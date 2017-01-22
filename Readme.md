@@ -14,12 +14,11 @@ Download and open in [Visual Studio Code](https://code.visualstudio.com/download
 
 The exchange order book is a separate module that can be used on it's own.
 
-```
+```C#
 var sec = new Security() { Id = 1, Type = SecurityType.Future, Group = "GC", Product = "GC", Contract = "GCZ6" };
 var book = new OrderBook(sec);
 book.SetStatus(SecurityTradingStatus.Open);
 
-OrderCreatedEventArgs createdArgs = null;
 book.OrderCreated += (sender, e) => { Console.WriteLine("created " + e.Order.Id); };
 book.OrderUpdated += (sender, e) => { Console.WriteLine("updated " + e.Order.Id); };
 book.OrderDeleted += (sender, e) => { Console.WriteLine("deleted " + e.Order.Id); };
@@ -33,9 +32,9 @@ You can also set up a fake CME server with accurate contract specifications, tra
 
 - Trading Sessions from ```/SBEFix/Production/TradingSessionList.dat```
 - Market Feeds from ```/SBEFix/Production/Configuration/config.xml```
-- Security Definitions from ```/SBEFix/Production/secdef.dat.gz``` (Note this file is large. It is also empty for most of the weekend, it is updated on Sunday afternoon before the start of trading at 6pm Chicago time.)
+- Security Definitions from ```/SBEFix/Production/secdef.dat.gz``` (Note this file is large and I recommend slicing out only the required definitions. It is also empty for most of the weekend, it is updated on Sunday afternoon before the start of trading at 6pm Chicago time.)
 
-```
+```C#
 var contract = "GCG7";
 
 // load CME information
@@ -44,16 +43,14 @@ var ts = TradingSessionImporter.Load("Cme/Resources/TradingSessionList.dat", sec
 var channels = MarketDataChannelImporter.Load("Cme/Resources/config.xml", sec.Product, true);
 
 // start trading engine
-int port = 7000 + (new Random()).Next(0, 100);
-
 var te = new TradingEngine(channels, ts, "CME", "G");
 te.AddSecurity(sec);
-te.Start(IPAddress.Loopback, port);
+te.Start(IPAddress.Loopback, 7821);
 
 // open for trading
 ts.Update(SecurityTradingStatus.Open);
 
-// listen for incoming market data
+// listen and output incoming market data
 var ch = channels.Connections.Find(x => x.Type == Circus.Cme.MarketDataChannelConnectionType.Incremental && x.Feed == "A");
 var dataClient = new FixUdpClient(ch.IPAddress, ch.Port);
 dataClient.IncrementalUpdateReceived += (sender, e) =>
