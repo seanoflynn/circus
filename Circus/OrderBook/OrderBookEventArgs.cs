@@ -20,7 +20,7 @@ namespace Circus.OrderBook
 
     public record OrderFilledEventArgs(Fill Fill);
 
-    public record TradedEventArgs(DateTime Time, Security Security, List<Fill> Fills);
+    public record TradedEventArgs(List<Fill> Fills);
 
     public record BookUpdatedEventArgs(DateTime Time, Security Security);
 }

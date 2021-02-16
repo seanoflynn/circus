@@ -9,6 +9,7 @@ namespace Circus.OrderBook
         public Security Security { get; }
         public DateTime CreatedTime { get; }
         public DateTime ModifiedTime { get; private set; }
+        public DateTime? CompletedTime { get; private set; }
         public TimeInForce TimeInForce { get; }
         public Side Side { get; }
         public decimal Price { get; private set; }
@@ -39,21 +40,21 @@ namespace Circus.OrderBook
 
         public Order ToOrder()
         {
-            return new(Id, Security, CreatedTime, ModifiedTime, Status, OrderType.Limit, TimeInForce, Side,
-                Price, null, Quantity, FilledQuantity, RemainingQuantity);
+            return new(Id, Security, CreatedTime, ModifiedTime, CompletedTime, Status, OrderType.Limit, TimeInForce,
+                Side, Price, null, Quantity, FilledQuantity, RemainingQuantity);
         }
 
         public void Delete(DateTime time)
         {
             RemainingQuantity = 0;
-            ModifiedTime = time;
+            CompletedTime = time;
             Status = OrderStatus.Deleted;
         }
 
         public void Update(DateTime time, decimal price, int quantity)
         {
             // TODO: validate quantity
-            
+
             if (price != Price || quantity > Quantity)
             {
                 ModifiedTime = time;
@@ -64,12 +65,18 @@ namespace Circus.OrderBook
             Quantity = quantity;
         }
 
-        public void Fill(int quantity)
+        public void Fill(DateTime time, int quantity)
         {
             // TODO: validate quantity
-            
+
             FilledQuantity += quantity;
             RemainingQuantity -= quantity;
+
+            if (RemainingQuantity == 0)
+            {
+                Status = OrderStatus.Filled;
+                CompletedTime = time;
+            }
         }
     }
 }

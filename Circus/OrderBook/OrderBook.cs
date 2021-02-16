@@ -172,7 +172,7 @@ namespace Circus.OrderBook
 
             if (fills.Count > 0)
             {
-                Traded?.Invoke(this, new TradedEventArgs(time, Security, fills));
+                Traded?.Invoke(this, new TradedEventArgs(fills));
             }
         }
 
@@ -181,8 +181,8 @@ namespace Circus.OrderBook
             var quantity = Math.Min(resting.Quantity, aggressing.Quantity);
             var price = resting.Price;
 
-            var fill1 = FillOrder(aggressing, time, price, quantity, true);
-            var fill2 = FillOrder(resting, time, price, quantity, false);
+            var fill1 = FillOrder(resting, time, price, quantity, false);
+            var fill2 = FillOrder(aggressing, time, price, quantity, true);
 
             OrderFilled?.Invoke(this, new OrderFilledEventArgs(fill1));
             OrderFilled?.Invoke(this, new OrderFilledEventArgs(fill2));
@@ -192,13 +192,13 @@ namespace Circus.OrderBook
 
         private Fill FillOrder(InternalOrder order, DateTime time, decimal price, int quantity, bool isAggressor)
         {
-            order.Fill(quantity);
-            if (order.RemainingQuantity == 0)
+            order.Fill(time, quantity);
+            if (order.Status == OrderStatus.Filled)
             {
                 CompleteOrder(order);
             }
 
-            return new Fill(order.Id, time, order.Side, price, quantity, isAggressor);
+            return new Fill(order.ToOrder(), time, price, quantity, isAggressor);
         }
 
         // private void CheckStops(decimal maxTradePrice, decimal minTradePrice)

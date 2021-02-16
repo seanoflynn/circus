@@ -8,6 +8,7 @@ namespace Circus
         Security Security,
         DateTime CreatedTime,
         DateTime ModifiedTime,
+        DateTime? CompletedTime,
         OrderStatus Status,
         OrderType Type,
         TimeInForce TimeInForce,
