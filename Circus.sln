@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Circus", "Circus\Circus.csproj", "{5D83AF31-799F-4130-9DE8-388F17DEEFAE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Circus.Tests", "Circus.Tests\Circus.Tests.csproj", "{7E6DC327-731A-49AE-9A18-2CDE5867F75C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Circus.Examples", "Circus.Examples\Circus.Examples.csproj", "{6BA53765-A118-41CD-9BBC-28C0904EFD36}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{5D83AF31-799F-4130-9DE8-388F17DEEFAE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5D83AF31-799F-4130-9DE8-388F17DEEFAE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5D83AF31-799F-4130-9DE8-388F17DEEFAE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5D83AF31-799F-4130-9DE8-388F17DEEFAE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7E6DC327-731A-49AE-9A18-2CDE5867F75C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7E6DC327-731A-49AE-9A18-2CDE5867F75C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7E6DC327-731A-49AE-9A18-2CDE5867F75C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7E6DC327-731A-49AE-9A18-2CDE5867F75C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6BA53765-A118-41CD-9BBC-28C0904EFD36}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6BA53765-A118-41CD-9BBC-28C0904EFD36}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6BA53765-A118-41CD-9BBC-28C0904EFD36}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6BA53765-A118-41CD-9BBC-28C0904EFD36}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
