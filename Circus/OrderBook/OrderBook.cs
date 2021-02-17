@@ -3,11 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using Circus.Enums;
 
-// TODO:
-// - Exchange.AddSecurity(Security, MatchingEngine)
-// - Move matching logic to matching engine class
-// - Exchange has Map<Security,OrderBook>
-
 namespace Circus.OrderBook
 {
     public class OrderBook
@@ -24,13 +19,14 @@ namespace Circus.OrderBook
         public event EventHandler<OrderExpiredEventArgs> OrderExpired;
 
         public event EventHandler<TradedEventArgs> Traded;
-        public event EventHandler<BookUpdatedEventArgs> Updated;
 
         public Security Security { get; }
         public OrderBookStatus Status { get; private set; } = OrderBookStatus.Closed;
 
         private readonly ITimeProvider _timeProvider;
         private DateTime Now() => _timeProvider.GetCurrentTime();
+
+        private long _nextSequenceNumber;
 
         private class DescendingComparer : IComparer<decimal>
         {
@@ -40,8 +36,10 @@ namespace Circus.OrderBook
             }
         }
 
-        private readonly SortedDictionary<decimal, List<InternalOrder>> _buyOrders = new(new DescendingComparer());
-        private readonly SortedDictionary<decimal, List<InternalOrder>> _sellOrders = new();
+        private readonly SortedDictionary<decimal, SortedDictionary<long, InternalOrder>> _buyOrders =
+            new(new DescendingComparer());
+
+        private readonly SortedDictionary<decimal, SortedDictionary<long, InternalOrder>> _sellOrders = new();
         private readonly Dictionary<Guid, InternalOrder> _orders = new();
         private readonly Dictionary<Guid, InternalOrder> _completedOrders = new();
 
@@ -57,7 +55,8 @@ namespace Circus.OrderBook
             if (ValidateCreate(id, RejectReason.InvalidPriceIncrement, () => price % Security.TickSize != 0)) return;
             if (ValidateCreate(id, RejectReason.InvalidQuantity, () => quantity < 1)) return;
 
-            var order = new InternalOrder(id, Security, Now(), tif, side, price, quantity);
+            _nextSequenceNumber++;
+            var order = new InternalOrder(_nextSequenceNumber, id, Security, Now(), tif, side, price, quantity);
 
             _orders.Add(order.Id, order);
 
@@ -82,15 +81,18 @@ namespace Circus.OrderBook
             // TODO: cancel order if quantity < remaining quantity
 
             var isPriceChange = price != order.Price;
+            var isQuantityIncrease = quantity > order.Quantity;
 
             var orders = order.Side == Side.Buy ? _buyOrders : _sellOrders;
-            if (isPriceChange)
+            var sequenceNumber = order.SequenceNumber;
+            if (isPriceChange || isQuantityIncrease)
             {
                 orders.Remove(order);
+                _nextSequenceNumber++;
+                sequenceNumber = _nextSequenceNumber;
             }
-
-            order.Update(Now(), price, quantity);
-            if (isPriceChange)
+            order.Update(sequenceNumber, Now(), price, quantity);
+            if (isPriceChange || isQuantityIncrease)
             {
                 orders.Add(order);
             }
@@ -122,7 +124,7 @@ namespace Circus.OrderBook
         private void CompleteOrder(InternalOrder order)
         {
             var orders = order.Side == Side.Buy ? _buyOrders : _sellOrders;
-            orders[order.Price].Remove(order);
+            orders.Remove(order);
             _orders.Remove(order.Id);
             _completedOrders.Add(order.Id, order);
         }
@@ -156,8 +158,8 @@ namespace Circus.OrderBook
             var fills = new List<Fill>();
             var time = Now();
 
-            var buy = _buyOrders.FirstOrDefault().Value?.FirstOrDefault();
-            var sell = _sellOrders.FirstOrDefault().Value?.FirstOrDefault();
+            var buy = _buyOrders.FirstOrDefault().Value?.FirstOrDefault().Value;
+            var sell = _sellOrders.FirstOrDefault().Value?.FirstOrDefault().Value;
 
             while (buy != null && sell != null && buy.Price >= sell.Price)
             {
@@ -166,8 +168,8 @@ namespace Circus.OrderBook
 
                 fills.AddRange(Match(time, resting, aggressor));
 
-                buy = _buyOrders.FirstOrDefault().Value?.FirstOrDefault();
-                sell = _sellOrders.FirstOrDefault().Value?.FirstOrDefault();
+                buy = _buyOrders.FirstOrDefault().Value?.FirstOrDefault().Value;
+                sell = _sellOrders.FirstOrDefault().Value?.FirstOrDefault().Value;
             }
 
             if (fills.Count > 0)
@@ -178,9 +180,13 @@ namespace Circus.OrderBook
 
         private IEnumerable<Fill> Match(DateTime time, InternalOrder resting, InternalOrder aggressing)
         {
-            var quantity = Math.Min(resting.Quantity, aggressing.Quantity);
+            var quantity = Math.Min(resting.RemainingQuantity, aggressing.RemainingQuantity);
             var price = resting.Price;
 
+            Console.WriteLine($"matched orders: {quantity}@{price}");
+            Console.WriteLine($"- resting    {resting}");
+            Console.WriteLine($"- aggressing {aggressing}");
+            
             var fill1 = FillOrder(resting, time, price, quantity, false);
             var fill2 = FillOrder(aggressing, time, price, quantity, true);
 
@@ -250,6 +256,12 @@ namespace Circus.OrderBook
             if (status == OrderBookStatus.Closed)
             {
                 // ExpireAllOrders();
+            }
+
+            if (status == OrderBookStatus.Open)
+            {
+                var date = Now();
+                _nextSequenceNumber = ((date.Year * 10000) + (date.Month * 100) + date.Day) * 10000000000L;
             }
 
             Status = status;
@@ -548,21 +560,23 @@ namespace Circus.OrderBook
 
     internal static class SortedDictionaryExtensions
     {
-        internal static void Add(this SortedDictionary<decimal, List<InternalOrder>> orders, InternalOrder order)
+        internal static void Add(this SortedDictionary<decimal, SortedDictionary<long, InternalOrder>> orders,
+            InternalOrder order)
         {
             if (orders.ContainsKey(order.Price))
             {
-                orders[order.Price].Add(order);
+                orders[order.Price].Add(order.SequenceNumber, order);
             }
             else
             {
-                orders[order.Price] = new List<InternalOrder> {order};
+                orders[order.Price] = new SortedDictionary<long, InternalOrder> {{order.SequenceNumber, order}};
             }
         }
 
-        internal static void Remove(this SortedDictionary<decimal, List<InternalOrder>> orders, InternalOrder order)
+        internal static void Remove(this SortedDictionary<decimal, SortedDictionary<long, InternalOrder>> orders,
+            InternalOrder order)
         {
-            orders[order.Price].Remove(order);
+            orders[order.Price].Remove(order.SequenceNumber);
 
             if (orders[order.Price].Count == 0)
             {

@@ -5,6 +5,7 @@ namespace Circus.OrderBook
 {
     internal class InternalOrder
     {
+        public long SequenceNumber { get; private set; }
         public Guid Id { get; }
         public Security Security { get; }
         public DateTime CreatedTime { get; }
@@ -18,9 +19,10 @@ namespace Circus.OrderBook
         public int FilledQuantity { get; private set; }
         public OrderStatus Status { get; private set; } = OrderStatus.Working;
 
-        public InternalOrder(Guid id, Security security, DateTime time, TimeInForce timeInForce, Side side,
+        public InternalOrder(long sequenceNumber, Guid id, Security security, DateTime time, TimeInForce timeInForce, Side side,
             decimal price, int quantity)
         {
+            SequenceNumber = sequenceNumber;
             Id = id;
             Security = security;
             CreatedTime = time;
@@ -51,15 +53,16 @@ namespace Circus.OrderBook
             Status = OrderStatus.Deleted;
         }
 
-        public void Update(DateTime time, decimal price, int quantity)
+        public void Update(long sequenceNumber, DateTime time, decimal price, int quantity)
         {
             // TODO: validate quantity
 
             if (price != Price || quantity > Quantity)
             {
-                ModifiedTime = time;
+                SequenceNumber = sequenceNumber;
             }
 
+            ModifiedTime = time;
             Price = price;
             RemainingQuantity -= (Quantity - quantity);
             Quantity = quantity;
