@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Circus.Enums;
 
 namespace Circus.OrderBook
 {
@@ -9,11 +8,11 @@ namespace Circus.OrderBook
     {
         public event EventHandler<OrderCreatedSuccessEventArgs> OrderCreated;
         public event EventHandler<OrderUpdatedSuccessEventArgs> OrderUpdated;
-        public event EventHandler<OrderDeletedSuccessEventArgs> OrderDeleted;
+        public event EventHandler<OrderCancelledSuccessEventArgs> OrderCancelled;
 
         public event EventHandler<OrderCreateRejectedEventArgs> OrderCreateRejected;
         public event EventHandler<OrderUpdateRejectedEventArgs> OrderUpdateRejected;
-        public event EventHandler<OrderDeleteRejectedEventArgs> OrderDeleteRejected;
+        public event EventHandler<OrderCancelRejectedEventArgs> OrderCancelRejected;
 
         public event EventHandler<OrderFilledEventArgs> OrderFilled;
         public event EventHandler<OrderExpiredEventArgs> OrderExpired;
@@ -51,9 +50,9 @@ namespace Circus.OrderBook
 
         public void CreateLimitOrder(Guid id, TimeInForce tif, Side side, decimal price, int quantity)
         {
-            if (ValidateCreate(id, RejectReason.MarketClosed, () => Status == OrderBookStatus.Closed)) return;
-            if (ValidateCreate(id, RejectReason.InvalidPriceIncrement, () => price % Security.TickSize != 0)) return;
-            if (ValidateCreate(id, RejectReason.InvalidQuantity, () => quantity < 1)) return;
+            if (ValidateCreate(id, OrderRejectedReason.MarketClosed, () => Status == OrderBookStatus.Closed)) return;
+            if (ValidateCreate(id, OrderRejectedReason.InvalidPriceIncrement, () => price % Security.TickSize != 0)) return;
+            if (ValidateCreate(id, OrderRejectedReason.InvalidQuantity, () => quantity < 1)) return;
 
             _nextSequenceNumber++;
             var order = new InternalOrder(_nextSequenceNumber, id, Security, Now(), tif, side, price, quantity);
@@ -71,14 +70,23 @@ namespace Circus.OrderBook
 
         public void UpdateLimitOrder(Guid id, decimal price, int quantity)
         {
-            if (ValidateUpdate(id, RejectReason.MarketClosed, () => Status == OrderBookStatus.Closed)) return;
-            if (ValidateUpdate(id, RejectReason.InvalidPriceIncrement, () => price % Security.TickSize != 0)) return;
-            if (ValidateUpdate(id, RejectReason.InvalidQuantity, () => quantity < 1)) return;
-            if (ValidateUpdate(id, RejectReason.TooLateToCancel, () => _completedOrders.ContainsKey(id))) return;
-            if (ValidateUpdate(id, RejectReason.OrderNotInBook, () => !_orders.ContainsKey(id))) return;
+            if (ValidateUpdate(id, OrderRejectedReason.MarketClosed, () => Status == OrderBookStatus.Closed)) return;
+            if (ValidateUpdate(id, OrderRejectedReason.InvalidPriceIncrement, () => price % Security.TickSize != 0)) return;
+            if (ValidateUpdate(id, OrderRejectedReason.InvalidQuantity, () => quantity < 1)) return;
+            if (ValidateUpdate(id, OrderRejectedReason.TooLateToCancel, () => _completedOrders.ContainsKey(id))) return;
+            if (ValidateUpdate(id, OrderRejectedReason.OrderNotInBook, () => !_orders.ContainsKey(id))) return;
             var order = _orders[id];
 
-            // TODO: cancel order if quantity < remaining quantity
+            if (quantity <= order.FilledQuantity)
+            {
+                order.Cancel(Now());
+                CompleteOrder(order);
+
+                Console.WriteLine($"order cancelled on update as new quantity <= filled quantity: {order}");
+
+                OrderCancelled?.Invoke(this, new OrderCancelledSuccessEventArgs(order.ToOrder(), OrderCancelledReason.UpdatedQuantityLowerThanFilledQuantity));
+                return;
+            }
 
             var isPriceChange = price != order.Price;
             var isQuantityIncrease = quantity > order.Quantity;
@@ -106,19 +114,19 @@ namespace Circus.OrderBook
             }
         }
 
-        public void DeleteOrder(Guid id)
+        public void CancelOrder(Guid id)
         {
-            if (ValidateDelete(id, RejectReason.MarketClosed, () => Status == OrderBookStatus.Closed)) return;
-            if (ValidateDelete(id, RejectReason.TooLateToCancel, () => _completedOrders.ContainsKey(id))) return;
-            if (ValidateDelete(id, RejectReason.OrderNotInBook, () => !_orders.ContainsKey(id))) return;
+            if (ValidateCancel(id, OrderRejectedReason.MarketClosed, () => Status == OrderBookStatus.Closed)) return;
+            if (ValidateCancel(id, OrderRejectedReason.TooLateToCancel, () => _completedOrders.ContainsKey(id))) return;
+            if (ValidateCancel(id, OrderRejectedReason.OrderNotInBook, () => !_orders.ContainsKey(id))) return;
             var order = _orders[id];
 
-            order.Delete(Now());
+            order.Cancel(Now());
             CompleteOrder(order);
 
-            Console.WriteLine($"order deleted from book: {order}");
+            Console.WriteLine($"order cancelled from book: {order}");
 
-            OrderDeleted?.Invoke(this, new OrderDeletedSuccessEventArgs(order.ToOrder(), OrderDeletedReason.Client));
+            OrderCancelled?.Invoke(this, new OrderCancelledSuccessEventArgs(order.ToOrder(), OrderCancelledReason.Cancelled));
         }
 
         private void CompleteOrder(InternalOrder order)
@@ -129,7 +137,7 @@ namespace Circus.OrderBook
             _completedOrders.Add(order.Id, order);
         }
 
-        private bool ValidateCreate(Guid id, RejectReason reason, Func<bool> validation)
+        private bool ValidateCreate(Guid id, OrderRejectedReason reason, Func<bool> validation)
         {
             if (!validation.Invoke()) return false;
 
@@ -137,7 +145,7 @@ namespace Circus.OrderBook
             return true;
         }
 
-        private bool ValidateUpdate(Guid id, RejectReason reason, Func<bool> validation)
+        private bool ValidateUpdate(Guid id, OrderRejectedReason reason, Func<bool> validation)
         {
             if (!validation.Invoke()) return false;
 
@@ -145,11 +153,11 @@ namespace Circus.OrderBook
             return true;
         }
 
-        private bool ValidateDelete(Guid id, RejectReason reason, Func<bool> validation)
+        private bool ValidateCancel(Guid id, OrderRejectedReason reason, Func<bool> validation)
         {
             if (!validation.Invoke()) return false;
 
-            OrderDeleteRejected?.Invoke(this, new OrderDeleteRejectedEventArgs(id, reason));
+            OrderCancelRejected?.Invoke(this, new OrderCancelRejectedEventArgs(id, reason));
             return true;
         }
 

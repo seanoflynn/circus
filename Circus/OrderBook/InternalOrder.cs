@@ -1,5 +1,4 @@
 using System;
-using Circus.Enums;
 
 namespace Circus.OrderBook
 {
@@ -46,11 +45,11 @@ namespace Circus.OrderBook
                 Side, Price, null, Quantity, FilledQuantity, RemainingQuantity);
         }
 
-        public void Delete(DateTime time)
+        public void Cancel(DateTime time)
         {
             RemainingQuantity = 0;
             CompletedTime = time;
-            Status = OrderStatus.Deleted;
+            Status = OrderStatus.Cancelled;
         }
 
         public void Update(long sequenceNumber, DateTime time, decimal price, int quantity)

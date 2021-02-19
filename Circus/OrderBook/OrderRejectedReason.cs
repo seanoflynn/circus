@@ -1,6 +1,6 @@
-namespace Circus.Enums
+namespace Circus.OrderBook
 {
-    public enum RejectReason
+    public enum OrderRejectedReason
     {
         MarketClosed,
         InvalidQuantity,

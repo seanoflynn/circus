@@ -1,5 +1,3 @@
-using Circus.Enums;
-
 namespace Circus
 {
     public record Security(

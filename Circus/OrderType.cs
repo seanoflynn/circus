@@ -1,4 +1,4 @@
-namespace Circus.Enums
+namespace Circus
 {
     public enum OrderType
     {

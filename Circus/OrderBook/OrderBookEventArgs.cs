@@ -1,20 +1,19 @@
 using System;
 using System.Collections.Generic;
-using Circus.Enums;
 
 namespace Circus.OrderBook
 {
     public record OrderCreatedSuccessEventArgs(Order Order);
 
-    public record OrderCreateRejectedEventArgs(Guid OrderId, RejectReason Reason);
+    public record OrderCreateRejectedEventArgs(Guid OrderId, OrderRejectedReason Reason);
 
     public record OrderUpdatedSuccessEventArgs(Order Order);
 
-    public record OrderUpdateRejectedEventArgs(Guid OrderId, RejectReason Reason);
+    public record OrderUpdateRejectedEventArgs(Guid OrderId, OrderRejectedReason Reason);
 
-    public record OrderDeletedSuccessEventArgs(Order Order, OrderDeletedReason Reason);
+    public record OrderCancelledSuccessEventArgs(Order Order, OrderCancelledReason Reason);
 
-    public record OrderDeleteRejectedEventArgs(Guid OrderId, RejectReason Reason);
+    public record OrderCancelRejectedEventArgs(Guid OrderId, OrderRejectedReason Reason);
 
     public record OrderExpiredEventArgs(Order Order);
 

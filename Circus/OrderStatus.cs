@@ -8,7 +8,7 @@ namespace Circus
         Hidden,
         Working,
         Filled,
-        Deleted,
+        Cancelled,
         Expired,
     }
 }

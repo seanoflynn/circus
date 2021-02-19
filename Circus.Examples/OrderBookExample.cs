@@ -1,6 +1,5 @@
 using System;
 using System.Threading;
-using Circus.Enums;
 using Circus.OrderBook;
 
 namespace Circus.Examples
