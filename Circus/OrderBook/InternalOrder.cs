@@ -18,7 +18,8 @@ namespace Circus.OrderBook
         public int FilledQuantity { get; private set; }
         public OrderStatus Status { get; private set; } = OrderStatus.Working;
 
-        public InternalOrder(long sequenceNumber, Guid id, Security security, DateTime time, TimeInForce timeInForce, Side side,
+        public InternalOrder(long sequenceNumber, Guid id, Security security, DateTime time, TimeInForce timeInForce,
+            Side side,
             decimal price, int quantity)
         {
             SequenceNumber = sequenceNumber;
@@ -50,6 +51,13 @@ namespace Circus.OrderBook
             RemainingQuantity = 0;
             CompletedTime = time;
             Status = OrderStatus.Cancelled;
+        }
+
+        public void Expire(DateTime time)
+        {
+            RemainingQuantity = 0;
+            CompletedTime = time;
+            Status = OrderStatus.Expired;
         }
 
         public void Update(long sequenceNumber, DateTime time, decimal price, int quantity)

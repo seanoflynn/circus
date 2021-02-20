@@ -1378,7 +1378,6 @@ namespace Circus.Tests
             Assert.AreEqual(filledArgs[3].Fill, tradedArgs.Fills[3]);
         }
 
-
         [Test]
         public void CreateLimitOrder_MarketClosed_Rejected()
         {
@@ -1390,7 +1389,6 @@ namespace Circus.Tests
 
             OrderCreateRejectedEventArgs rejectedArgs = null;
             book.OrderCreateRejected += (sender, e) => { rejectedArgs = e; };
-            book.SetStatus(OrderBookStatus.Closed);
             var id = Guid.NewGuid();
 
             // act
@@ -1529,7 +1527,7 @@ namespace Circus.Tests
         }
 
         [Test]
-        public void UpdateLimitOrder_DecreaseQuantityBelowFilled_Success()
+        public void UpdateLimitOrder_DecreaseQuantityBelowFilled_Cancelled()
         {
             // arrange
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
@@ -1621,6 +1619,33 @@ namespace Circus.Tests
             Assert.AreEqual(id, updatedArgs.OrderId);
             Assert.AreEqual(OrderRejectedReason.TooLateToCancel, updatedArgs.Reason);
         }
+
+        [Test]
+        public void UpdateLimitOrder_OrderExpired_Rejected()
+        {
+            // arrange
+            var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
+            var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
+            var timeProvider = new TestTimeProvider(now1);
+            var book = new OrderBook.OrderBook(sec, timeProvider);
+
+            OrderUpdateRejectedEventArgs updatedArgs = null;
+            book.OrderUpdateRejected += (sender, e) => { updatedArgs = e; };
+            book.SetStatus(OrderBookStatus.Open);
+            var id = Guid.NewGuid();
+            book.CreateLimitOrder(id, TimeInForce.Day, Side.Buy, 100, 3);
+            book.SetStatus(OrderBookStatus.Closed);
+            book.SetStatus(OrderBookStatus.Open);
+
+            // act
+            book.UpdateLimitOrder(id, 110, 5);
+
+            // assert
+            Assert.IsNotNull(updatedArgs);
+            Assert.AreEqual(id, updatedArgs.OrderId);
+            Assert.AreEqual(OrderRejectedReason.TooLateToCancel, updatedArgs.Reason);
+        }
+
 
         [Test]
         public void UpdateLimitOrder_NotFound_Rejected()
@@ -1809,15 +1834,207 @@ namespace Circus.Tests
             Assert.AreEqual(id, rejectedArgs.OrderId);
         }
 
-        // Expire orders
-        // Clear expired orders after status = closed
+        [Test]
+        public void CreateMarketOrder_Valid_Success()
+        {
+            // arrange
+            var sec = new Security("GCZ6", SecurityType.Future, 10, 10, 20);
+            var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
+            var timeProvider = new TestTimeProvider(now1);
+            var book = new OrderBook.OrderBook(sec, timeProvider);
+            book.SetStatus(OrderBookStatus.Open);
 
-        // No match after status changed
-        // No match on cancelled orders
+            var filledArgs = new List<OrderFilledEventArgs>();
+            book.OrderFilled += (_, e) => filledArgs.Add(e);
+            TradedEventArgs tradedArgs = null;
+            book.Traded += (_, e) => tradedArgs = e;
 
-        // Match on open
+            var id1 = Guid.NewGuid();
+            book.CreateLimitOrder(id1, TimeInForce.Day, Side.Buy, 500, 3);
+            var now2 = new DateTime(2000, 1, 1, 12, 1, 0);
+            timeProvider.SetCurrentTime(now2);
+            var id2 = Guid.NewGuid();
 
-        // Market orders
-        // Market orders exceptions
+            // act
+            book.CreateMarketOrder(id2, TimeInForce.Day, Side.Sell, 5);
+
+            // assert
+            Assert.IsNotNull(filledArgs);
+
+            Assert.AreEqual(id1, filledArgs[0].Fill.Order.Id);
+            Assert.AreEqual(sec, filledArgs[0].Fill.Order.Security);
+            Assert.AreEqual(now1, filledArgs[0].Fill.Order.CreatedTime);
+            Assert.AreEqual(now1, filledArgs[0].Fill.Order.ModifiedTime);
+            Assert.AreEqual(now2, filledArgs[0].Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Filled, filledArgs[0].Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filledArgs[0].Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filledArgs[0].Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Buy, filledArgs[0].Fill.Order.Side);
+            Assert.AreEqual(500, filledArgs[0].Fill.Order.Price);
+            Assert.IsNull(filledArgs[0].Fill.Order.StopPrice);
+            Assert.AreEqual(3, filledArgs[0].Fill.Order.Quantity);
+            Assert.AreEqual(3, filledArgs[0].Fill.Order.FilledQuantity);
+            Assert.AreEqual(0, filledArgs[0].Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now2, filledArgs[0].Fill.Time);
+            Assert.AreEqual(500, filledArgs[0].Fill.Price);
+            Assert.AreEqual(3, filledArgs[0].Fill.Quantity);
+            Assert.IsFalse(filledArgs[0].Fill.IsAggressor);
+
+            Assert.AreEqual(id2, filledArgs[1].Fill.Order.Id);
+            Assert.AreEqual(sec, filledArgs[1].Fill.Order.Security);
+            Assert.AreEqual(now2, filledArgs[1].Fill.Order.CreatedTime);
+            Assert.AreEqual(now2, filledArgs[1].Fill.Order.ModifiedTime);
+            Assert.IsNull(filledArgs[1].Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Working, filledArgs[1].Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filledArgs[1].Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filledArgs[1].Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Sell, filledArgs[1].Fill.Order.Side);
+            Assert.AreEqual(300, filledArgs[1].Fill.Order.Price);
+            Assert.IsNull(filledArgs[1].Fill.Order.StopPrice);
+            Assert.AreEqual(5, filledArgs[1].Fill.Order.Quantity);
+            Assert.AreEqual(3, filledArgs[1].Fill.Order.FilledQuantity);
+            Assert.AreEqual(2, filledArgs[1].Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now2, filledArgs[1].Fill.Time);
+            Assert.AreEqual(500, filledArgs[1].Fill.Price);
+            Assert.AreEqual(3, filledArgs[1].Fill.Quantity);
+            Assert.IsTrue(filledArgs[1].Fill.IsAggressor);
+
+            Assert.AreEqual(filledArgs[0].Fill, tradedArgs.Fills[0]);
+            Assert.AreEqual(filledArgs[1].Fill, tradedArgs.Fills[1]);
+        }
+
+        [Test]
+        public void CreateMarketOrder_MarketClosed_Rejected()
+        {
+            // arrange
+            var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
+            var now = new DateTime(2000, 1, 1, 12, 0, 0);
+            var timeProvider = new TestTimeProvider(now);
+            var book = new OrderBook.OrderBook(sec, timeProvider);
+
+            OrderCreateRejectedEventArgs rejectedArgs = null;
+            book.OrderCreateRejected += (sender, e) => { rejectedArgs = e; };
+            var id = Guid.NewGuid();
+
+            // act
+            book.CreateMarketOrder(id, TimeInForce.Day, Side.Buy, 3);
+
+            // assert
+            Assert.IsNotNull(rejectedArgs);
+            Assert.AreEqual(OrderRejectedReason.MarketClosed, rejectedArgs.Reason);
+            Assert.AreEqual(id, rejectedArgs.OrderId);
+        }
+
+        [TestCase(0)]
+        [TestCase(-1)]
+        public void CreateMarketOrder_InvalidQuantity_Rejected(int quantity)
+        {
+            // arrange
+            var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
+            var now = new DateTime(2000, 1, 1, 12, 0, 0);
+            var timeProvider = new TestTimeProvider(now);
+            var book = new OrderBook.OrderBook(sec, timeProvider);
+
+            OrderCreateRejectedEventArgs rejectedArgs = null;
+            book.OrderCreateRejected += (sender, e) => { rejectedArgs = e; };
+            book.SetStatus(OrderBookStatus.Open);
+            var id = Guid.NewGuid();
+
+            // act
+            book.CreateMarketOrder(id, TimeInForce.Day, Side.Buy, quantity);
+
+            // assert
+            Assert.IsNotNull(rejectedArgs);
+            Assert.AreEqual(OrderRejectedReason.InvalidQuantity, rejectedArgs.Reason);
+            Assert.AreEqual(id, rejectedArgs.OrderId);
+        }
+
+        [Test]
+        public void CreateMarketOrder_EmptyBook_Rejected()
+        {
+            // arrange
+            var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
+            var now = new DateTime(2000, 1, 1, 12, 0, 0);
+            var timeProvider = new TestTimeProvider(now);
+            var book = new OrderBook.OrderBook(sec, timeProvider);
+
+            OrderCreateRejectedEventArgs rejectedArgs = null;
+            book.OrderCreateRejected += (sender, e) => { rejectedArgs = e; };
+            book.SetStatus(OrderBookStatus.Open);
+            var id = Guid.NewGuid();
+
+            // act
+            book.CreateMarketOrder(id, TimeInForce.Day, Side.Buy, 3);
+
+            // assert
+            Assert.IsNotNull(rejectedArgs);
+            Assert.AreEqual(OrderRejectedReason.NoOrdersToMatchMarketOrder, rejectedArgs.Reason);
+            Assert.AreEqual(id, rejectedArgs.OrderId);
+        }
+
+        [Test]
+        public void SetStatusClosed_ExpireDayOrders()
+        {
+            // arrange
+            var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
+            var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
+            var timeProvider = new TestTimeProvider(now1);
+            var book = new OrderBook.OrderBook(sec, timeProvider);
+
+            OrderExpiredEventArgs expiredArgs = null;
+            book.OrderExpired += (sender, e) => { expiredArgs = e; };
+            book.SetStatus(OrderBookStatus.Open);
+            var id = Guid.NewGuid();
+            book.CreateLimitOrder(id, TimeInForce.Day, Side.Buy, 100, 5);
+            var now2 = new DateTime(2000, 1, 1, 12, 1, 0);
+            timeProvider.SetCurrentTime(now2);
+
+            // act
+            book.SetStatus(OrderBookStatus.Closed);
+
+            // assert
+            Assert.IsNotNull(expiredArgs);
+            Assert.AreEqual(id, expiredArgs.Order.Id);
+            Assert.AreEqual(sec, expiredArgs.Order.Security);
+            Assert.AreEqual(now1, expiredArgs.Order.CreatedTime);
+            Assert.AreEqual(now1, expiredArgs.Order.ModifiedTime);
+            Assert.AreEqual(now2, expiredArgs.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Expired, expiredArgs.Order.Status);
+            Assert.AreEqual(OrderType.Limit, expiredArgs.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, expiredArgs.Order.TimeInForce);
+            Assert.AreEqual(Side.Buy, expiredArgs.Order.Side);
+            Assert.AreEqual(100, expiredArgs.Order.Price);
+            Assert.IsNull(expiredArgs.Order.StopPrice);
+            Assert.AreEqual(5, expiredArgs.Order.Quantity);
+            Assert.AreEqual(0, expiredArgs.Order.FilledQuantity);
+            Assert.AreEqual(0, expiredArgs.Order.RemainingQuantity);
+        }
+
+        [Test]
+        public void SetStatusClosed_AlreadyClosed_Exception()
+        {
+            // arrange
+            var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
+            var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
+            var timeProvider = new TestTimeProvider(now1);
+            var book = new OrderBook.OrderBook(sec, timeProvider);
+
+            // act & assert
+            Assert.Throws<Exception>(() => book.SetStatus(OrderBookStatus.Closed));
+        }
+
+        [Test]
+        public void SetStatusClosed_AlreadyOpen_Exception()
+        {
+            // arrange
+            var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
+            var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
+            var timeProvider = new TestTimeProvider(now1);
+            var book = new OrderBook.OrderBook(sec, timeProvider);
+            book.SetStatus(OrderBookStatus.Open);
+
+            // act & assert
+            Assert.Throws<Exception>(() => book.SetStatus(OrderBookStatus.Open));
+        }
     }
 }

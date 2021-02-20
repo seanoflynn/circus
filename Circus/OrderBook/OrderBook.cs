@@ -51,8 +51,36 @@ namespace Circus.OrderBook
         public void CreateLimitOrder(Guid id, TimeInForce tif, Side side, decimal price, int quantity)
         {
             if (ValidateCreate(id, OrderRejectedReason.MarketClosed, () => Status == OrderBookStatus.Closed)) return;
-            if (ValidateCreate(id, OrderRejectedReason.InvalidPriceIncrement, () => price % Security.TickSize != 0)) return;
+            if (ValidateCreate(id, OrderRejectedReason.InvalidPriceIncrement,
+                () => price % Security.TickSize != 0)) return;
             if (ValidateCreate(id, OrderRejectedReason.InvalidQuantity, () => quantity < 1)) return;
+
+            _nextSequenceNumber++;
+            var order = new InternalOrder(_nextSequenceNumber, id, Security, Now(), tif, side, price, quantity);
+
+            _orders.Add(order.Id, order);
+
+            var orders = order.Side == Side.Buy ? _buyOrders : _sellOrders;
+            orders.Add(order);
+
+            Console.WriteLine($"order added to book: {order}");
+            OrderCreated?.Invoke(this, new OrderCreatedSuccessEventArgs(order.ToOrder()));
+
+            Match();
+        }
+
+        public void CreateMarketOrder(Guid id, TimeInForce tif, Side side, int quantity)
+        {
+            if (ValidateCreate(id, OrderRejectedReason.MarketClosed, () => Status == OrderBookStatus.Closed)) return;
+            if (ValidateCreate(id, OrderRejectedReason.InvalidQuantity, () => quantity < 1)) return;
+
+            var oppositeOrders = (side == Side.Buy ? _sellOrders : _buyOrders);
+            if (ValidateCreate(id, OrderRejectedReason.NoOrdersToMatchMarketOrder, () => !oppositeOrders.Any())) return;
+
+            // set price as best offer + protection ticks for buy orders, best bid - protection ticks for sell orders
+            // TODO: option to use best bid + protection tickets for buy orders, etc (eurex)
+            var price = oppositeOrders.First().Key +
+                        ((side == Side.Buy ? 1 : -1) * (Security.MarketOrderProtectionTicks * Security.TickSize));
 
             _nextSequenceNumber++;
             var order = new InternalOrder(_nextSequenceNumber, id, Security, Now(), tif, side, price, quantity);
@@ -71,7 +99,8 @@ namespace Circus.OrderBook
         public void UpdateLimitOrder(Guid id, decimal price, int quantity)
         {
             if (ValidateUpdate(id, OrderRejectedReason.MarketClosed, () => Status == OrderBookStatus.Closed)) return;
-            if (ValidateUpdate(id, OrderRejectedReason.InvalidPriceIncrement, () => price % Security.TickSize != 0)) return;
+            if (ValidateUpdate(id, OrderRejectedReason.InvalidPriceIncrement,
+                () => price % Security.TickSize != 0)) return;
             if (ValidateUpdate(id, OrderRejectedReason.InvalidQuantity, () => quantity < 1)) return;
             if (ValidateUpdate(id, OrderRejectedReason.TooLateToCancel, () => _completedOrders.ContainsKey(id))) return;
             if (ValidateUpdate(id, OrderRejectedReason.OrderNotInBook, () => !_orders.ContainsKey(id))) return;
@@ -84,7 +113,9 @@ namespace Circus.OrderBook
 
                 Console.WriteLine($"order cancelled on update as new quantity <= filled quantity: {order}");
 
-                OrderCancelled?.Invoke(this, new OrderCancelledSuccessEventArgs(order.ToOrder(), OrderCancelledReason.UpdatedQuantityLowerThanFilledQuantity));
+                OrderCancelled?.Invoke(this,
+                    new OrderCancelledSuccessEventArgs(order.ToOrder(),
+                        OrderCancelledReason.UpdatedQuantityLowerThanFilledQuantity));
                 return;
             }
 
@@ -99,6 +130,7 @@ namespace Circus.OrderBook
                 _nextSequenceNumber++;
                 sequenceNumber = _nextSequenceNumber;
             }
+
             order.Update(sequenceNumber, Now(), price, quantity);
             if (isPriceChange || isQuantityIncrease)
             {
@@ -124,9 +156,20 @@ namespace Circus.OrderBook
             order.Cancel(Now());
             CompleteOrder(order);
 
-            Console.WriteLine($"order cancelled from book: {order}");
+            Console.WriteLine($"order cancelled: {order}");
 
-            OrderCancelled?.Invoke(this, new OrderCancelledSuccessEventArgs(order.ToOrder(), OrderCancelledReason.Cancelled));
+            OrderCancelled?.Invoke(this,
+                new OrderCancelledSuccessEventArgs(order.ToOrder(), OrderCancelledReason.Cancelled));
+        }
+
+        private void ExpireOrder(InternalOrder order)
+        {
+            order.Expire(Now());
+            CompleteOrder(order);
+
+            Console.WriteLine($"order expired: {order}");
+
+            OrderExpired?.Invoke(this, new OrderExpiredEventArgs(order.ToOrder()));
         }
 
         private void CompleteOrder(InternalOrder order)
@@ -194,7 +237,7 @@ namespace Circus.OrderBook
             Console.WriteLine($"matched orders: {quantity}@{price}");
             Console.WriteLine($"- resting    {resting}");
             Console.WriteLine($"- aggressing {aggressing}");
-            
+
             var fill1 = FillOrder(resting, time, price, quantity, false);
             var fill2 = FillOrder(aggressing, time, price, quantity, true);
 
@@ -259,311 +302,51 @@ namespace Circus.OrderBook
 
         public void SetStatus(OrderBookStatus status)
         {
-            // TODO: validate transitions
-
-            if (status == OrderBookStatus.Closed)
+            switch (status)
             {
-                // ExpireAllOrders();
+                case OrderBookStatus.Closed:
+                    CloseMarket();
+                    break;
+                case OrderBookStatus.Open:
+                    OpenMarket();
+                    break;
             }
+        }
 
-            if (status == OrderBookStatus.Open)
-            {
-                var date = Now();
-                _nextSequenceNumber = ((date.Year * 10000) + (date.Month * 100) + date.Day) * 10000000000L;
-            }
-
-            Status = status;
-
+        private void OpenMarket()
+        {
+            ValidateSetStatus("cannot open market, market must in closed state",
+                () => Status != OrderBookStatus.Closed);
+            // TODO: move to closed -> pre open transition, consider scenario where market opens multiple times per day
+            var date = Now();
+            _nextSequenceNumber = ((date.Year * 10000) + (date.Month * 100) + date.Day) * 10000000000L;
+            Status = OrderBookStatus.Open;
             Match();
         }
 
-        // private void ExpireAllOrders()
-        // {
-        //     foreach (var order in _orders)
-        //     {
-        //         if (order.TimeInForce == TimeInForce.GoodTilCancel ||
-        //             order.TimeInForce == TimeInForce.GoodTilDate)
-        //             continue;
-        //
-        //         // order.RemainingQuantity = 0;
-        //         // order.Status = OrderStatus.Expired;
-        //
-        //         OrderExpired?.Invoke(this, new OrderExpiredEventArgs(order.ToOrder()));
-        //     }
-        // }
+        private void CloseMarket()
+        {
+            ValidateSetStatus("cannot close market, market must in open state", () => Status != OrderBookStatus.Open);
+            Status = OrderBookStatus.Closed;
+            ExpireDayOrders();
+        }
 
-        // public AggregateBook GetAggregateBook(int depth)
-        // {
-        //     var bids = WorkingOrders(Side.Buy).GroupBy(x => x.Price)
-        //         .Take(depth)
-        //         .Select(x => new AggregateBookLevel(x.Key.Value, x.Sum(y => y.Quantity), x.Count()));
-        //
-        //     var asks = WorkingOrders(Side.Sell).GroupBy(x => x.Price)
-        //         .Take(depth)
-        //         .Select(x => new AggregateBookLevel(x.Key.Value, x.Sum(y => y.Quantity), x.Count()));
-        //
-        //     var ab = new AggregateBook(depth, bids, asks);
-        //
-        //     return ab;
-        // }
+        private void ValidateSetStatus(string message, Func<bool> validation)
+        {
+            if (validation.Invoke())
+            {
+                throw new Exception($"error changing market state: {message}");
+            }
+        }
 
-
-        // private int? _lastTradePrice;
-        // private int _sessionVolume;
-        // private int? _sessionMaxTradePrice;
-        // private int? _sessionMinTradePrice;
-        // private int? _sessionMaxBidPrice;
-        // private int? _sessionMinAskPrice;
-        // private int? _sessionOpenPrice;
-        //
-        // public DateTime SessionDate { get; private set; }
-        //
-        // public int? LastTradePrice
-        // {
-        //     get { return _lastTradePrice; }
-        // }
-        //
-        // public int SessionVolume
-        // {
-        //     get { return _sessionVolume; }
-        // }
-        //
-        // public int? SessionMaxTradePrice
-        // {
-        //     get { return _sessionMaxTradePrice; }
-        // }
-        //
-        // public int? SessionMinTradePrice
-        // {
-        //     get { return _sessionMinTradePrice; }
-        // }
-        //
-        // public int? SessionMaxBidPrice
-        // {
-        //     get { return _sessionMaxBidPrice; }
-        // }
-        //
-        // public int? SessionMinAskPrice
-        // {
-        //     get { return _sessionMinAskPrice; }
-        // }
-        //
-        // public int? SessionOpenPrice
-        // {
-        //     get { return _sessionOpenPrice; }
-        // }
-        //
-        // public DateTime PreviousSessionDate { get; private set; }
-        // public int PreviousSessionVolume { get; private set; }
-        // public int PreviousSessionOpenInterest { get; private set; }
-        // public int PreviousSessionSettlementPrice { get; private set; }
-
-
-        // private bool IsWorking(Side side)
-        // {
-        //     return _orders.Any(x => (x.Status & OrderStatus.Working) != 0 && x.Side == side);
-        // }
-        //
-        // public bool Contains(int id)
-        // {
-        //     return _orders.Any(x => x.Id == id);
-        // }
-
-
-        // public void CreateMarketOrder(Guid id, TimeInForce tif, Side side, int quantity)
-        // {
-        //     if (quantity < 1)
-        //     {
-        //         FireCreateRejected(id, OrderRejectReason.QuantityTooLow);
-        //         return;
-        //     }
-        //
-        //     if (Status != OrderBookStatus.Open)
-        //     {
-        //         FireCreateRejected(id, OrderRejectReason.MarketClosed);
-        //         return;
-        //     }
-        //
-        //     // TODO: reject if for market-limit, "A designated limit is farther than price bands from current Last Best Price"
-        //
-        //     var top = WorkingOrders(side == Side.Buy ? Side.Sell : Side.Buy).FirstOrDefault();
-        //
-        //     // check if book is empty
-        //     if (top == null)
-        //     {
-        //         FireCreateRejected(id, OrderRejectReason.NoOrdersToMatchMarketOrder);
-        //         return;
-        //     }
-        //
-        //     // TODO: need to get these Protection Point values from somewhere
-        //     // 		 -- "Protection point values usually equal half of the Non-reviewable range"
-        //     var protectionPoints = 10 * (side == Side.Buy ? 1 : -1);
-        //     var price = top.Price + protectionPoints;
-        //
-        //     var order = new Order(id, DateTime.Now, DateTime.Now, OrderStatus.Created, Security,
-        //         OrderType.Market, tif, side, price, null, quantity);
-        //
-        //     // if (order.TimeInForce == TimeInForce.FillAndKill)
-        //     // {
-        //     //     // TODO: catch earlier?
-        //     //     if (order.MinQuantity > order.Quantity)
-        //     //     {
-        //     //         FireCreateRejected(order, OrderRejectReason.QuantityOutOfRange);
-        //     //         return;
-        //     //     }
-        //     // }
-        //
-        //     CreateOrder(order);
-        //     Match();
-        // }
-        //
-        // public void CreateMarketLimitOrder(Guid id, TimeInForce tif, Side side, int quantity)
-        // {
-        //     if (quantity < 1)
-        //     {
-        //         FireCreateRejected(id, OrderRejectReason.QuantityTooLow);
-        //         return;
-        //     }
-        //
-        //     if (Status != OrderBookStatus.Open)
-        //     {
-        //         FireCreateRejected(id, OrderRejectReason.MarketClosed);
-        //         return;
-        //     }
-        //
-        //     // TODO: reject if for market-limit, "A designated limit is farther than price bands from current Last Best Price"
-        //
-        //     var top = WorkingOrders(side == Side.Buy ? Side.Sell : Side.Buy).FirstOrDefault();
-        //
-        //     // check if book is empty
-        //     if (top == null)
-        //     {
-        //         FireCreateRejected(id, OrderRejectReason.NoOrdersToMatchMarketOrder);
-        //         return;
-        //     }
-        //
-        //     var order = new Order(id, DateTime.Now, DateTime.Now, OrderStatus.Created, Security,
-        //         OrderType.MarketLimit, tif, side, top.Price, null,
-        //         quantity);
-        //
-        //
-        //     // if (order.TimeInForce == TimeInForce.FillAndKill)
-        //     // {
-        //     //     // TODO: catch earlier?
-        //     //     if (order.MinQuantity > order.Quantity)
-        //     //     {
-        //     //         FireCreateRejected(order, OrderRejectReason.QuantityOutOfRange);
-        //     //         return;
-        //     //     }
-        //     // }
-        //
-        //     CreateOrder(order);
-        //     Match();
-        // }
-        //
-        // public void CreateStopMarketOrder(Guid id, TimeInForce tif, Side side, int stopPrice, int quantity)
-        // {
-        //     if (quantity < 1)
-        //     {
-        //         FireCreateRejected(id, OrderRejectReason.QuantityTooLow);
-        //         return;
-        //     }
-        //
-        //     if (Status == OrderBookStatus.Close || Status == OrderBookStatus.NotAvailable)
-        //     {
-        //         FireCreateRejected(id, OrderRejectReason.MarketClosed);
-        //         return;
-        //     }
-        //
-        //     // if (order.Side == Side.Buy && stopPrice > _lastTradePrice)
-        //     // {
-        //     //     FireCreateRejected(order.Id, OrderRejectReason.StopPriceMustBeLessThanLastTradePrice);
-        //     //     return;
-        //     // }
-        //     //
-        //     // if (order.Side == Side.Sell && stopPrice < _lastTradePrice)
-        //     // {
-        //     //     FireCreateRejected(order.Id, OrderRejectReason.StopPriceMustBeGreaterThanLastTradePrice);
-        //     //     return;
-        //     // }
-        //
-        //     // if (order.TimeInForce == TimeInForce.FillAndKill)
-        //     // {
-        //     //     // TODO: catch earlier?
-        //     //     if (order.MinQuantity > order.Quantity)
-        //     //     {
-        //     //         FireCreateRejected(order, OrderRejectReason.QuantityOutOfRange);
-        //     //         return;
-        //     //     }
-        //     // }
-        //     
-        //     // TODO: price doesn't get set until order is triggered
-        //     var order = new Order(id, DateTime.Now, DateTime.Now, OrderStatus.Hidden, Security,
-        //         OrderType.MarketLimit, tif, side, 0, stopPrice,
-        //         quantity);
-        //
-        //     CreateOrder(order);
-        //     Match();
-        // }
-        //
-        // public void CreateStopLimitOrder(Guid id, TimeInForce tif, Side side, int price, int stopPrice, int quantity)
-        // {
-        //     var order = new Order(id, DateTime.Now, DateTime.Now, OrderStatus.Hidden, Security,
-        //         OrderType.MarketLimit, tif, side, price, stopPrice,
-        //         quantity);
-        //
-        //     if (quantity < 1)
-        //     {
-        //         FireCreateRejected(order.Id, OrderRejectReason.QuantityTooLow);
-        //         return;
-        //     }
-        //
-        //     if (Status == OrderBookStatus.Close || Status == OrderBookStatus.NotAvailable)
-        //     {
-        //         FireCreateRejected(order.Id, OrderRejectReason.MarketClosed);
-        //         return;
-        //     }
-        //
-        //     // if (order.Side == Side.Buy && stopPrice > _lastTradePrice)
-        //     // {
-        //     //     FireCreateRejected(order.Id, OrderRejectReason.StopPriceMustBeLessThanLastTradePrice);
-        //     //     return;
-        //     // }
-        //     //
-        //     // if (order.Side == Side.Sell && stopPrice < _lastTradePrice)
-        //     // {
-        //     //     FireCreateRejected(order.Id, OrderRejectReason.StopPriceMustBeGreaterThanLastTradePrice);
-        //     //     return;
-        //     // }
-        //
-        //     if (order.Type == OrderType.StopLimit)
-        //     {
-        //         if (order.Side == Side.Buy && price < stopPrice)
-        //         {
-        //             FireCreateRejected(order.Id, OrderRejectReason.InvalidStopPriceMustBeGreaterThanEqualTriggerPrice);
-        //             return;
-        //         }
-        //
-        //         if (order.Side == Side.Sell && price > stopPrice)
-        //         {
-        //             FireCreateRejected(order.Id, OrderRejectReason.InvalidStopPriceMustBeLessThanEqualTriggerPrice);
-        //             return;
-        //         }
-        //     }
-        //
-        //     // if (order.TimeInForce == TimeInForce.FillAndKill)
-        //     // {
-        //     //     // TODO: catch earlier?
-        //     //     if (order.MinQuantity > order.Quantity)
-        //     //     {
-        //     //         FireCreateRejected(order, OrderRejectReason.QuantityOutOfRange);
-        //     //         return;
-        //     //     }
-        //     // }
-        //
-        //     CreateOrder(order);
-        //     Match();
-        // }
+        private void ExpireDayOrders()
+        {
+            var orders = _orders.Values.Where(o => o.TimeInForce == TimeInForce.Day).ToList();
+            foreach (var order in orders)
+            {
+                ExpireOrder(order);
+            }
+        }
     }
 
     internal static class SortedDictionaryExtensions

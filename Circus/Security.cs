@@ -4,6 +4,7 @@ namespace Circus
         string Name,
         SecurityType Type,
         decimal TickSize,
-        decimal TickValue
+        decimal TickValue,
+        int MarketOrderProtectionTicks = 10
     );
 }

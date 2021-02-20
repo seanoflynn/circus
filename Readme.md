@@ -2,36 +2,46 @@
 
 A financial exchange simulator.
 
-## Usage
+## Dependencies
 
-Make sure you have [.NET 5](https://dotnet.microsoft.com/download) installed. There are no other dependencies.
+[.NET 5](https://dotnet.microsoft.com/download) is required. There are no other dependencies.
 
 ## To Do
 
 Priority
-- [ ] Finish limit orders
-- [ ] Add market orders
-- [ ] Sessions + time provider
-- [ ] ...
+- [X] Limit orders
+- [X] Market orders
+- [X] Day orders
+- [ ] Market data
+- [ ] Simulator
+- [ ] Sessions (add timers to)
+- [ ] GTC, GTD
+- [ ] Pre-open
 
 ## Features
 
 Order types
-- [ ] Limit orders
-- [ ] Market orders
+- [x] Limit orders
+- [x] Market orders
 - [ ] Stop orders
 
 Time in force/order validity
-- [ ] Day orders
+- [x] Day orders
 - [ ] GTC orders
 - [ ] GTD orders
 - [ ] FAK/FOK orders
 
 Sessions
-- [ ] Time provider
+- [x] Time provider
 - [ ] Sessions
 - [ ] Indicative open
 - [ ] Market statistics
+
+Market data
+- [ ] Trades
+- [ ] Price/qty/count at top of book
+- [ ] Price/qty/count for x levels
+- [ ] All order updates
 
 Safety features
 - [ ] Banding
@@ -41,15 +51,14 @@ Safety features
 - [ ] Self-match prevention
 
 Matching algorithms
-- [ ] FIFO matching algorithm
+- [x] FIFO matching algorithm
 - [ ] Allocation matching algorithm
 - [ ] Pro-Rata matching algorithm
 - [ ] Indicative open, open algorithm
 
 Contract types
 - [ ] Futures
-- [ ] Calendars/spread contracts
-- [ ] Options
+- [ ] Calendar/spread contracts
 
 ## Examples
 
