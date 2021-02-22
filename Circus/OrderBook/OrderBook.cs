@@ -219,7 +219,7 @@ namespace Circus.OrderBook
             var sell = _sellOrders.FirstOrDefault().Value?.FirstOrDefault().Value;
 
             var events = new List<OrderBookEvent>();
-            
+
             while (buy != null && sell != null && buy.Price >= sell.Price)
             {
                 var resting = buy.CreatedTime < sell.CreatedTime ? buy : sell;
@@ -232,11 +232,14 @@ namespace Circus.OrderBook
                 Console.WriteLine($"- resting   {resting}");
                 Console.WriteLine($"- aggressor {aggressor}");
 
-                var fill1 = FillOrder(resting, time, price, quantity, false);
-                var fill2 = FillOrder(aggressor, time, price, quantity, true);
+                FillOrder(resting, time, quantity);
+                FillOrder(aggressor, time, quantity);
 
-                events.Add(new OrderFilledEvent(fill1));
-                events.Add(new OrderFilledEvent(fill2));
+                events.Add(new OrderMatchedEvent(
+                    new Fill(time, price, quantity),
+                    resting.ToOrder(),
+                    aggressor.ToOrder()
+                ));
 
                 buy = _buyOrders.FirstOrDefault().Value?.FirstOrDefault().Value;
                 sell = _sellOrders.FirstOrDefault().Value?.FirstOrDefault().Value;
@@ -245,15 +248,13 @@ namespace Circus.OrderBook
             return events;
         }
 
-        private Fill FillOrder(InternalOrder order, DateTime time, decimal price, int quantity, bool isAggressor)
+        private void FillOrder(InternalOrder order, DateTime time, int quantity)
         {
             order.Fill(time, quantity);
             if (order.Status == OrderStatus.Filled)
             {
                 CompleteOrder(order);
             }
-
-            return new Fill(order.ToOrder(), time, price, quantity, isAggressor);
         }
 
         // private void CheckStops(decimal maxTradePrice, decimal minTradePrice)

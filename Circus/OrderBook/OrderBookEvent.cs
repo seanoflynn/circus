@@ -19,7 +19,7 @@ namespace Circus.OrderBook
 
     public record OrderExpiredEvent(Order Order) : OrderBookEvent;
 
-    public record OrderFilledEvent(Fill Fill) : OrderBookEvent;
+    public record OrderMatchedEvent(Fill Fill, Order Resting, Order Aggressor) : OrderBookEvent;
 
     // public record TradedEventArgs(List<Fill> Fills);
 }
