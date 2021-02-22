@@ -3,7 +3,7 @@ using System.Linq;
 using Circus.OrderBook;
 using NUnit.Framework;
 
-namespace Circus.Tests
+namespace Circus.Tests.OrderBook
 {
     [TestFixture]
     public class OrderBookTest
@@ -15,7 +15,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
@@ -52,7 +52,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
             var id1 = Guid.NewGuid();
@@ -112,7 +112,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
             var id1 = Guid.NewGuid();
@@ -173,7 +173,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
             var id1 = Guid.NewGuid();
@@ -233,7 +233,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
             var id1 = Guid.NewGuid();
@@ -297,7 +297,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
             var id1 = Guid.NewGuid();
@@ -397,7 +397,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
             var id1 = Guid.NewGuid();
@@ -461,7 +461,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
             var id1 = Guid.NewGuid();
@@ -561,7 +561,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
             var id1 = Guid.NewGuid();
@@ -625,7 +625,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
             var id1 = Guid.NewGuid();
@@ -725,7 +725,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
             var id1 = Guid.NewGuid();
@@ -789,7 +789,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
             var id1 = Guid.NewGuid();
@@ -889,7 +889,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
             var id1 = Guid.NewGuid();
@@ -956,7 +956,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
             var id1 = Guid.NewGuid();
@@ -1059,7 +1059,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
             var id1 = Guid.NewGuid();
@@ -1126,7 +1126,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
             var id1 = Guid.NewGuid();
@@ -1229,7 +1229,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
             var id = Guid.NewGuid();
 
             // act
@@ -1252,7 +1252,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
@@ -1279,7 +1279,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
@@ -1303,7 +1303,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
@@ -1342,7 +1342,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
@@ -1381,7 +1381,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
@@ -1422,7 +1422,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
@@ -1450,7 +1450,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
@@ -1478,7 +1478,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
@@ -1506,7 +1506,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
@@ -1530,7 +1530,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
@@ -1557,7 +1557,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
@@ -1585,7 +1585,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
@@ -1610,7 +1610,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
@@ -1650,7 +1650,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
@@ -1674,7 +1674,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
@@ -1700,7 +1700,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10, 20);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
             var id1 = Guid.NewGuid();
@@ -1760,7 +1760,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
 
             var id = Guid.NewGuid();
 
@@ -1784,7 +1784,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
@@ -1808,7 +1808,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
@@ -1832,7 +1832,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
@@ -1871,7 +1871,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
 
             // act & assert
             Assert.Throws<Exception>(() => book.SetStatus(OrderBookStatus.Closed));
@@ -1884,7 +1884,7 @@ namespace Circus.Tests
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new OrderBook.OrderBook(sec, timeProvider);
+            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
             // act & assert

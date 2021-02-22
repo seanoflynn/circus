@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using Circus.OrderBook;
 
-namespace Circus.MarketData
+namespace Circus.MarketDataProducers
 {
     public interface IMarketDataProducer
     {
