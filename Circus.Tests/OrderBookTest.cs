@@ -1,5 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.Linq;
 using Circus.OrderBook;
 using NUnit.Framework;
 
@@ -17,30 +17,31 @@ namespace Circus.Tests
             var timeProvider = new TestTimeProvider(now);
             var book = new OrderBook.OrderBook(sec, timeProvider);
 
-            OrderCreatedSuccessEventArgs createdArgs = null;
-            book.OrderCreated += (sender, e) => createdArgs = e;
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
 
             // act
-            book.CreateLimitOrder(id, TimeInForce.Day, Side.Buy, 100, 3);
+            var events = book.CreateLimitOrder(id, TimeInForce.Day, Side.Buy, 100, 3).ToList();
 
             // assert
-            Assert.IsNotNull(createdArgs);
-            Assert.AreEqual(id, createdArgs.Order.Id);
-            Assert.AreEqual(sec, createdArgs.Order.Security);
-            Assert.AreEqual(now, createdArgs.Order.CreatedTime);
-            Assert.AreEqual(now, createdArgs.Order.ModifiedTime);
-            Assert.IsNull(createdArgs.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Working, createdArgs.Order.Status);
-            Assert.AreEqual(OrderType.Limit, createdArgs.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, createdArgs.Order.TimeInForce);
-            Assert.AreEqual(Side.Buy, createdArgs.Order.Side);
-            Assert.AreEqual(100, createdArgs.Order.Price);
-            Assert.IsNull(createdArgs.Order.StopPrice);
-            Assert.AreEqual(3, createdArgs.Order.Quantity);
-            Assert.AreEqual(0, createdArgs.Order.FilledQuantity);
-            Assert.AreEqual(3, createdArgs.Order.RemainingQuantity);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(1, events.Count);
+            var created = events[0] as OrderCreatedEvent;
+            Assert.IsNotNull(created);
+            Assert.AreEqual(id, created.Order.Id);
+            Assert.AreEqual(sec, created.Order.Security);
+            Assert.AreEqual(now, created.Order.CreatedTime);
+            Assert.AreEqual(now, created.Order.ModifiedTime);
+            Assert.IsNull(created.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Working, created.Order.Status);
+            Assert.AreEqual(OrderType.Limit, created.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, created.Order.TimeInForce);
+            Assert.AreEqual(Side.Buy, created.Order.Side);
+            Assert.AreEqual(100, created.Order.Price);
+            Assert.IsNull(created.Order.StopPrice);
+            Assert.AreEqual(3, created.Order.Quantity);
+            Assert.AreEqual(0, created.Order.FilledQuantity);
+            Assert.AreEqual(3, created.Order.RemainingQuantity);
         }
 
         [Test]
@@ -53,11 +54,6 @@ namespace Circus.Tests
             var book = new OrderBook.OrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
-            var filledArgs = new List<OrderFilledEventArgs>();
-            book.OrderFilled += (_, e) => filledArgs.Add(e);
-            TradedEventArgs tradedArgs = null;
-            book.Traded += (_, e) => tradedArgs = e;
-
             var id1 = Guid.NewGuid();
             book.CreateLimitOrder(id1, TimeInForce.Day, Side.Buy, 100, 3);
             var now2 = new DateTime(2000, 1, 1, 12, 1, 0);
@@ -65,51 +61,53 @@ namespace Circus.Tests
             var id2 = Guid.NewGuid();
 
             // act
-            book.CreateLimitOrder(id2, TimeInForce.Day, Side.Sell, 100, 5);
+            var events = book.CreateLimitOrder(id2, TimeInForce.Day, Side.Sell, 100, 5).ToList();
 
             // assert
-            Assert.IsNotNull(filledArgs);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(3, events.Count);
 
-            Assert.AreEqual(id1, filledArgs[0].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[0].Fill.Order.Security);
-            Assert.AreEqual(now1, filledArgs[0].Fill.Order.CreatedTime);
-            Assert.AreEqual(now1, filledArgs[0].Fill.Order.ModifiedTime);
-            Assert.AreEqual(now2, filledArgs[0].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Filled, filledArgs[0].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[0].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[0].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Buy, filledArgs[0].Fill.Order.Side);
-            Assert.AreEqual(100, filledArgs[0].Fill.Order.Price);
-            Assert.IsNull(filledArgs[0].Fill.Order.StopPrice);
-            Assert.AreEqual(3, filledArgs[0].Fill.Order.Quantity);
-            Assert.AreEqual(3, filledArgs[0].Fill.Order.FilledQuantity);
-            Assert.AreEqual(0, filledArgs[0].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now2, filledArgs[0].Fill.Time);
-            Assert.AreEqual(100, filledArgs[0].Fill.Price);
-            Assert.AreEqual(3, filledArgs[0].Fill.Quantity);
-            Assert.IsFalse(filledArgs[0].Fill.IsAggressor);
+            var filled1 = events[1] as OrderFilledEvent;
+            Assert.IsNotNull(filled1);
+            Assert.AreEqual(id1, filled1.Fill.Order.Id);
+            Assert.AreEqual(sec, filled1.Fill.Order.Security);
+            Assert.AreEqual(now1, filled1.Fill.Order.CreatedTime);
+            Assert.AreEqual(now1, filled1.Fill.Order.ModifiedTime);
+            Assert.AreEqual(now2, filled1.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Filled, filled1.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled1.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled1.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Buy, filled1.Fill.Order.Side);
+            Assert.AreEqual(100, filled1.Fill.Order.Price);
+            Assert.IsNull(filled1.Fill.Order.StopPrice);
+            Assert.AreEqual(3, filled1.Fill.Order.Quantity);
+            Assert.AreEqual(3, filled1.Fill.Order.FilledQuantity);
+            Assert.AreEqual(0, filled1.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now2, filled1.Fill.Time);
+            Assert.AreEqual(100, filled1.Fill.Price);
+            Assert.AreEqual(3, filled1.Fill.Quantity);
+            Assert.IsFalse(filled1.Fill.IsAggressor);
 
-            Assert.AreEqual(id2, filledArgs[1].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[1].Fill.Order.Security);
-            Assert.AreEqual(now2, filledArgs[1].Fill.Order.CreatedTime);
-            Assert.AreEqual(now2, filledArgs[1].Fill.Order.ModifiedTime);
-            Assert.IsNull(filledArgs[1].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Working, filledArgs[1].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[1].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[1].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Sell, filledArgs[1].Fill.Order.Side);
-            Assert.AreEqual(100, filledArgs[1].Fill.Order.Price);
-            Assert.IsNull(filledArgs[1].Fill.Order.StopPrice);
-            Assert.AreEqual(5, filledArgs[1].Fill.Order.Quantity);
-            Assert.AreEqual(3, filledArgs[1].Fill.Order.FilledQuantity);
-            Assert.AreEqual(2, filledArgs[1].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now2, filledArgs[1].Fill.Time);
-            Assert.AreEqual(100, filledArgs[1].Fill.Price);
-            Assert.AreEqual(3, filledArgs[1].Fill.Quantity);
-            Assert.IsTrue(filledArgs[1].Fill.IsAggressor);
-
-            Assert.AreEqual(filledArgs[0].Fill, tradedArgs.Fills[0]);
-            Assert.AreEqual(filledArgs[1].Fill, tradedArgs.Fills[1]);
+            var filled2 = events[2] as OrderFilledEvent;
+            Assert.IsNotNull(filled2);
+            Assert.AreEqual(id2, filled2.Fill.Order.Id);
+            Assert.AreEqual(sec, filled2.Fill.Order.Security);
+            Assert.AreEqual(now2, filled2.Fill.Order.CreatedTime);
+            Assert.AreEqual(now2, filled2.Fill.Order.ModifiedTime);
+            Assert.IsNull(filled2.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Working, filled2.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled2.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled2.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Sell, filled2.Fill.Order.Side);
+            Assert.AreEqual(100, filled2.Fill.Order.Price);
+            Assert.IsNull(filled2.Fill.Order.StopPrice);
+            Assert.AreEqual(5, filled2.Fill.Order.Quantity);
+            Assert.AreEqual(3, filled2.Fill.Order.FilledQuantity);
+            Assert.AreEqual(2, filled2.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now2, filled2.Fill.Time);
+            Assert.AreEqual(100, filled2.Fill.Price);
+            Assert.AreEqual(3, filled2.Fill.Quantity);
+            Assert.IsTrue(filled2.Fill.IsAggressor);
         }
 
         [Test]
@@ -122,11 +120,6 @@ namespace Circus.Tests
             var book = new OrderBook.OrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
-            var filledArgs = new List<OrderFilledEventArgs>();
-            book.OrderFilled += (_, e) => filledArgs.Add(e);
-            TradedEventArgs tradedArgs = null;
-            book.Traded += (_, e) => tradedArgs = e;
-
             var id1 = Guid.NewGuid();
             book.CreateLimitOrder(id1, TimeInForce.Day, Side.Buy, 110, 3);
             var now2 = new DateTime(2000, 1, 1, 12, 1, 0);
@@ -134,51 +127,53 @@ namespace Circus.Tests
             var id2 = Guid.NewGuid();
 
             // act
-            book.CreateLimitOrder(id2, TimeInForce.Day, Side.Sell, 100, 5);
+            var events = book.CreateLimitOrder(id2, TimeInForce.Day, Side.Sell, 100, 5).ToList();
 
             // assert
-            Assert.IsNotNull(filledArgs);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(3, events.Count);
 
-            Assert.AreEqual(id1, filledArgs[0].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[0].Fill.Order.Security);
-            Assert.AreEqual(now1, filledArgs[0].Fill.Order.CreatedTime);
-            Assert.AreEqual(now1, filledArgs[0].Fill.Order.ModifiedTime);
-            Assert.AreEqual(now2, filledArgs[0].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Filled, filledArgs[0].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[0].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[0].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Buy, filledArgs[0].Fill.Order.Side);
-            Assert.AreEqual(110, filledArgs[0].Fill.Order.Price);
-            Assert.IsNull(filledArgs[0].Fill.Order.StopPrice);
-            Assert.AreEqual(3, filledArgs[0].Fill.Order.Quantity);
-            Assert.AreEqual(3, filledArgs[0].Fill.Order.FilledQuantity);
-            Assert.AreEqual(0, filledArgs[0].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now2, filledArgs[0].Fill.Time);
-            Assert.AreEqual(110, filledArgs[0].Fill.Price);
-            Assert.AreEqual(3, filledArgs[0].Fill.Quantity);
-            Assert.IsFalse(filledArgs[0].Fill.IsAggressor);
+            var filled1 = events[1] as OrderFilledEvent;
+            Assert.IsNotNull(filled1);
+            Assert.AreEqual(id1, filled1.Fill.Order.Id);
+            Assert.AreEqual(sec, filled1.Fill.Order.Security);
+            Assert.AreEqual(now1, filled1.Fill.Order.CreatedTime);
+            Assert.AreEqual(now1, filled1.Fill.Order.ModifiedTime);
+            Assert.AreEqual(now2, filled1.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Filled, filled1.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled1.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled1.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Buy, filled1.Fill.Order.Side);
+            Assert.AreEqual(110, filled1.Fill.Order.Price);
+            Assert.IsNull(filled1.Fill.Order.StopPrice);
+            Assert.AreEqual(3, filled1.Fill.Order.Quantity);
+            Assert.AreEqual(3, filled1.Fill.Order.FilledQuantity);
+            Assert.AreEqual(0, filled1.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now2, filled1.Fill.Time);
+            Assert.AreEqual(110, filled1.Fill.Price);
+            Assert.AreEqual(3, filled1.Fill.Quantity);
+            Assert.IsFalse(filled1.Fill.IsAggressor);
 
-            Assert.AreEqual(id2, filledArgs[1].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[1].Fill.Order.Security);
-            Assert.AreEqual(now2, filledArgs[1].Fill.Order.CreatedTime);
-            Assert.AreEqual(now2, filledArgs[1].Fill.Order.ModifiedTime);
-            Assert.IsNull(filledArgs[1].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Working, filledArgs[1].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[1].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[1].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Sell, filledArgs[1].Fill.Order.Side);
-            Assert.AreEqual(100, filledArgs[1].Fill.Order.Price);
-            Assert.IsNull(filledArgs[1].Fill.Order.StopPrice);
-            Assert.AreEqual(5, filledArgs[1].Fill.Order.Quantity);
-            Assert.AreEqual(3, filledArgs[1].Fill.Order.FilledQuantity);
-            Assert.AreEqual(2, filledArgs[1].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now2, filledArgs[1].Fill.Time);
-            Assert.AreEqual(110, filledArgs[1].Fill.Price);
-            Assert.AreEqual(3, filledArgs[1].Fill.Quantity);
-            Assert.IsTrue(filledArgs[1].Fill.IsAggressor);
-
-            Assert.AreEqual(filledArgs[0].Fill, tradedArgs.Fills[0]);
-            Assert.AreEqual(filledArgs[1].Fill, tradedArgs.Fills[1]);
+            var filled2 = events[2] as OrderFilledEvent;
+            Assert.IsNotNull(filled2);
+            Assert.AreEqual(id2, filled2.Fill.Order.Id);
+            Assert.AreEqual(sec, filled2.Fill.Order.Security);
+            Assert.AreEqual(now2, filled2.Fill.Order.CreatedTime);
+            Assert.AreEqual(now2, filled2.Fill.Order.ModifiedTime);
+            Assert.IsNull(filled2.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Working, filled2.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled2.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled2.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Sell, filled2.Fill.Order.Side);
+            Assert.AreEqual(100, filled2.Fill.Order.Price);
+            Assert.IsNull(filled2.Fill.Order.StopPrice);
+            Assert.AreEqual(5, filled2.Fill.Order.Quantity);
+            Assert.AreEqual(3, filled2.Fill.Order.FilledQuantity);
+            Assert.AreEqual(2, filled2.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now2, filled2.Fill.Time);
+            Assert.AreEqual(110, filled2.Fill.Price);
+            Assert.AreEqual(3, filled2.Fill.Quantity);
+            Assert.IsTrue(filled2.Fill.IsAggressor);
         }
 
         [Test]
@@ -191,11 +186,6 @@ namespace Circus.Tests
             var book = new OrderBook.OrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
-            var filledArgs = new List<OrderFilledEventArgs>();
-            book.OrderFilled += (_, e) => filledArgs.Add(e);
-            TradedEventArgs tradedArgs = null;
-            book.Traded += (_, e) => tradedArgs = e;
-
             var id1 = Guid.NewGuid();
             book.CreateLimitOrder(id1, TimeInForce.Day, Side.Buy, 110, 5);
             var now2 = new DateTime(2000, 1, 1, 12, 1, 0);
@@ -203,51 +193,53 @@ namespace Circus.Tests
             var id2 = Guid.NewGuid();
 
             // act
-            book.CreateLimitOrder(id2, TimeInForce.Day, Side.Sell, 100, 3);
+            var events = book.CreateLimitOrder(id2, TimeInForce.Day, Side.Sell, 100, 3).ToList();
 
             // assert
-            Assert.IsNotNull(filledArgs);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(3, events.Count);
 
-            Assert.AreEqual(id1, filledArgs[0].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[0].Fill.Order.Security);
-            Assert.AreEqual(now1, filledArgs[0].Fill.Order.CreatedTime);
-            Assert.AreEqual(now1, filledArgs[0].Fill.Order.ModifiedTime);
-            Assert.IsNull(filledArgs[0].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Working, filledArgs[0].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[0].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[0].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Buy, filledArgs[0].Fill.Order.Side);
-            Assert.AreEqual(110, filledArgs[0].Fill.Order.Price);
-            Assert.IsNull(filledArgs[0].Fill.Order.StopPrice);
-            Assert.AreEqual(5, filledArgs[0].Fill.Order.Quantity);
-            Assert.AreEqual(3, filledArgs[0].Fill.Order.FilledQuantity);
-            Assert.AreEqual(2, filledArgs[0].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now2, filledArgs[0].Fill.Time);
-            Assert.AreEqual(110, filledArgs[0].Fill.Price);
-            Assert.AreEqual(3, filledArgs[0].Fill.Quantity);
-            Assert.IsFalse(filledArgs[0].Fill.IsAggressor);
+            var filled1 = events[1] as OrderFilledEvent;
+            Assert.IsNotNull(filled1);
+            Assert.AreEqual(id1, filled1.Fill.Order.Id);
+            Assert.AreEqual(sec, filled1.Fill.Order.Security);
+            Assert.AreEqual(now1, filled1.Fill.Order.CreatedTime);
+            Assert.AreEqual(now1, filled1.Fill.Order.ModifiedTime);
+            Assert.IsNull(filled1.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Working, filled1.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled1.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled1.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Buy, filled1.Fill.Order.Side);
+            Assert.AreEqual(110, filled1.Fill.Order.Price);
+            Assert.IsNull(filled1.Fill.Order.StopPrice);
+            Assert.AreEqual(5, filled1.Fill.Order.Quantity);
+            Assert.AreEqual(3, filled1.Fill.Order.FilledQuantity);
+            Assert.AreEqual(2, filled1.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now2, filled1.Fill.Time);
+            Assert.AreEqual(110, filled1.Fill.Price);
+            Assert.AreEqual(3, filled1.Fill.Quantity);
+            Assert.IsFalse(filled1.Fill.IsAggressor);
 
-            Assert.AreEqual(id2, filledArgs[1].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[1].Fill.Order.Security);
-            Assert.AreEqual(now2, filledArgs[1].Fill.Order.CreatedTime);
-            Assert.AreEqual(now2, filledArgs[1].Fill.Order.ModifiedTime);
-            Assert.AreEqual(now2, filledArgs[1].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Filled, filledArgs[1].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[1].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[1].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Sell, filledArgs[1].Fill.Order.Side);
-            Assert.AreEqual(100, filledArgs[1].Fill.Order.Price);
-            Assert.IsNull(filledArgs[1].Fill.Order.StopPrice);
-            Assert.AreEqual(3, filledArgs[1].Fill.Order.Quantity);
-            Assert.AreEqual(3, filledArgs[1].Fill.Order.FilledQuantity);
-            Assert.AreEqual(0, filledArgs[1].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now2, filledArgs[1].Fill.Time);
-            Assert.AreEqual(110, filledArgs[1].Fill.Price);
-            Assert.AreEqual(3, filledArgs[1].Fill.Quantity);
-            Assert.IsTrue(filledArgs[1].Fill.IsAggressor);
-
-            Assert.AreEqual(filledArgs[0].Fill, tradedArgs.Fills[0]);
-            Assert.AreEqual(filledArgs[1].Fill, tradedArgs.Fills[1]);
+            var filled2 = events[2] as OrderFilledEvent;
+            Assert.IsNotNull(filled2);
+            Assert.AreEqual(id2, filled2.Fill.Order.Id);
+            Assert.AreEqual(sec, filled2.Fill.Order.Security);
+            Assert.AreEqual(now2, filled2.Fill.Order.CreatedTime);
+            Assert.AreEqual(now2, filled2.Fill.Order.ModifiedTime);
+            Assert.AreEqual(now2, filled2.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Filled, filled2.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled2.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled2.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Sell, filled2.Fill.Order.Side);
+            Assert.AreEqual(100, filled2.Fill.Order.Price);
+            Assert.IsNull(filled2.Fill.Order.StopPrice);
+            Assert.AreEqual(3, filled2.Fill.Order.Quantity);
+            Assert.AreEqual(3, filled2.Fill.Order.FilledQuantity);
+            Assert.AreEqual(0, filled2.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now2, filled2.Fill.Time);
+            Assert.AreEqual(110, filled2.Fill.Price);
+            Assert.AreEqual(3, filled2.Fill.Quantity);
+            Assert.IsTrue(filled2.Fill.IsAggressor);
         }
 
         [Test]
@@ -260,11 +252,6 @@ namespace Circus.Tests
             var book = new OrderBook.OrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
-            var filledArgs = new List<OrderFilledEventArgs>();
-            book.OrderFilled += (_, e) => filledArgs.Add(e);
-            TradedEventArgs tradedArgs = null;
-            book.Traded += (_, e) => tradedArgs = e;
-
             var id1 = Guid.NewGuid();
             book.CreateLimitOrder(id1, TimeInForce.Day, Side.Buy, 110, 5);
             var now2 = new DateTime(2000, 1, 1, 12, 1, 0);
@@ -276,51 +263,53 @@ namespace Circus.Tests
             var id3 = Guid.NewGuid();
 
             // act
-            book.CreateLimitOrder(id3, TimeInForce.Day, Side.Sell, 100, 3);
+            var events = book.CreateLimitOrder(id3, TimeInForce.Day, Side.Sell, 100, 3).ToList();
 
             // assert
-            Assert.IsNotNull(filledArgs);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(3, events.Count);
 
-            Assert.AreEqual(id2, filledArgs[0].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[0].Fill.Order.Security);
-            Assert.AreEqual(now2, filledArgs[0].Fill.Order.CreatedTime);
-            Assert.AreEqual(now2, filledArgs[0].Fill.Order.ModifiedTime);
-            Assert.IsNull(filledArgs[0].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Working, filledArgs[0].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[0].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[0].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Buy, filledArgs[0].Fill.Order.Side);
-            Assert.AreEqual(120, filledArgs[0].Fill.Order.Price);
-            Assert.IsNull(filledArgs[0].Fill.Order.StopPrice);
-            Assert.AreEqual(5, filledArgs[0].Fill.Order.Quantity);
-            Assert.AreEqual(3, filledArgs[0].Fill.Order.FilledQuantity);
-            Assert.AreEqual(2, filledArgs[0].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now3, filledArgs[0].Fill.Time);
-            Assert.AreEqual(120, filledArgs[0].Fill.Price);
-            Assert.AreEqual(3, filledArgs[0].Fill.Quantity);
-            Assert.IsFalse(filledArgs[0].Fill.IsAggressor);
+            var filled1 = events[1] as OrderFilledEvent;
+            Assert.IsNotNull(filled1);
+            Assert.AreEqual(id2, filled1.Fill.Order.Id);
+            Assert.AreEqual(sec, filled1.Fill.Order.Security);
+            Assert.AreEqual(now2, filled1.Fill.Order.CreatedTime);
+            Assert.AreEqual(now2, filled1.Fill.Order.ModifiedTime);
+            Assert.IsNull(filled1.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Working, filled1.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled1.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled1.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Buy, filled1.Fill.Order.Side);
+            Assert.AreEqual(120, filled1.Fill.Order.Price);
+            Assert.IsNull(filled1.Fill.Order.StopPrice);
+            Assert.AreEqual(5, filled1.Fill.Order.Quantity);
+            Assert.AreEqual(3, filled1.Fill.Order.FilledQuantity);
+            Assert.AreEqual(2, filled1.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now3, filled1.Fill.Time);
+            Assert.AreEqual(120, filled1.Fill.Price);
+            Assert.AreEqual(3, filled1.Fill.Quantity);
+            Assert.IsFalse(filled1.Fill.IsAggressor);
 
-            Assert.AreEqual(id3, filledArgs[1].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[1].Fill.Order.Security);
-            Assert.AreEqual(now3, filledArgs[1].Fill.Order.CreatedTime);
-            Assert.AreEqual(now3, filledArgs[1].Fill.Order.ModifiedTime);
-            Assert.AreEqual(now3, filledArgs[1].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Filled, filledArgs[1].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[1].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[1].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Sell, filledArgs[1].Fill.Order.Side);
-            Assert.AreEqual(100, filledArgs[1].Fill.Order.Price);
-            Assert.IsNull(filledArgs[1].Fill.Order.StopPrice);
-            Assert.AreEqual(3, filledArgs[1].Fill.Order.Quantity);
-            Assert.AreEqual(3, filledArgs[1].Fill.Order.FilledQuantity);
-            Assert.AreEqual(0, filledArgs[1].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now3, filledArgs[1].Fill.Time);
-            Assert.AreEqual(120, filledArgs[1].Fill.Price);
-            Assert.AreEqual(3, filledArgs[1].Fill.Quantity);
-            Assert.IsTrue(filledArgs[1].Fill.IsAggressor);
-
-            Assert.AreEqual(filledArgs[0].Fill, tradedArgs.Fills[0]);
-            Assert.AreEqual(filledArgs[1].Fill, tradedArgs.Fills[1]);
+            var filled2 = events[2] as OrderFilledEvent;
+            Assert.IsNotNull(filled2);
+            Assert.AreEqual(id3, filled2.Fill.Order.Id);
+            Assert.AreEqual(sec, filled2.Fill.Order.Security);
+            Assert.AreEqual(now3, filled2.Fill.Order.CreatedTime);
+            Assert.AreEqual(now3, filled2.Fill.Order.ModifiedTime);
+            Assert.AreEqual(now3, filled2.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Filled, filled2.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled2.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled2.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Sell, filled2.Fill.Order.Side);
+            Assert.AreEqual(100, filled2.Fill.Order.Price);
+            Assert.IsNull(filled2.Fill.Order.StopPrice);
+            Assert.AreEqual(3, filled2.Fill.Order.Quantity);
+            Assert.AreEqual(3, filled2.Fill.Order.FilledQuantity);
+            Assert.AreEqual(0, filled2.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now3, filled2.Fill.Time);
+            Assert.AreEqual(120, filled2.Fill.Price);
+            Assert.AreEqual(3, filled2.Fill.Quantity);
+            Assert.IsTrue(filled2.Fill.IsAggressor);
         }
 
         [Test]
@@ -333,11 +322,6 @@ namespace Circus.Tests
             var book = new OrderBook.OrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
-            var filledArgs = new List<OrderFilledEventArgs>();
-            book.OrderFilled += (_, e) => filledArgs.Add(e);
-            TradedEventArgs tradedArgs = null;
-            book.Traded += (_, e) => tradedArgs = e;
-
             var id1 = Guid.NewGuid();
             book.CreateLimitOrder(id1, TimeInForce.Day, Side.Buy, 110, 5);
             var now2 = new DateTime(2000, 1, 1, 12, 1, 0);
@@ -349,91 +333,95 @@ namespace Circus.Tests
             var id3 = Guid.NewGuid();
 
             // act
-            book.CreateLimitOrder(id3, TimeInForce.Day, Side.Sell, 100, 8);
+            var events = book.CreateLimitOrder(id3, TimeInForce.Day, Side.Sell, 100, 8).ToList();
 
             // assert
-            Assert.IsNotNull(filledArgs);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(5, events.Count);
 
-            Assert.AreEqual(id2, filledArgs[0].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[0].Fill.Order.Security);
-            Assert.AreEqual(now2, filledArgs[0].Fill.Order.CreatedTime);
-            Assert.AreEqual(now2, filledArgs[0].Fill.Order.ModifiedTime);
-            Assert.AreEqual(now3, filledArgs[0].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Filled, filledArgs[0].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[0].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[0].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Buy, filledArgs[0].Fill.Order.Side);
-            Assert.AreEqual(120, filledArgs[0].Fill.Order.Price);
-            Assert.IsNull(filledArgs[0].Fill.Order.StopPrice);
-            Assert.AreEqual(5, filledArgs[0].Fill.Order.Quantity);
-            Assert.AreEqual(5, filledArgs[0].Fill.Order.FilledQuantity);
-            Assert.AreEqual(0, filledArgs[0].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now3, filledArgs[0].Fill.Time);
-            Assert.AreEqual(120, filledArgs[0].Fill.Price);
-            Assert.AreEqual(5, filledArgs[0].Fill.Quantity);
-            Assert.IsFalse(filledArgs[0].Fill.IsAggressor);
+            var filled1 = events[1] as OrderFilledEvent;
+            Assert.IsNotNull(filled1);
+            Assert.AreEqual(id2, filled1.Fill.Order.Id);
+            Assert.AreEqual(sec, filled1.Fill.Order.Security);
+            Assert.AreEqual(now2, filled1.Fill.Order.CreatedTime);
+            Assert.AreEqual(now2, filled1.Fill.Order.ModifiedTime);
+            Assert.AreEqual(now3, filled1.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Filled, filled1.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled1.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled1.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Buy, filled1.Fill.Order.Side);
+            Assert.AreEqual(120, filled1.Fill.Order.Price);
+            Assert.IsNull(filled1.Fill.Order.StopPrice);
+            Assert.AreEqual(5, filled1.Fill.Order.Quantity);
+            Assert.AreEqual(5, filled1.Fill.Order.FilledQuantity);
+            Assert.AreEqual(0, filled1.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now3, filled1.Fill.Time);
+            Assert.AreEqual(120, filled1.Fill.Price);
+            Assert.AreEqual(5, filled1.Fill.Quantity);
+            Assert.IsFalse(filled1.Fill.IsAggressor);
 
-            Assert.AreEqual(id3, filledArgs[1].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[1].Fill.Order.Security);
-            Assert.AreEqual(now3, filledArgs[1].Fill.Order.CreatedTime);
-            Assert.AreEqual(now3, filledArgs[1].Fill.Order.ModifiedTime);
-            Assert.IsNull(filledArgs[1].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Working, filledArgs[1].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[1].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[1].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Sell, filledArgs[1].Fill.Order.Side);
-            Assert.AreEqual(100, filledArgs[1].Fill.Order.Price);
-            Assert.IsNull(filledArgs[1].Fill.Order.StopPrice);
-            Assert.AreEqual(8, filledArgs[1].Fill.Order.Quantity);
-            Assert.AreEqual(5, filledArgs[1].Fill.Order.FilledQuantity);
-            Assert.AreEqual(3, filledArgs[1].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now3, filledArgs[1].Fill.Time);
-            Assert.AreEqual(120, filledArgs[1].Fill.Price);
-            Assert.AreEqual(5, filledArgs[1].Fill.Quantity);
-            Assert.IsTrue(filledArgs[1].Fill.IsAggressor);
+            var filled2 = events[2] as OrderFilledEvent;
+            Assert.IsNotNull(filled2);
+            Assert.AreEqual(id3, filled2.Fill.Order.Id);
+            Assert.AreEqual(sec, filled2.Fill.Order.Security);
+            Assert.AreEqual(now3, filled2.Fill.Order.CreatedTime);
+            Assert.AreEqual(now3, filled2.Fill.Order.ModifiedTime);
+            Assert.IsNull(filled2.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Working, filled2.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled2.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled2.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Sell, filled2.Fill.Order.Side);
+            Assert.AreEqual(100, filled2.Fill.Order.Price);
+            Assert.IsNull(filled2.Fill.Order.StopPrice);
+            Assert.AreEqual(8, filled2.Fill.Order.Quantity);
+            Assert.AreEqual(5, filled2.Fill.Order.FilledQuantity);
+            Assert.AreEqual(3, filled2.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now3, filled2.Fill.Time);
+            Assert.AreEqual(120, filled2.Fill.Price);
+            Assert.AreEqual(5, filled2.Fill.Quantity);
+            Assert.IsTrue(filled2.Fill.IsAggressor);
 
-            Assert.AreEqual(id1, filledArgs[2].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[2].Fill.Order.Security);
-            Assert.AreEqual(now1, filledArgs[2].Fill.Order.CreatedTime);
-            Assert.AreEqual(now1, filledArgs[2].Fill.Order.ModifiedTime);
-            Assert.IsNull(filledArgs[2].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Working, filledArgs[2].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[2].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[2].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Buy, filledArgs[2].Fill.Order.Side);
-            Assert.AreEqual(110, filledArgs[2].Fill.Order.Price);
-            Assert.IsNull(filledArgs[2].Fill.Order.StopPrice);
-            Assert.AreEqual(5, filledArgs[2].Fill.Order.Quantity);
-            Assert.AreEqual(3, filledArgs[2].Fill.Order.FilledQuantity);
-            Assert.AreEqual(2, filledArgs[2].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now3, filledArgs[2].Fill.Time);
-            Assert.AreEqual(110, filledArgs[2].Fill.Price);
-            Assert.AreEqual(3, filledArgs[2].Fill.Quantity);
-            Assert.IsFalse(filledArgs[2].Fill.IsAggressor);
+            var filled3 = events[3] as OrderFilledEvent;
+            Assert.IsNotNull(filled3);
+            Assert.AreEqual(id1, filled3.Fill.Order.Id);
+            Assert.AreEqual(sec, filled3.Fill.Order.Security);
+            Assert.AreEqual(now1, filled3.Fill.Order.CreatedTime);
+            Assert.AreEqual(now1, filled3.Fill.Order.ModifiedTime);
+            Assert.IsNull(filled3.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Working, filled3.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled3.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled3.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Buy, filled3.Fill.Order.Side);
+            Assert.AreEqual(110, filled3.Fill.Order.Price);
+            Assert.IsNull(filled3.Fill.Order.StopPrice);
+            Assert.AreEqual(5, filled3.Fill.Order.Quantity);
+            Assert.AreEqual(3, filled3.Fill.Order.FilledQuantity);
+            Assert.AreEqual(2, filled3.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now3, filled3.Fill.Time);
+            Assert.AreEqual(110, filled3.Fill.Price);
+            Assert.AreEqual(3, filled3.Fill.Quantity);
+            Assert.IsFalse(filled3.Fill.IsAggressor);
 
-            Assert.AreEqual(id3, filledArgs[3].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[3].Fill.Order.Security);
-            Assert.AreEqual(now3, filledArgs[3].Fill.Order.CreatedTime);
-            Assert.AreEqual(now3, filledArgs[3].Fill.Order.ModifiedTime);
-            Assert.AreEqual(now3, filledArgs[3].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Filled, filledArgs[3].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[3].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[3].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Sell, filledArgs[3].Fill.Order.Side);
-            Assert.AreEqual(100, filledArgs[3].Fill.Order.Price);
-            Assert.IsNull(filledArgs[3].Fill.Order.StopPrice);
-            Assert.AreEqual(8, filledArgs[3].Fill.Order.Quantity);
-            Assert.AreEqual(8, filledArgs[3].Fill.Order.FilledQuantity);
-            Assert.AreEqual(0, filledArgs[3].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now3, filledArgs[3].Fill.Time);
-            Assert.AreEqual(110, filledArgs[3].Fill.Price);
-            Assert.AreEqual(3, filledArgs[3].Fill.Quantity);
-            Assert.IsTrue(filledArgs[3].Fill.IsAggressor);
-
-            Assert.AreEqual(filledArgs[0].Fill, tradedArgs.Fills[0]);
-            Assert.AreEqual(filledArgs[1].Fill, tradedArgs.Fills[1]);
-            Assert.AreEqual(filledArgs[2].Fill, tradedArgs.Fills[2]);
-            Assert.AreEqual(filledArgs[3].Fill, tradedArgs.Fills[3]);
+            var filled4 = events[4] as OrderFilledEvent;
+            Assert.IsNotNull(filled4);
+            Assert.AreEqual(id3, filled4.Fill.Order.Id);
+            Assert.AreEqual(sec, filled4.Fill.Order.Security);
+            Assert.AreEqual(now3, filled4.Fill.Order.CreatedTime);
+            Assert.AreEqual(now3, filled4.Fill.Order.ModifiedTime);
+            Assert.AreEqual(now3, filled4.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Filled, filled4.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled4.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled4.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Sell, filled4.Fill.Order.Side);
+            Assert.AreEqual(100, filled4.Fill.Order.Price);
+            Assert.IsNull(filled4.Fill.Order.StopPrice);
+            Assert.AreEqual(8, filled4.Fill.Order.Quantity);
+            Assert.AreEqual(8, filled4.Fill.Order.FilledQuantity);
+            Assert.AreEqual(0, filled4.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now3, filled4.Fill.Time);
+            Assert.AreEqual(110, filled4.Fill.Price);
+            Assert.AreEqual(3, filled4.Fill.Quantity);
+            Assert.IsTrue(filled4.Fill.IsAggressor);
         }
 
         [Test]
@@ -446,11 +434,6 @@ namespace Circus.Tests
             var book = new OrderBook.OrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
-            var filledArgs = new List<OrderFilledEventArgs>();
-            book.OrderFilled += (_, e) => filledArgs.Add(e);
-            TradedEventArgs tradedArgs = null;
-            book.Traded += (_, e) => tradedArgs = e;
-
             var id1 = Guid.NewGuid();
             book.CreateLimitOrder(id1, TimeInForce.Day, Side.Buy, 110, 5);
             var now2 = new DateTime(2000, 1, 1, 12, 1, 0);
@@ -462,51 +445,53 @@ namespace Circus.Tests
             var id3 = Guid.NewGuid();
 
             // act
-            book.CreateLimitOrder(id3, TimeInForce.Day, Side.Sell, 100, 3);
+            var events = book.CreateLimitOrder(id3, TimeInForce.Day, Side.Sell, 100, 3).ToList();
 
             // assert
-            Assert.IsNotNull(filledArgs);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(3, events.Count);
 
-            Assert.AreEqual(id1, filledArgs[0].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[0].Fill.Order.Security);
-            Assert.AreEqual(now1, filledArgs[0].Fill.Order.CreatedTime);
-            Assert.AreEqual(now1, filledArgs[0].Fill.Order.ModifiedTime);
-            Assert.IsNull(filledArgs[0].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Working, filledArgs[0].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[0].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[0].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Buy, filledArgs[0].Fill.Order.Side);
-            Assert.AreEqual(110, filledArgs[0].Fill.Order.Price);
-            Assert.IsNull(filledArgs[0].Fill.Order.StopPrice);
-            Assert.AreEqual(5, filledArgs[0].Fill.Order.Quantity);
-            Assert.AreEqual(3, filledArgs[0].Fill.Order.FilledQuantity);
-            Assert.AreEqual(2, filledArgs[0].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now3, filledArgs[0].Fill.Time);
-            Assert.AreEqual(110, filledArgs[0].Fill.Price);
-            Assert.AreEqual(3, filledArgs[0].Fill.Quantity);
-            Assert.IsFalse(filledArgs[0].Fill.IsAggressor);
+            var filled1 = events[1] as OrderFilledEvent;
+            Assert.IsNotNull(filled1);
+            Assert.AreEqual(id1, filled1.Fill.Order.Id);
+            Assert.AreEqual(sec, filled1.Fill.Order.Security);
+            Assert.AreEqual(now1, filled1.Fill.Order.CreatedTime);
+            Assert.AreEqual(now1, filled1.Fill.Order.ModifiedTime);
+            Assert.IsNull(filled1.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Working, filled1.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled1.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled1.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Buy, filled1.Fill.Order.Side);
+            Assert.AreEqual(110, filled1.Fill.Order.Price);
+            Assert.IsNull(filled1.Fill.Order.StopPrice);
+            Assert.AreEqual(5, filled1.Fill.Order.Quantity);
+            Assert.AreEqual(3, filled1.Fill.Order.FilledQuantity);
+            Assert.AreEqual(2, filled1.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now3, filled1.Fill.Time);
+            Assert.AreEqual(110, filled1.Fill.Price);
+            Assert.AreEqual(3, filled1.Fill.Quantity);
+            Assert.IsFalse(filled1.Fill.IsAggressor);
 
-            Assert.AreEqual(id3, filledArgs[1].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[1].Fill.Order.Security);
-            Assert.AreEqual(now3, filledArgs[1].Fill.Order.CreatedTime);
-            Assert.AreEqual(now3, filledArgs[1].Fill.Order.ModifiedTime);
-            Assert.AreEqual(now3, filledArgs[1].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Filled, filledArgs[1].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[1].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[1].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Sell, filledArgs[1].Fill.Order.Side);
-            Assert.AreEqual(100, filledArgs[1].Fill.Order.Price);
-            Assert.IsNull(filledArgs[1].Fill.Order.StopPrice);
-            Assert.AreEqual(3, filledArgs[1].Fill.Order.Quantity);
-            Assert.AreEqual(3, filledArgs[1].Fill.Order.FilledQuantity);
-            Assert.AreEqual(0, filledArgs[1].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now3, filledArgs[1].Fill.Time);
-            Assert.AreEqual(110, filledArgs[1].Fill.Price);
-            Assert.AreEqual(3, filledArgs[1].Fill.Quantity);
-            Assert.IsTrue(filledArgs[1].Fill.IsAggressor);
-
-            Assert.AreEqual(filledArgs[0].Fill, tradedArgs.Fills[0]);
-            Assert.AreEqual(filledArgs[1].Fill, tradedArgs.Fills[1]);
+            var filled2 = events[2] as OrderFilledEvent;
+            Assert.IsNotNull(filled2);
+            Assert.AreEqual(id3, filled2.Fill.Order.Id);
+            Assert.AreEqual(sec, filled2.Fill.Order.Security);
+            Assert.AreEqual(now3, filled2.Fill.Order.CreatedTime);
+            Assert.AreEqual(now3, filled2.Fill.Order.ModifiedTime);
+            Assert.AreEqual(now3, filled2.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Filled, filled2.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled2.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled2.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Sell, filled2.Fill.Order.Side);
+            Assert.AreEqual(100, filled2.Fill.Order.Price);
+            Assert.IsNull(filled2.Fill.Order.StopPrice);
+            Assert.AreEqual(3, filled2.Fill.Order.Quantity);
+            Assert.AreEqual(3, filled2.Fill.Order.FilledQuantity);
+            Assert.AreEqual(0, filled2.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now3, filled2.Fill.Time);
+            Assert.AreEqual(110, filled2.Fill.Price);
+            Assert.AreEqual(3, filled2.Fill.Quantity);
+            Assert.IsTrue(filled2.Fill.IsAggressor);
         }
 
         [Test]
@@ -519,11 +504,6 @@ namespace Circus.Tests
             var book = new OrderBook.OrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
-            var filledArgs = new List<OrderFilledEventArgs>();
-            book.OrderFilled += (_, e) => filledArgs.Add(e);
-            TradedEventArgs tradedArgs = null;
-            book.Traded += (_, e) => tradedArgs = e;
-
             var id1 = Guid.NewGuid();
             book.CreateLimitOrder(id1, TimeInForce.Day, Side.Buy, 110, 5);
             var now2 = new DateTime(2000, 1, 1, 12, 1, 0);
@@ -535,91 +515,95 @@ namespace Circus.Tests
             var id3 = Guid.NewGuid();
 
             // act
-            book.CreateLimitOrder(id3, TimeInForce.Day, Side.Sell, 100, 8);
+            var events = book.CreateLimitOrder(id3, TimeInForce.Day, Side.Sell, 100, 8).ToList();
 
             // assert
-            Assert.IsNotNull(filledArgs);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(5, events.Count);
 
-            Assert.AreEqual(id1, filledArgs[0].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[0].Fill.Order.Security);
-            Assert.AreEqual(now1, filledArgs[0].Fill.Order.CreatedTime);
-            Assert.AreEqual(now1, filledArgs[0].Fill.Order.ModifiedTime);
-            Assert.AreEqual(now3, filledArgs[0].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Filled, filledArgs[0].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[0].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[0].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Buy, filledArgs[0].Fill.Order.Side);
-            Assert.AreEqual(110, filledArgs[0].Fill.Order.Price);
-            Assert.IsNull(filledArgs[0].Fill.Order.StopPrice);
-            Assert.AreEqual(5, filledArgs[0].Fill.Order.Quantity);
-            Assert.AreEqual(5, filledArgs[0].Fill.Order.FilledQuantity);
-            Assert.AreEqual(0, filledArgs[0].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now3, filledArgs[0].Fill.Time);
-            Assert.AreEqual(110, filledArgs[0].Fill.Price);
-            Assert.AreEqual(5, filledArgs[0].Fill.Quantity);
-            Assert.IsFalse(filledArgs[0].Fill.IsAggressor);
+            var filled1 = events[1] as OrderFilledEvent;
+            Assert.IsNotNull(filled1);
+            Assert.AreEqual(id1, filled1.Fill.Order.Id);
+            Assert.AreEqual(sec, filled1.Fill.Order.Security);
+            Assert.AreEqual(now1, filled1.Fill.Order.CreatedTime);
+            Assert.AreEqual(now1, filled1.Fill.Order.ModifiedTime);
+            Assert.AreEqual(now3, filled1.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Filled, filled1.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled1.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled1.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Buy, filled1.Fill.Order.Side);
+            Assert.AreEqual(110, filled1.Fill.Order.Price);
+            Assert.IsNull(filled1.Fill.Order.StopPrice);
+            Assert.AreEqual(5, filled1.Fill.Order.Quantity);
+            Assert.AreEqual(5, filled1.Fill.Order.FilledQuantity);
+            Assert.AreEqual(0, filled1.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now3, filled1.Fill.Time);
+            Assert.AreEqual(110, filled1.Fill.Price);
+            Assert.AreEqual(5, filled1.Fill.Quantity);
+            Assert.IsFalse(filled1.Fill.IsAggressor);
 
-            Assert.AreEqual(id3, filledArgs[1].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[1].Fill.Order.Security);
-            Assert.AreEqual(now3, filledArgs[1].Fill.Order.CreatedTime);
-            Assert.AreEqual(now3, filledArgs[1].Fill.Order.ModifiedTime);
-            Assert.IsNull(filledArgs[1].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Working, filledArgs[1].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[1].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[1].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Sell, filledArgs[1].Fill.Order.Side);
-            Assert.AreEqual(100, filledArgs[1].Fill.Order.Price);
-            Assert.IsNull(filledArgs[1].Fill.Order.StopPrice);
-            Assert.AreEqual(8, filledArgs[1].Fill.Order.Quantity);
-            Assert.AreEqual(5, filledArgs[1].Fill.Order.FilledQuantity);
-            Assert.AreEqual(3, filledArgs[1].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now3, filledArgs[1].Fill.Time);
-            Assert.AreEqual(110, filledArgs[1].Fill.Price);
-            Assert.AreEqual(5, filledArgs[1].Fill.Quantity);
-            Assert.IsTrue(filledArgs[1].Fill.IsAggressor);
+            var filled2 = events[2] as OrderFilledEvent;
+            Assert.IsNotNull(filled2);
+            Assert.AreEqual(id3, filled2.Fill.Order.Id);
+            Assert.AreEqual(sec, filled2.Fill.Order.Security);
+            Assert.AreEqual(now3, filled2.Fill.Order.CreatedTime);
+            Assert.AreEqual(now3, filled2.Fill.Order.ModifiedTime);
+            Assert.IsNull(filled2.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Working, filled2.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled2.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled2.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Sell, filled2.Fill.Order.Side);
+            Assert.AreEqual(100, filled2.Fill.Order.Price);
+            Assert.IsNull(filled2.Fill.Order.StopPrice);
+            Assert.AreEqual(8, filled2.Fill.Order.Quantity);
+            Assert.AreEqual(5, filled2.Fill.Order.FilledQuantity);
+            Assert.AreEqual(3, filled2.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now3, filled2.Fill.Time);
+            Assert.AreEqual(110, filled2.Fill.Price);
+            Assert.AreEqual(5, filled2.Fill.Quantity);
+            Assert.IsTrue(filled2.Fill.IsAggressor);
 
-            Assert.AreEqual(id2, filledArgs[2].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[2].Fill.Order.Security);
-            Assert.AreEqual(now2, filledArgs[2].Fill.Order.CreatedTime);
-            Assert.AreEqual(now2, filledArgs[2].Fill.Order.ModifiedTime);
-            Assert.IsNull(filledArgs[2].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Working, filledArgs[2].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[2].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[2].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Buy, filledArgs[2].Fill.Order.Side);
-            Assert.AreEqual(110, filledArgs[2].Fill.Order.Price);
-            Assert.IsNull(filledArgs[2].Fill.Order.StopPrice);
-            Assert.AreEqual(5, filledArgs[2].Fill.Order.Quantity);
-            Assert.AreEqual(3, filledArgs[2].Fill.Order.FilledQuantity);
-            Assert.AreEqual(2, filledArgs[2].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now3, filledArgs[2].Fill.Time);
-            Assert.AreEqual(110, filledArgs[2].Fill.Price);
-            Assert.AreEqual(3, filledArgs[2].Fill.Quantity);
-            Assert.IsFalse(filledArgs[2].Fill.IsAggressor);
+            var filled3 = events[3] as OrderFilledEvent;
+            Assert.IsNotNull(filled3);
+            Assert.AreEqual(id2, filled3.Fill.Order.Id);
+            Assert.AreEqual(sec, filled3.Fill.Order.Security);
+            Assert.AreEqual(now2, filled3.Fill.Order.CreatedTime);
+            Assert.AreEqual(now2, filled3.Fill.Order.ModifiedTime);
+            Assert.IsNull(filled3.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Working, filled3.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled3.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled3.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Buy, filled3.Fill.Order.Side);
+            Assert.AreEqual(110, filled3.Fill.Order.Price);
+            Assert.IsNull(filled3.Fill.Order.StopPrice);
+            Assert.AreEqual(5, filled3.Fill.Order.Quantity);
+            Assert.AreEqual(3, filled3.Fill.Order.FilledQuantity);
+            Assert.AreEqual(2, filled3.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now3, filled3.Fill.Time);
+            Assert.AreEqual(110, filled3.Fill.Price);
+            Assert.AreEqual(3, filled3.Fill.Quantity);
+            Assert.IsFalse(filled3.Fill.IsAggressor);
 
-            Assert.AreEqual(id3, filledArgs[3].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[3].Fill.Order.Security);
-            Assert.AreEqual(now3, filledArgs[3].Fill.Order.CreatedTime);
-            Assert.AreEqual(now3, filledArgs[3].Fill.Order.ModifiedTime);
-            Assert.AreEqual(now3, filledArgs[3].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Filled, filledArgs[3].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[3].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[3].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Sell, filledArgs[3].Fill.Order.Side);
-            Assert.AreEqual(100, filledArgs[3].Fill.Order.Price);
-            Assert.IsNull(filledArgs[3].Fill.Order.StopPrice);
-            Assert.AreEqual(8, filledArgs[3].Fill.Order.Quantity);
-            Assert.AreEqual(8, filledArgs[3].Fill.Order.FilledQuantity);
-            Assert.AreEqual(0, filledArgs[3].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now3, filledArgs[3].Fill.Time);
-            Assert.AreEqual(110, filledArgs[3].Fill.Price);
-            Assert.AreEqual(3, filledArgs[3].Fill.Quantity);
-            Assert.IsTrue(filledArgs[3].Fill.IsAggressor);
-
-            Assert.AreEqual(filledArgs[0].Fill, tradedArgs.Fills[0]);
-            Assert.AreEqual(filledArgs[1].Fill, tradedArgs.Fills[1]);
-            Assert.AreEqual(filledArgs[2].Fill, tradedArgs.Fills[2]);
-            Assert.AreEqual(filledArgs[3].Fill, tradedArgs.Fills[3]);
+            var filled4 = events[4] as OrderFilledEvent;
+            Assert.IsNotNull(filled4);
+            Assert.AreEqual(id3, filled4.Fill.Order.Id);
+            Assert.AreEqual(sec, filled4.Fill.Order.Security);
+            Assert.AreEqual(now3, filled4.Fill.Order.CreatedTime);
+            Assert.AreEqual(now3, filled4.Fill.Order.ModifiedTime);
+            Assert.AreEqual(now3, filled4.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Filled, filled4.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled4.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled4.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Sell, filled4.Fill.Order.Side);
+            Assert.AreEqual(100, filled4.Fill.Order.Price);
+            Assert.IsNull(filled4.Fill.Order.StopPrice);
+            Assert.AreEqual(8, filled4.Fill.Order.Quantity);
+            Assert.AreEqual(8, filled4.Fill.Order.FilledQuantity);
+            Assert.AreEqual(0, filled4.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now3, filled4.Fill.Time);
+            Assert.AreEqual(110, filled4.Fill.Price);
+            Assert.AreEqual(3, filled4.Fill.Quantity);
+            Assert.IsTrue(filled4.Fill.IsAggressor);
         }
 
         [Test]
@@ -632,11 +616,6 @@ namespace Circus.Tests
             var book = new OrderBook.OrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
-            var filledArgs = new List<OrderFilledEventArgs>();
-            book.OrderFilled += (_, e) => filledArgs.Add(e);
-            TradedEventArgs tradedArgs = null;
-            book.Traded += (_, e) => tradedArgs = e;
-
             var id1 = Guid.NewGuid();
             book.CreateLimitOrder(id1, TimeInForce.Day, Side.Sell, 90, 5);
             var now2 = new DateTime(2000, 1, 1, 12, 1, 0);
@@ -648,51 +627,53 @@ namespace Circus.Tests
             var id3 = Guid.NewGuid();
 
             // act
-            book.CreateLimitOrder(id3, TimeInForce.Day, Side.Buy, 100, 3);
+            var events = book.CreateLimitOrder(id3, TimeInForce.Day, Side.Buy, 100, 3).ToList();
 
             // assert
-            Assert.IsNotNull(filledArgs);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(3, events.Count);
 
-            Assert.AreEqual(id2, filledArgs[0].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[0].Fill.Order.Security);
-            Assert.AreEqual(now2, filledArgs[0].Fill.Order.CreatedTime);
-            Assert.AreEqual(now2, filledArgs[0].Fill.Order.ModifiedTime);
-            Assert.IsNull(filledArgs[0].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Working, filledArgs[0].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[0].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[0].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Sell, filledArgs[0].Fill.Order.Side);
-            Assert.AreEqual(80, filledArgs[0].Fill.Order.Price);
-            Assert.IsNull(filledArgs[0].Fill.Order.StopPrice);
-            Assert.AreEqual(5, filledArgs[0].Fill.Order.Quantity);
-            Assert.AreEqual(3, filledArgs[0].Fill.Order.FilledQuantity);
-            Assert.AreEqual(2, filledArgs[0].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now3, filledArgs[0].Fill.Time);
-            Assert.AreEqual(80, filledArgs[0].Fill.Price);
-            Assert.AreEqual(3, filledArgs[0].Fill.Quantity);
-            Assert.IsFalse(filledArgs[0].Fill.IsAggressor);
+            var filled1 = events[1] as OrderFilledEvent;
+            Assert.IsNotNull(filled1);
+            Assert.AreEqual(id2, filled1.Fill.Order.Id);
+            Assert.AreEqual(sec, filled1.Fill.Order.Security);
+            Assert.AreEqual(now2, filled1.Fill.Order.CreatedTime);
+            Assert.AreEqual(now2, filled1.Fill.Order.ModifiedTime);
+            Assert.IsNull(filled1.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Working, filled1.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled1.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled1.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Sell, filled1.Fill.Order.Side);
+            Assert.AreEqual(80, filled1.Fill.Order.Price);
+            Assert.IsNull(filled1.Fill.Order.StopPrice);
+            Assert.AreEqual(5, filled1.Fill.Order.Quantity);
+            Assert.AreEqual(3, filled1.Fill.Order.FilledQuantity);
+            Assert.AreEqual(2, filled1.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now3, filled1.Fill.Time);
+            Assert.AreEqual(80, filled1.Fill.Price);
+            Assert.AreEqual(3, filled1.Fill.Quantity);
+            Assert.IsFalse(filled1.Fill.IsAggressor);
 
-            Assert.AreEqual(id3, filledArgs[1].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[1].Fill.Order.Security);
-            Assert.AreEqual(now3, filledArgs[1].Fill.Order.CreatedTime);
-            Assert.AreEqual(now3, filledArgs[1].Fill.Order.ModifiedTime);
-            Assert.AreEqual(now3, filledArgs[1].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Filled, filledArgs[1].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[1].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[1].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Buy, filledArgs[1].Fill.Order.Side);
-            Assert.AreEqual(100, filledArgs[1].Fill.Order.Price);
-            Assert.IsNull(filledArgs[1].Fill.Order.StopPrice);
-            Assert.AreEqual(3, filledArgs[1].Fill.Order.Quantity);
-            Assert.AreEqual(3, filledArgs[1].Fill.Order.FilledQuantity);
-            Assert.AreEqual(0, filledArgs[1].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now3, filledArgs[1].Fill.Time);
-            Assert.AreEqual(80, filledArgs[1].Fill.Price);
-            Assert.AreEqual(3, filledArgs[1].Fill.Quantity);
-            Assert.IsTrue(filledArgs[1].Fill.IsAggressor);
-
-            Assert.AreEqual(filledArgs[0].Fill, tradedArgs.Fills[0]);
-            Assert.AreEqual(filledArgs[1].Fill, tradedArgs.Fills[1]);
+            var filled2 = events[2] as OrderFilledEvent;
+            Assert.IsNotNull(filled2);
+            Assert.AreEqual(id3, filled2.Fill.Order.Id);
+            Assert.AreEqual(sec, filled2.Fill.Order.Security);
+            Assert.AreEqual(now3, filled2.Fill.Order.CreatedTime);
+            Assert.AreEqual(now3, filled2.Fill.Order.ModifiedTime);
+            Assert.AreEqual(now3, filled2.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Filled, filled2.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled2.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled2.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Buy, filled2.Fill.Order.Side);
+            Assert.AreEqual(100, filled2.Fill.Order.Price);
+            Assert.IsNull(filled2.Fill.Order.StopPrice);
+            Assert.AreEqual(3, filled2.Fill.Order.Quantity);
+            Assert.AreEqual(3, filled2.Fill.Order.FilledQuantity);
+            Assert.AreEqual(0, filled2.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now3, filled2.Fill.Time);
+            Assert.AreEqual(80, filled2.Fill.Price);
+            Assert.AreEqual(3, filled2.Fill.Quantity);
+            Assert.IsTrue(filled2.Fill.IsAggressor);
         }
 
         [Test]
@@ -705,11 +686,6 @@ namespace Circus.Tests
             var book = new OrderBook.OrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
-            var filledArgs = new List<OrderFilledEventArgs>();
-            book.OrderFilled += (_, e) => filledArgs.Add(e);
-            TradedEventArgs tradedArgs = null;
-            book.Traded += (_, e) => tradedArgs = e;
-
             var id1 = Guid.NewGuid();
             book.CreateLimitOrder(id1, TimeInForce.Day, Side.Sell, 90, 5);
             var now2 = new DateTime(2000, 1, 1, 12, 1, 0);
@@ -721,91 +697,95 @@ namespace Circus.Tests
             var id3 = Guid.NewGuid();
 
             // act
-            book.CreateLimitOrder(id3, TimeInForce.Day, Side.Buy, 100, 8);
+            var events = book.CreateLimitOrder(id3, TimeInForce.Day, Side.Buy, 100, 8).ToList();
 
             // assert
-            Assert.IsNotNull(filledArgs);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(5, events.Count);
 
-            Assert.AreEqual(id2, filledArgs[0].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[0].Fill.Order.Security);
-            Assert.AreEqual(now2, filledArgs[0].Fill.Order.CreatedTime);
-            Assert.AreEqual(now2, filledArgs[0].Fill.Order.ModifiedTime);
-            Assert.AreEqual(now3, filledArgs[0].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Filled, filledArgs[0].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[0].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[0].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Sell, filledArgs[0].Fill.Order.Side);
-            Assert.AreEqual(80, filledArgs[0].Fill.Order.Price);
-            Assert.IsNull(filledArgs[0].Fill.Order.StopPrice);
-            Assert.AreEqual(5, filledArgs[0].Fill.Order.Quantity);
-            Assert.AreEqual(5, filledArgs[0].Fill.Order.FilledQuantity);
-            Assert.AreEqual(0, filledArgs[0].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now3, filledArgs[0].Fill.Time);
-            Assert.AreEqual(80, filledArgs[0].Fill.Price);
-            Assert.AreEqual(5, filledArgs[0].Fill.Quantity);
-            Assert.IsFalse(filledArgs[0].Fill.IsAggressor);
+            var filled1 = events[1] as OrderFilledEvent;
+            Assert.IsNotNull(filled1);
+            Assert.AreEqual(id2, filled1.Fill.Order.Id);
+            Assert.AreEqual(sec, filled1.Fill.Order.Security);
+            Assert.AreEqual(now2, filled1.Fill.Order.CreatedTime);
+            Assert.AreEqual(now2, filled1.Fill.Order.ModifiedTime);
+            Assert.AreEqual(now3, filled1.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Filled, filled1.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled1.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled1.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Sell, filled1.Fill.Order.Side);
+            Assert.AreEqual(80, filled1.Fill.Order.Price);
+            Assert.IsNull(filled1.Fill.Order.StopPrice);
+            Assert.AreEqual(5, filled1.Fill.Order.Quantity);
+            Assert.AreEqual(5, filled1.Fill.Order.FilledQuantity);
+            Assert.AreEqual(0, filled1.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now3, filled1.Fill.Time);
+            Assert.AreEqual(80, filled1.Fill.Price);
+            Assert.AreEqual(5, filled1.Fill.Quantity);
+            Assert.IsFalse(filled1.Fill.IsAggressor);
 
-            Assert.AreEqual(id3, filledArgs[1].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[1].Fill.Order.Security);
-            Assert.AreEqual(now3, filledArgs[1].Fill.Order.CreatedTime);
-            Assert.AreEqual(now3, filledArgs[1].Fill.Order.ModifiedTime);
-            Assert.IsNull(filledArgs[1].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Working, filledArgs[1].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[1].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[1].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Buy, filledArgs[1].Fill.Order.Side);
-            Assert.AreEqual(100, filledArgs[1].Fill.Order.Price);
-            Assert.IsNull(filledArgs[1].Fill.Order.StopPrice);
-            Assert.AreEqual(8, filledArgs[1].Fill.Order.Quantity);
-            Assert.AreEqual(5, filledArgs[1].Fill.Order.FilledQuantity);
-            Assert.AreEqual(3, filledArgs[1].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now3, filledArgs[1].Fill.Time);
-            Assert.AreEqual(80, filledArgs[1].Fill.Price);
-            Assert.AreEqual(5, filledArgs[1].Fill.Quantity);
-            Assert.IsTrue(filledArgs[1].Fill.IsAggressor);
+            var filled2 = events[2] as OrderFilledEvent;
+            Assert.IsNotNull(filled2);
+            Assert.AreEqual(id3, filled2.Fill.Order.Id);
+            Assert.AreEqual(sec, filled2.Fill.Order.Security);
+            Assert.AreEqual(now3, filled2.Fill.Order.CreatedTime);
+            Assert.AreEqual(now3, filled2.Fill.Order.ModifiedTime);
+            Assert.IsNull(filled2.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Working, filled2.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled2.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled2.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Buy, filled2.Fill.Order.Side);
+            Assert.AreEqual(100, filled2.Fill.Order.Price);
+            Assert.IsNull(filled2.Fill.Order.StopPrice);
+            Assert.AreEqual(8, filled2.Fill.Order.Quantity);
+            Assert.AreEqual(5, filled2.Fill.Order.FilledQuantity);
+            Assert.AreEqual(3, filled2.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now3, filled2.Fill.Time);
+            Assert.AreEqual(80, filled2.Fill.Price);
+            Assert.AreEqual(5, filled2.Fill.Quantity);
+            Assert.IsTrue(filled2.Fill.IsAggressor);
 
-            Assert.AreEqual(id1, filledArgs[2].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[2].Fill.Order.Security);
-            Assert.AreEqual(now1, filledArgs[2].Fill.Order.CreatedTime);
-            Assert.AreEqual(now1, filledArgs[2].Fill.Order.ModifiedTime);
-            Assert.IsNull(filledArgs[2].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Working, filledArgs[2].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[2].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[2].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Sell, filledArgs[2].Fill.Order.Side);
-            Assert.AreEqual(90, filledArgs[2].Fill.Order.Price);
-            Assert.IsNull(filledArgs[2].Fill.Order.StopPrice);
-            Assert.AreEqual(5, filledArgs[2].Fill.Order.Quantity);
-            Assert.AreEqual(3, filledArgs[2].Fill.Order.FilledQuantity);
-            Assert.AreEqual(2, filledArgs[2].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now3, filledArgs[2].Fill.Time);
-            Assert.AreEqual(90, filledArgs[2].Fill.Price);
-            Assert.AreEqual(3, filledArgs[2].Fill.Quantity);
-            Assert.IsFalse(filledArgs[2].Fill.IsAggressor);
+            var filled3 = events[3] as OrderFilledEvent;
+            Assert.IsNotNull(filled3);
+            Assert.AreEqual(id1, filled3.Fill.Order.Id);
+            Assert.AreEqual(sec, filled3.Fill.Order.Security);
+            Assert.AreEqual(now1, filled3.Fill.Order.CreatedTime);
+            Assert.AreEqual(now1, filled3.Fill.Order.ModifiedTime);
+            Assert.IsNull(filled3.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Working, filled3.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled3.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled3.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Sell, filled3.Fill.Order.Side);
+            Assert.AreEqual(90, filled3.Fill.Order.Price);
+            Assert.IsNull(filled3.Fill.Order.StopPrice);
+            Assert.AreEqual(5, filled3.Fill.Order.Quantity);
+            Assert.AreEqual(3, filled3.Fill.Order.FilledQuantity);
+            Assert.AreEqual(2, filled3.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now3, filled3.Fill.Time);
+            Assert.AreEqual(90, filled3.Fill.Price);
+            Assert.AreEqual(3, filled3.Fill.Quantity);
+            Assert.IsFalse(filled3.Fill.IsAggressor);
 
-            Assert.AreEqual(id3, filledArgs[3].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[3].Fill.Order.Security);
-            Assert.AreEqual(now3, filledArgs[3].Fill.Order.CreatedTime);
-            Assert.AreEqual(now3, filledArgs[3].Fill.Order.ModifiedTime);
-            Assert.AreEqual(now3, filledArgs[3].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Filled, filledArgs[3].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[3].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[3].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Buy, filledArgs[3].Fill.Order.Side);
-            Assert.AreEqual(100, filledArgs[3].Fill.Order.Price);
-            Assert.IsNull(filledArgs[3].Fill.Order.StopPrice);
-            Assert.AreEqual(8, filledArgs[3].Fill.Order.Quantity);
-            Assert.AreEqual(8, filledArgs[3].Fill.Order.FilledQuantity);
-            Assert.AreEqual(0, filledArgs[3].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now3, filledArgs[3].Fill.Time);
-            Assert.AreEqual(90, filledArgs[3].Fill.Price);
-            Assert.AreEqual(3, filledArgs[3].Fill.Quantity);
-            Assert.IsTrue(filledArgs[3].Fill.IsAggressor);
-
-            Assert.AreEqual(filledArgs[0].Fill, tradedArgs.Fills[0]);
-            Assert.AreEqual(filledArgs[1].Fill, tradedArgs.Fills[1]);
-            Assert.AreEqual(filledArgs[2].Fill, tradedArgs.Fills[2]);
-            Assert.AreEqual(filledArgs[3].Fill, tradedArgs.Fills[3]);
+            var filled4 = events[4] as OrderFilledEvent;
+            Assert.IsNotNull(filled4);
+            Assert.AreEqual(id3, filled4.Fill.Order.Id);
+            Assert.AreEqual(sec, filled4.Fill.Order.Security);
+            Assert.AreEqual(now3, filled4.Fill.Order.CreatedTime);
+            Assert.AreEqual(now3, filled4.Fill.Order.ModifiedTime);
+            Assert.AreEqual(now3, filled4.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Filled, filled4.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled4.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled4.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Buy, filled4.Fill.Order.Side);
+            Assert.AreEqual(100, filled4.Fill.Order.Price);
+            Assert.IsNull(filled4.Fill.Order.StopPrice);
+            Assert.AreEqual(8, filled4.Fill.Order.Quantity);
+            Assert.AreEqual(8, filled4.Fill.Order.FilledQuantity);
+            Assert.AreEqual(0, filled4.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now3, filled4.Fill.Time);
+            Assert.AreEqual(90, filled4.Fill.Price);
+            Assert.AreEqual(3, filled4.Fill.Quantity);
+            Assert.IsTrue(filled4.Fill.IsAggressor);
         }
 
         [Test]
@@ -818,11 +798,6 @@ namespace Circus.Tests
             var book = new OrderBook.OrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
-            var filledArgs = new List<OrderFilledEventArgs>();
-            book.OrderFilled += (_, e) => filledArgs.Add(e);
-            TradedEventArgs tradedArgs = null;
-            book.Traded += (_, e) => tradedArgs = e;
-
             var id1 = Guid.NewGuid();
             book.CreateLimitOrder(id1, TimeInForce.Day, Side.Sell, 90, 5);
             var now2 = new DateTime(2000, 1, 1, 12, 1, 0);
@@ -834,51 +809,53 @@ namespace Circus.Tests
             var id3 = Guid.NewGuid();
 
             // act
-            book.CreateLimitOrder(id3, TimeInForce.Day, Side.Buy, 100, 3);
+            var events = book.CreateLimitOrder(id3, TimeInForce.Day, Side.Buy, 100, 3).ToList();
 
             // assert
-            Assert.IsNotNull(filledArgs);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(3, events.Count);
 
-            Assert.AreEqual(id1, filledArgs[0].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[0].Fill.Order.Security);
-            Assert.AreEqual(now1, filledArgs[0].Fill.Order.CreatedTime);
-            Assert.AreEqual(now1, filledArgs[0].Fill.Order.ModifiedTime);
-            Assert.IsNull(filledArgs[0].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Working, filledArgs[0].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[0].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[0].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Sell, filledArgs[0].Fill.Order.Side);
-            Assert.AreEqual(90, filledArgs[0].Fill.Order.Price);
-            Assert.IsNull(filledArgs[0].Fill.Order.StopPrice);
-            Assert.AreEqual(5, filledArgs[0].Fill.Order.Quantity);
-            Assert.AreEqual(3, filledArgs[0].Fill.Order.FilledQuantity);
-            Assert.AreEqual(2, filledArgs[0].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now3, filledArgs[0].Fill.Time);
-            Assert.AreEqual(90, filledArgs[0].Fill.Price);
-            Assert.AreEqual(3, filledArgs[0].Fill.Quantity);
-            Assert.IsFalse(filledArgs[0].Fill.IsAggressor);
+            var filled1 = events[1] as OrderFilledEvent;
+            Assert.IsNotNull(filled1);
+            Assert.AreEqual(id1, filled1.Fill.Order.Id);
+            Assert.AreEqual(sec, filled1.Fill.Order.Security);
+            Assert.AreEqual(now1, filled1.Fill.Order.CreatedTime);
+            Assert.AreEqual(now1, filled1.Fill.Order.ModifiedTime);
+            Assert.IsNull(filled1.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Working, filled1.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled1.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled1.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Sell, filled1.Fill.Order.Side);
+            Assert.AreEqual(90, filled1.Fill.Order.Price);
+            Assert.IsNull(filled1.Fill.Order.StopPrice);
+            Assert.AreEqual(5, filled1.Fill.Order.Quantity);
+            Assert.AreEqual(3, filled1.Fill.Order.FilledQuantity);
+            Assert.AreEqual(2, filled1.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now3, filled1.Fill.Time);
+            Assert.AreEqual(90, filled1.Fill.Price);
+            Assert.AreEqual(3, filled1.Fill.Quantity);
+            Assert.IsFalse(filled1.Fill.IsAggressor);
 
-            Assert.AreEqual(id3, filledArgs[1].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[1].Fill.Order.Security);
-            Assert.AreEqual(now3, filledArgs[1].Fill.Order.CreatedTime);
-            Assert.AreEqual(now3, filledArgs[1].Fill.Order.ModifiedTime);
-            Assert.AreEqual(now3, filledArgs[1].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Filled, filledArgs[1].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[1].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[1].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Buy, filledArgs[1].Fill.Order.Side);
-            Assert.AreEqual(100, filledArgs[1].Fill.Order.Price);
-            Assert.IsNull(filledArgs[1].Fill.Order.StopPrice);
-            Assert.AreEqual(3, filledArgs[1].Fill.Order.Quantity);
-            Assert.AreEqual(3, filledArgs[1].Fill.Order.FilledQuantity);
-            Assert.AreEqual(0, filledArgs[1].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now3, filledArgs[1].Fill.Time);
-            Assert.AreEqual(90, filledArgs[1].Fill.Price);
-            Assert.AreEqual(3, filledArgs[1].Fill.Quantity);
-            Assert.IsTrue(filledArgs[1].Fill.IsAggressor);
-
-            Assert.AreEqual(filledArgs[0].Fill, tradedArgs.Fills[0]);
-            Assert.AreEqual(filledArgs[1].Fill, tradedArgs.Fills[1]);
+            var filled2 = events[2] as OrderFilledEvent;
+            Assert.IsNotNull(filled2);
+            Assert.AreEqual(id3, filled2.Fill.Order.Id);
+            Assert.AreEqual(sec, filled2.Fill.Order.Security);
+            Assert.AreEqual(now3, filled2.Fill.Order.CreatedTime);
+            Assert.AreEqual(now3, filled2.Fill.Order.ModifiedTime);
+            Assert.AreEqual(now3, filled2.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Filled, filled2.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled2.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled2.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Buy, filled2.Fill.Order.Side);
+            Assert.AreEqual(100, filled2.Fill.Order.Price);
+            Assert.IsNull(filled2.Fill.Order.StopPrice);
+            Assert.AreEqual(3, filled2.Fill.Order.Quantity);
+            Assert.AreEqual(3, filled2.Fill.Order.FilledQuantity);
+            Assert.AreEqual(0, filled2.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now3, filled2.Fill.Time);
+            Assert.AreEqual(90, filled2.Fill.Price);
+            Assert.AreEqual(3, filled2.Fill.Quantity);
+            Assert.IsTrue(filled2.Fill.IsAggressor);
         }
 
         [Test]
@@ -891,11 +868,6 @@ namespace Circus.Tests
             var book = new OrderBook.OrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
-            var filledArgs = new List<OrderFilledEventArgs>();
-            book.OrderFilled += (_, e) => filledArgs.Add(e);
-            TradedEventArgs tradedArgs = null;
-            book.Traded += (_, e) => tradedArgs = e;
-
             var id1 = Guid.NewGuid();
             book.CreateLimitOrder(id1, TimeInForce.Day, Side.Sell, 90, 5);
             var now2 = new DateTime(2000, 1, 1, 12, 1, 0);
@@ -907,91 +879,95 @@ namespace Circus.Tests
             var id3 = Guid.NewGuid();
 
             // act
-            book.CreateLimitOrder(id3, TimeInForce.Day, Side.Buy, 100, 8);
+            var events = book.CreateLimitOrder(id3, TimeInForce.Day, Side.Buy, 100, 8).ToList();
 
             // assert
-            Assert.IsNotNull(filledArgs);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(5, events.Count);
 
-            Assert.AreEqual(id1, filledArgs[0].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[0].Fill.Order.Security);
-            Assert.AreEqual(now1, filledArgs[0].Fill.Order.CreatedTime);
-            Assert.AreEqual(now1, filledArgs[0].Fill.Order.ModifiedTime);
-            Assert.AreEqual(now3, filledArgs[0].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Filled, filledArgs[0].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[0].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[0].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Sell, filledArgs[0].Fill.Order.Side);
-            Assert.AreEqual(90, filledArgs[0].Fill.Order.Price);
-            Assert.IsNull(filledArgs[0].Fill.Order.StopPrice);
-            Assert.AreEqual(5, filledArgs[0].Fill.Order.Quantity);
-            Assert.AreEqual(5, filledArgs[0].Fill.Order.FilledQuantity);
-            Assert.AreEqual(0, filledArgs[0].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now3, filledArgs[0].Fill.Time);
-            Assert.AreEqual(90, filledArgs[0].Fill.Price);
-            Assert.AreEqual(5, filledArgs[0].Fill.Quantity);
-            Assert.IsFalse(filledArgs[0].Fill.IsAggressor);
+            var filled1 = events[1] as OrderFilledEvent;
+            Assert.IsNotNull(filled1);
+            Assert.AreEqual(id1, filled1.Fill.Order.Id);
+            Assert.AreEqual(sec, filled1.Fill.Order.Security);
+            Assert.AreEqual(now1, filled1.Fill.Order.CreatedTime);
+            Assert.AreEqual(now1, filled1.Fill.Order.ModifiedTime);
+            Assert.AreEqual(now3, filled1.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Filled, filled1.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled1.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled1.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Sell, filled1.Fill.Order.Side);
+            Assert.AreEqual(90, filled1.Fill.Order.Price);
+            Assert.IsNull(filled1.Fill.Order.StopPrice);
+            Assert.AreEqual(5, filled1.Fill.Order.Quantity);
+            Assert.AreEqual(5, filled1.Fill.Order.FilledQuantity);
+            Assert.AreEqual(0, filled1.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now3, filled1.Fill.Time);
+            Assert.AreEqual(90, filled1.Fill.Price);
+            Assert.AreEqual(5, filled1.Fill.Quantity);
+            Assert.IsFalse(filled1.Fill.IsAggressor);
 
-            Assert.AreEqual(id3, filledArgs[1].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[1].Fill.Order.Security);
-            Assert.AreEqual(now3, filledArgs[1].Fill.Order.CreatedTime);
-            Assert.AreEqual(now3, filledArgs[1].Fill.Order.ModifiedTime);
-            Assert.IsNull(filledArgs[1].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Working, filledArgs[1].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[1].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[1].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Buy, filledArgs[1].Fill.Order.Side);
-            Assert.AreEqual(100, filledArgs[1].Fill.Order.Price);
-            Assert.IsNull(filledArgs[1].Fill.Order.StopPrice);
-            Assert.AreEqual(8, filledArgs[1].Fill.Order.Quantity);
-            Assert.AreEqual(5, filledArgs[1].Fill.Order.FilledQuantity);
-            Assert.AreEqual(3, filledArgs[1].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now3, filledArgs[1].Fill.Time);
-            Assert.AreEqual(90, filledArgs[1].Fill.Price);
-            Assert.AreEqual(5, filledArgs[1].Fill.Quantity);
-            Assert.IsTrue(filledArgs[1].Fill.IsAggressor);
+            var filled2 = events[2] as OrderFilledEvent;
+            Assert.IsNotNull(filled2);
+            Assert.AreEqual(id3, filled2.Fill.Order.Id);
+            Assert.AreEqual(sec, filled2.Fill.Order.Security);
+            Assert.AreEqual(now3, filled2.Fill.Order.CreatedTime);
+            Assert.AreEqual(now3, filled2.Fill.Order.ModifiedTime);
+            Assert.IsNull(filled2.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Working, filled2.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled2.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled2.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Buy, filled2.Fill.Order.Side);
+            Assert.AreEqual(100, filled2.Fill.Order.Price);
+            Assert.IsNull(filled2.Fill.Order.StopPrice);
+            Assert.AreEqual(8, filled2.Fill.Order.Quantity);
+            Assert.AreEqual(5, filled2.Fill.Order.FilledQuantity);
+            Assert.AreEqual(3, filled2.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now3, filled2.Fill.Time);
+            Assert.AreEqual(90, filled2.Fill.Price);
+            Assert.AreEqual(5, filled2.Fill.Quantity);
+            Assert.IsTrue(filled2.Fill.IsAggressor);
 
-            Assert.AreEqual(id2, filledArgs[2].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[2].Fill.Order.Security);
-            Assert.AreEqual(now2, filledArgs[2].Fill.Order.CreatedTime);
-            Assert.AreEqual(now2, filledArgs[2].Fill.Order.ModifiedTime);
-            Assert.IsNull(filledArgs[2].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Working, filledArgs[2].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[2].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[2].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Sell, filledArgs[2].Fill.Order.Side);
-            Assert.AreEqual(90, filledArgs[2].Fill.Order.Price);
-            Assert.IsNull(filledArgs[2].Fill.Order.StopPrice);
-            Assert.AreEqual(5, filledArgs[2].Fill.Order.Quantity);
-            Assert.AreEqual(3, filledArgs[2].Fill.Order.FilledQuantity);
-            Assert.AreEqual(2, filledArgs[2].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now3, filledArgs[2].Fill.Time);
-            Assert.AreEqual(90, filledArgs[2].Fill.Price);
-            Assert.AreEqual(3, filledArgs[2].Fill.Quantity);
-            Assert.IsFalse(filledArgs[2].Fill.IsAggressor);
+            var filled3 = events[3] as OrderFilledEvent;
+            Assert.IsNotNull(filled3);
+            Assert.AreEqual(id2, filled3.Fill.Order.Id);
+            Assert.AreEqual(sec, filled3.Fill.Order.Security);
+            Assert.AreEqual(now2, filled3.Fill.Order.CreatedTime);
+            Assert.AreEqual(now2, filled3.Fill.Order.ModifiedTime);
+            Assert.IsNull(filled3.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Working, filled3.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled3.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled3.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Sell, filled3.Fill.Order.Side);
+            Assert.AreEqual(90, filled3.Fill.Order.Price);
+            Assert.IsNull(filled3.Fill.Order.StopPrice);
+            Assert.AreEqual(5, filled3.Fill.Order.Quantity);
+            Assert.AreEqual(3, filled3.Fill.Order.FilledQuantity);
+            Assert.AreEqual(2, filled3.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now3, filled3.Fill.Time);
+            Assert.AreEqual(90, filled3.Fill.Price);
+            Assert.AreEqual(3, filled3.Fill.Quantity);
+            Assert.IsFalse(filled3.Fill.IsAggressor);
 
-            Assert.AreEqual(id3, filledArgs[3].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[3].Fill.Order.Security);
-            Assert.AreEqual(now3, filledArgs[3].Fill.Order.CreatedTime);
-            Assert.AreEqual(now3, filledArgs[3].Fill.Order.ModifiedTime);
-            Assert.AreEqual(now3, filledArgs[3].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Filled, filledArgs[3].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[3].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[3].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Buy, filledArgs[3].Fill.Order.Side);
-            Assert.AreEqual(100, filledArgs[3].Fill.Order.Price);
-            Assert.IsNull(filledArgs[3].Fill.Order.StopPrice);
-            Assert.AreEqual(8, filledArgs[3].Fill.Order.Quantity);
-            Assert.AreEqual(8, filledArgs[3].Fill.Order.FilledQuantity);
-            Assert.AreEqual(0, filledArgs[3].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now3, filledArgs[3].Fill.Time);
-            Assert.AreEqual(90, filledArgs[3].Fill.Price);
-            Assert.AreEqual(3, filledArgs[3].Fill.Quantity);
-            Assert.IsTrue(filledArgs[3].Fill.IsAggressor);
-
-            Assert.AreEqual(filledArgs[0].Fill, tradedArgs.Fills[0]);
-            Assert.AreEqual(filledArgs[1].Fill, tradedArgs.Fills[1]);
-            Assert.AreEqual(filledArgs[2].Fill, tradedArgs.Fills[2]);
-            Assert.AreEqual(filledArgs[3].Fill, tradedArgs.Fills[3]);
+            var filled4 = events[4] as OrderFilledEvent;
+            Assert.IsNotNull(filled4);
+            Assert.AreEqual(id3, filled4.Fill.Order.Id);
+            Assert.AreEqual(sec, filled4.Fill.Order.Security);
+            Assert.AreEqual(now3, filled4.Fill.Order.CreatedTime);
+            Assert.AreEqual(now3, filled4.Fill.Order.ModifiedTime);
+            Assert.AreEqual(now3, filled4.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Filled, filled4.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled4.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled4.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Buy, filled4.Fill.Order.Side);
+            Assert.AreEqual(100, filled4.Fill.Order.Price);
+            Assert.IsNull(filled4.Fill.Order.StopPrice);
+            Assert.AreEqual(8, filled4.Fill.Order.Quantity);
+            Assert.AreEqual(8, filled4.Fill.Order.FilledQuantity);
+            Assert.AreEqual(0, filled4.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now3, filled4.Fill.Time);
+            Assert.AreEqual(90, filled4.Fill.Price);
+            Assert.AreEqual(3, filled4.Fill.Quantity);
+            Assert.IsTrue(filled4.Fill.IsAggressor);
         }
 
         [Test]
@@ -1003,11 +979,6 @@ namespace Circus.Tests
             var timeProvider = new TestTimeProvider(now1);
             var book = new OrderBook.OrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
-
-            var filledArgs = new List<OrderFilledEventArgs>();
-            book.OrderFilled += (_, e) => filledArgs.Add(e);
-            TradedEventArgs tradedArgs = null;
-            book.Traded += (_, e) => tradedArgs = e;
 
             var id1 = Guid.NewGuid();
             book.CreateLimitOrder(id1, TimeInForce.Day, Side.Buy, 110, 5);
@@ -1023,51 +994,53 @@ namespace Circus.Tests
             var id3 = Guid.NewGuid();
 
             // act
-            book.CreateLimitOrder(id3, TimeInForce.Day, Side.Sell, 100, 3);
+            var events = book.CreateLimitOrder(id3, TimeInForce.Day, Side.Sell, 100, 3).ToList();
 
             // assert
-            Assert.IsNotNull(filledArgs);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(3, events.Count);
 
-            Assert.AreEqual(id2, filledArgs[0].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[0].Fill.Order.Security);
-            Assert.AreEqual(now2, filledArgs[0].Fill.Order.CreatedTime);
-            Assert.AreEqual(now2, filledArgs[0].Fill.Order.ModifiedTime);
-            Assert.IsNull(filledArgs[0].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Working, filledArgs[0].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[0].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[0].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Buy, filledArgs[0].Fill.Order.Side);
-            Assert.AreEqual(110, filledArgs[0].Fill.Order.Price);
-            Assert.IsNull(filledArgs[0].Fill.Order.StopPrice);
-            Assert.AreEqual(5, filledArgs[0].Fill.Order.Quantity);
-            Assert.AreEqual(3, filledArgs[0].Fill.Order.FilledQuantity);
-            Assert.AreEqual(2, filledArgs[0].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now4, filledArgs[0].Fill.Time);
-            Assert.AreEqual(110, filledArgs[0].Fill.Price);
-            Assert.AreEqual(3, filledArgs[0].Fill.Quantity);
-            Assert.IsFalse(filledArgs[0].Fill.IsAggressor);
+            var filled1 = events[1] as OrderFilledEvent;
+            Assert.IsNotNull(filled1);
+            Assert.AreEqual(id2, filled1.Fill.Order.Id);
+            Assert.AreEqual(sec, filled1.Fill.Order.Security);
+            Assert.AreEqual(now2, filled1.Fill.Order.CreatedTime);
+            Assert.AreEqual(now2, filled1.Fill.Order.ModifiedTime);
+            Assert.IsNull(filled1.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Working, filled1.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled1.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled1.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Buy, filled1.Fill.Order.Side);
+            Assert.AreEqual(110, filled1.Fill.Order.Price);
+            Assert.IsNull(filled1.Fill.Order.StopPrice);
+            Assert.AreEqual(5, filled1.Fill.Order.Quantity);
+            Assert.AreEqual(3, filled1.Fill.Order.FilledQuantity);
+            Assert.AreEqual(2, filled1.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now4, filled1.Fill.Time);
+            Assert.AreEqual(110, filled1.Fill.Price);
+            Assert.AreEqual(3, filled1.Fill.Quantity);
+            Assert.IsFalse(filled1.Fill.IsAggressor);
 
-            Assert.AreEqual(id3, filledArgs[1].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[1].Fill.Order.Security);
-            Assert.AreEqual(now4, filledArgs[1].Fill.Order.CreatedTime);
-            Assert.AreEqual(now4, filledArgs[1].Fill.Order.ModifiedTime);
-            Assert.AreEqual(now4, filledArgs[1].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Filled, filledArgs[1].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[1].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[1].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Sell, filledArgs[1].Fill.Order.Side);
-            Assert.AreEqual(100, filledArgs[1].Fill.Order.Price);
-            Assert.IsNull(filledArgs[1].Fill.Order.StopPrice);
-            Assert.AreEqual(3, filledArgs[1].Fill.Order.Quantity);
-            Assert.AreEqual(3, filledArgs[1].Fill.Order.FilledQuantity);
-            Assert.AreEqual(0, filledArgs[1].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now4, filledArgs[1].Fill.Time);
-            Assert.AreEqual(110, filledArgs[1].Fill.Price);
-            Assert.AreEqual(3, filledArgs[1].Fill.Quantity);
-            Assert.IsTrue(filledArgs[1].Fill.IsAggressor);
-
-            Assert.AreEqual(filledArgs[0].Fill, tradedArgs.Fills[0]);
-            Assert.AreEqual(filledArgs[1].Fill, tradedArgs.Fills[1]);
+            var filled2 = events[2] as OrderFilledEvent;
+            Assert.IsNotNull(filled2);
+            Assert.AreEqual(id3, filled2.Fill.Order.Id);
+            Assert.AreEqual(sec, filled2.Fill.Order.Security);
+            Assert.AreEqual(now4, filled2.Fill.Order.CreatedTime);
+            Assert.AreEqual(now4, filled2.Fill.Order.ModifiedTime);
+            Assert.AreEqual(now4, filled2.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Filled, filled2.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled2.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled2.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Sell, filled2.Fill.Order.Side);
+            Assert.AreEqual(100, filled2.Fill.Order.Price);
+            Assert.IsNull(filled2.Fill.Order.StopPrice);
+            Assert.AreEqual(3, filled2.Fill.Order.Quantity);
+            Assert.AreEqual(3, filled2.Fill.Order.FilledQuantity);
+            Assert.AreEqual(0, filled2.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now4, filled2.Fill.Time);
+            Assert.AreEqual(110, filled2.Fill.Price);
+            Assert.AreEqual(3, filled2.Fill.Quantity);
+            Assert.IsTrue(filled2.Fill.IsAggressor);
         }
 
         [Test]
@@ -1079,11 +1052,6 @@ namespace Circus.Tests
             var timeProvider = new TestTimeProvider(now1);
             var book = new OrderBook.OrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
-
-            var filledArgs = new List<OrderFilledEventArgs>();
-            book.OrderFilled += (_, e) => filledArgs.Add(e);
-            TradedEventArgs tradedArgs = null;
-            book.Traded += (_, e) => tradedArgs = e;
 
             var id1 = Guid.NewGuid();
             book.CreateLimitOrder(id1, TimeInForce.Day, Side.Buy, 110, 5);
@@ -1099,91 +1067,95 @@ namespace Circus.Tests
             var id3 = Guid.NewGuid();
 
             // act
-            book.CreateLimitOrder(id3, TimeInForce.Day, Side.Sell, 100, 8);
+            var events = book.CreateLimitOrder(id3, TimeInForce.Day, Side.Sell, 100, 8).ToList();
 
             // assert
-            Assert.IsNotNull(filledArgs);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(5, events.Count);
 
-            Assert.AreEqual(id2, filledArgs[0].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[0].Fill.Order.Security);
-            Assert.AreEqual(now2, filledArgs[0].Fill.Order.CreatedTime);
-            Assert.AreEqual(now2, filledArgs[0].Fill.Order.ModifiedTime);
-            Assert.AreEqual(now4, filledArgs[0].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Filled, filledArgs[0].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[0].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[0].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Buy, filledArgs[0].Fill.Order.Side);
-            Assert.AreEqual(110, filledArgs[0].Fill.Order.Price);
-            Assert.IsNull(filledArgs[0].Fill.Order.StopPrice);
-            Assert.AreEqual(5, filledArgs[0].Fill.Order.Quantity);
-            Assert.AreEqual(5, filledArgs[0].Fill.Order.FilledQuantity);
-            Assert.AreEqual(0, filledArgs[0].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now4, filledArgs[0].Fill.Time);
-            Assert.AreEqual(110, filledArgs[0].Fill.Price);
-            Assert.AreEqual(5, filledArgs[0].Fill.Quantity);
-            Assert.IsFalse(filledArgs[0].Fill.IsAggressor);
+            var filled1 = events[1] as OrderFilledEvent;
+            Assert.IsNotNull(filled1);
+            Assert.AreEqual(id2, filled1.Fill.Order.Id);
+            Assert.AreEqual(sec, filled1.Fill.Order.Security);
+            Assert.AreEqual(now2, filled1.Fill.Order.CreatedTime);
+            Assert.AreEqual(now2, filled1.Fill.Order.ModifiedTime);
+            Assert.AreEqual(now4, filled1.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Filled, filled1.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled1.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled1.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Buy, filled1.Fill.Order.Side);
+            Assert.AreEqual(110, filled1.Fill.Order.Price);
+            Assert.IsNull(filled1.Fill.Order.StopPrice);
+            Assert.AreEqual(5, filled1.Fill.Order.Quantity);
+            Assert.AreEqual(5, filled1.Fill.Order.FilledQuantity);
+            Assert.AreEqual(0, filled1.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now4, filled1.Fill.Time);
+            Assert.AreEqual(110, filled1.Fill.Price);
+            Assert.AreEqual(5, filled1.Fill.Quantity);
+            Assert.IsFalse(filled1.Fill.IsAggressor);
 
-            Assert.AreEqual(id3, filledArgs[1].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[1].Fill.Order.Security);
-            Assert.AreEqual(now4, filledArgs[1].Fill.Order.CreatedTime);
-            Assert.AreEqual(now4, filledArgs[1].Fill.Order.ModifiedTime);
-            Assert.IsNull(filledArgs[1].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Working, filledArgs[1].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[1].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[1].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Sell, filledArgs[1].Fill.Order.Side);
-            Assert.AreEqual(100, filledArgs[1].Fill.Order.Price);
-            Assert.IsNull(filledArgs[1].Fill.Order.StopPrice);
-            Assert.AreEqual(8, filledArgs[1].Fill.Order.Quantity);
-            Assert.AreEqual(5, filledArgs[1].Fill.Order.FilledQuantity);
-            Assert.AreEqual(3, filledArgs[1].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now4, filledArgs[1].Fill.Time);
-            Assert.AreEqual(110, filledArgs[1].Fill.Price);
-            Assert.AreEqual(5, filledArgs[1].Fill.Quantity);
-            Assert.IsTrue(filledArgs[1].Fill.IsAggressor);
+            var filled2 = events[2] as OrderFilledEvent;
+            Assert.IsNotNull(filled2);
+            Assert.AreEqual(id3, filled2.Fill.Order.Id);
+            Assert.AreEqual(sec, filled2.Fill.Order.Security);
+            Assert.AreEqual(now4, filled2.Fill.Order.CreatedTime);
+            Assert.AreEqual(now4, filled2.Fill.Order.ModifiedTime);
+            Assert.IsNull(filled2.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Working, filled2.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled2.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled2.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Sell, filled2.Fill.Order.Side);
+            Assert.AreEqual(100, filled2.Fill.Order.Price);
+            Assert.IsNull(filled2.Fill.Order.StopPrice);
+            Assert.AreEqual(8, filled2.Fill.Order.Quantity);
+            Assert.AreEqual(5, filled2.Fill.Order.FilledQuantity);
+            Assert.AreEqual(3, filled2.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now4, filled2.Fill.Time);
+            Assert.AreEqual(110, filled2.Fill.Price);
+            Assert.AreEqual(5, filled2.Fill.Quantity);
+            Assert.IsTrue(filled2.Fill.IsAggressor);
 
-            Assert.AreEqual(id1, filledArgs[2].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[2].Fill.Order.Security);
-            Assert.AreEqual(now1, filledArgs[2].Fill.Order.CreatedTime);
-            Assert.AreEqual(now3, filledArgs[2].Fill.Order.ModifiedTime);
-            Assert.IsNull(filledArgs[2].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Working, filledArgs[2].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[2].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[2].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Buy, filledArgs[2].Fill.Order.Side);
-            Assert.AreEqual(110, filledArgs[2].Fill.Order.Price);
-            Assert.IsNull(filledArgs[2].Fill.Order.StopPrice);
-            Assert.AreEqual(6, filledArgs[2].Fill.Order.Quantity);
-            Assert.AreEqual(3, filledArgs[2].Fill.Order.FilledQuantity);
-            Assert.AreEqual(3, filledArgs[2].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now4, filledArgs[2].Fill.Time);
-            Assert.AreEqual(110, filledArgs[2].Fill.Price);
-            Assert.AreEqual(3, filledArgs[2].Fill.Quantity);
-            Assert.IsFalse(filledArgs[2].Fill.IsAggressor);
+            var filled3 = events[3] as OrderFilledEvent;
+            Assert.IsNotNull(filled3);
+            Assert.AreEqual(id1, filled3.Fill.Order.Id);
+            Assert.AreEqual(sec, filled3.Fill.Order.Security);
+            Assert.AreEqual(now1, filled3.Fill.Order.CreatedTime);
+            Assert.AreEqual(now3, filled3.Fill.Order.ModifiedTime);
+            Assert.IsNull(filled3.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Working, filled3.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled3.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled3.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Buy, filled3.Fill.Order.Side);
+            Assert.AreEqual(110, filled3.Fill.Order.Price);
+            Assert.IsNull(filled3.Fill.Order.StopPrice);
+            Assert.AreEqual(6, filled3.Fill.Order.Quantity);
+            Assert.AreEqual(3, filled3.Fill.Order.FilledQuantity);
+            Assert.AreEqual(3, filled3.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now4, filled3.Fill.Time);
+            Assert.AreEqual(110, filled3.Fill.Price);
+            Assert.AreEqual(3, filled3.Fill.Quantity);
+            Assert.IsFalse(filled3.Fill.IsAggressor);
 
-            Assert.AreEqual(id3, filledArgs[3].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[3].Fill.Order.Security);
-            Assert.AreEqual(now4, filledArgs[3].Fill.Order.CreatedTime);
-            Assert.AreEqual(now4, filledArgs[3].Fill.Order.ModifiedTime);
-            Assert.AreEqual(now4, filledArgs[3].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Filled, filledArgs[3].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[3].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[3].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Sell, filledArgs[3].Fill.Order.Side);
-            Assert.AreEqual(100, filledArgs[3].Fill.Order.Price);
-            Assert.IsNull(filledArgs[3].Fill.Order.StopPrice);
-            Assert.AreEqual(8, filledArgs[3].Fill.Order.Quantity);
-            Assert.AreEqual(8, filledArgs[3].Fill.Order.FilledQuantity);
-            Assert.AreEqual(0, filledArgs[3].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now4, filledArgs[3].Fill.Time);
-            Assert.AreEqual(110, filledArgs[3].Fill.Price);
-            Assert.AreEqual(3, filledArgs[3].Fill.Quantity);
-            Assert.IsTrue(filledArgs[3].Fill.IsAggressor);
-
-            Assert.AreEqual(filledArgs[0].Fill, tradedArgs.Fills[0]);
-            Assert.AreEqual(filledArgs[1].Fill, tradedArgs.Fills[1]);
-            Assert.AreEqual(filledArgs[2].Fill, tradedArgs.Fills[2]);
-            Assert.AreEqual(filledArgs[3].Fill, tradedArgs.Fills[3]);
+            var filled4 = events[4] as OrderFilledEvent;
+            Assert.IsNotNull(filled4);
+            Assert.AreEqual(id3, filled4.Fill.Order.Id);
+            Assert.AreEqual(sec, filled4.Fill.Order.Security);
+            Assert.AreEqual(now4, filled4.Fill.Order.CreatedTime);
+            Assert.AreEqual(now4, filled4.Fill.Order.ModifiedTime);
+            Assert.AreEqual(now4, filled4.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Filled, filled4.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled4.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled4.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Sell, filled4.Fill.Order.Side);
+            Assert.AreEqual(100, filled4.Fill.Order.Price);
+            Assert.IsNull(filled4.Fill.Order.StopPrice);
+            Assert.AreEqual(8, filled4.Fill.Order.Quantity);
+            Assert.AreEqual(8, filled4.Fill.Order.FilledQuantity);
+            Assert.AreEqual(0, filled4.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now4, filled4.Fill.Time);
+            Assert.AreEqual(110, filled4.Fill.Price);
+            Assert.AreEqual(3, filled4.Fill.Quantity);
+            Assert.IsTrue(filled4.Fill.IsAggressor);
         }
 
         [Test]
@@ -1196,11 +1168,6 @@ namespace Circus.Tests
             var book = new OrderBook.OrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
-            var filledArgs = new List<OrderFilledEventArgs>();
-            book.OrderFilled += (_, e) => filledArgs.Add(e);
-            TradedEventArgs tradedArgs = null;
-            book.Traded += (_, e) => tradedArgs = e;
-
             var id1 = Guid.NewGuid();
             book.CreateLimitOrder(id1, TimeInForce.Day, Side.Buy, 110, 5);
             var now2 = new DateTime(2000, 1, 1, 12, 1, 0);
@@ -1215,51 +1182,53 @@ namespace Circus.Tests
             var id3 = Guid.NewGuid();
 
             // act
-            book.CreateLimitOrder(id3, TimeInForce.Day, Side.Sell, 100, 3);
+            var events = book.CreateLimitOrder(id3, TimeInForce.Day, Side.Sell, 100, 3).ToList();
 
             // assert
-            Assert.IsNotNull(filledArgs);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(3, events.Count);
 
-            Assert.AreEqual(id1, filledArgs[0].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[0].Fill.Order.Security);
-            Assert.AreEqual(now1, filledArgs[0].Fill.Order.CreatedTime);
-            Assert.AreEqual(now3, filledArgs[0].Fill.Order.ModifiedTime);
-            Assert.IsNull(filledArgs[0].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Working, filledArgs[0].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[0].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[0].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Buy, filledArgs[0].Fill.Order.Side);
-            Assert.AreEqual(110, filledArgs[0].Fill.Order.Price);
-            Assert.IsNull(filledArgs[0].Fill.Order.StopPrice);
-            Assert.AreEqual(4, filledArgs[0].Fill.Order.Quantity);
-            Assert.AreEqual(3, filledArgs[0].Fill.Order.FilledQuantity);
-            Assert.AreEqual(1, filledArgs[0].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now4, filledArgs[0].Fill.Time);
-            Assert.AreEqual(110, filledArgs[0].Fill.Price);
-            Assert.AreEqual(3, filledArgs[0].Fill.Quantity);
-            Assert.IsFalse(filledArgs[0].Fill.IsAggressor);
+            var filled1 = events[1] as OrderFilledEvent;
+            Assert.IsNotNull(filled1);
+            Assert.AreEqual(id1, filled1.Fill.Order.Id);
+            Assert.AreEqual(sec, filled1.Fill.Order.Security);
+            Assert.AreEqual(now1, filled1.Fill.Order.CreatedTime);
+            Assert.AreEqual(now3, filled1.Fill.Order.ModifiedTime);
+            Assert.IsNull(filled1.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Working, filled1.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled1.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled1.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Buy, filled1.Fill.Order.Side);
+            Assert.AreEqual(110, filled1.Fill.Order.Price);
+            Assert.IsNull(filled1.Fill.Order.StopPrice);
+            Assert.AreEqual(4, filled1.Fill.Order.Quantity);
+            Assert.AreEqual(3, filled1.Fill.Order.FilledQuantity);
+            Assert.AreEqual(1, filled1.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now4, filled1.Fill.Time);
+            Assert.AreEqual(110, filled1.Fill.Price);
+            Assert.AreEqual(3, filled1.Fill.Quantity);
+            Assert.IsFalse(filled1.Fill.IsAggressor);
 
-            Assert.AreEqual(id3, filledArgs[1].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[1].Fill.Order.Security);
-            Assert.AreEqual(now4, filledArgs[1].Fill.Order.CreatedTime);
-            Assert.AreEqual(now4, filledArgs[1].Fill.Order.ModifiedTime);
-            Assert.AreEqual(now4, filledArgs[1].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Filled, filledArgs[1].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[1].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[1].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Sell, filledArgs[1].Fill.Order.Side);
-            Assert.AreEqual(100, filledArgs[1].Fill.Order.Price);
-            Assert.IsNull(filledArgs[1].Fill.Order.StopPrice);
-            Assert.AreEqual(3, filledArgs[1].Fill.Order.Quantity);
-            Assert.AreEqual(3, filledArgs[1].Fill.Order.FilledQuantity);
-            Assert.AreEqual(0, filledArgs[1].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now4, filledArgs[1].Fill.Time);
-            Assert.AreEqual(110, filledArgs[1].Fill.Price);
-            Assert.AreEqual(3, filledArgs[1].Fill.Quantity);
-            Assert.IsTrue(filledArgs[1].Fill.IsAggressor);
-
-            Assert.AreEqual(filledArgs[0].Fill, tradedArgs.Fills[0]);
-            Assert.AreEqual(filledArgs[1].Fill, tradedArgs.Fills[1]);
+            var filled2 = events[2] as OrderFilledEvent;
+            Assert.IsNotNull(filled2);
+            Assert.AreEqual(id3, filled2.Fill.Order.Id);
+            Assert.AreEqual(sec, filled2.Fill.Order.Security);
+            Assert.AreEqual(now4, filled2.Fill.Order.CreatedTime);
+            Assert.AreEqual(now4, filled2.Fill.Order.ModifiedTime);
+            Assert.AreEqual(now4, filled2.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Filled, filled2.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled2.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled2.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Sell, filled2.Fill.Order.Side);
+            Assert.AreEqual(100, filled2.Fill.Order.Price);
+            Assert.IsNull(filled2.Fill.Order.StopPrice);
+            Assert.AreEqual(3, filled2.Fill.Order.Quantity);
+            Assert.AreEqual(3, filled2.Fill.Order.FilledQuantity);
+            Assert.AreEqual(0, filled2.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now4, filled2.Fill.Time);
+            Assert.AreEqual(110, filled2.Fill.Price);
+            Assert.AreEqual(3, filled2.Fill.Quantity);
+            Assert.IsTrue(filled2.Fill.IsAggressor);
         }
 
         [Test]
@@ -1272,11 +1241,6 @@ namespace Circus.Tests
             var book = new OrderBook.OrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
-            var filledArgs = new List<OrderFilledEventArgs>();
-            book.OrderFilled += (_, e) => filledArgs.Add(e);
-            TradedEventArgs tradedArgs = null;
-            book.Traded += (_, e) => tradedArgs = e;
-
             var id1 = Guid.NewGuid();
             book.CreateLimitOrder(id1, TimeInForce.Day, Side.Buy, 110, 5);
             var now2 = new DateTime(2000, 1, 1, 12, 1, 0);
@@ -1291,91 +1255,95 @@ namespace Circus.Tests
             var id3 = Guid.NewGuid();
 
             // act
-            book.CreateLimitOrder(id3, TimeInForce.Day, Side.Sell, 100, 8);
+            var events = book.CreateLimitOrder(id3, TimeInForce.Day, Side.Sell, 100, 8).ToList();
 
             // assert
-            Assert.IsNotNull(filledArgs);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(5, events.Count);
 
-            Assert.AreEqual(id1, filledArgs[0].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[0].Fill.Order.Security);
-            Assert.AreEqual(now1, filledArgs[0].Fill.Order.CreatedTime);
-            Assert.AreEqual(now3, filledArgs[0].Fill.Order.ModifiedTime);
-            Assert.AreEqual(now4, filledArgs[0].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Filled, filledArgs[0].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[0].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[0].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Buy, filledArgs[0].Fill.Order.Side);
-            Assert.AreEqual(110, filledArgs[0].Fill.Order.Price);
-            Assert.IsNull(filledArgs[0].Fill.Order.StopPrice);
-            Assert.AreEqual(4, filledArgs[0].Fill.Order.Quantity);
-            Assert.AreEqual(4, filledArgs[0].Fill.Order.FilledQuantity);
-            Assert.AreEqual(0, filledArgs[0].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now4, filledArgs[0].Fill.Time);
-            Assert.AreEqual(110, filledArgs[0].Fill.Price);
-            Assert.AreEqual(4, filledArgs[0].Fill.Quantity);
-            Assert.IsFalse(filledArgs[0].Fill.IsAggressor);
+            var filled1 = events[1] as OrderFilledEvent;
+            Assert.IsNotNull(filled1);
+            Assert.AreEqual(id1, filled1.Fill.Order.Id);
+            Assert.AreEqual(sec, filled1.Fill.Order.Security);
+            Assert.AreEqual(now1, filled1.Fill.Order.CreatedTime);
+            Assert.AreEqual(now3, filled1.Fill.Order.ModifiedTime);
+            Assert.AreEqual(now4, filled1.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Filled, filled1.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled1.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled1.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Buy, filled1.Fill.Order.Side);
+            Assert.AreEqual(110, filled1.Fill.Order.Price);
+            Assert.IsNull(filled1.Fill.Order.StopPrice);
+            Assert.AreEqual(4, filled1.Fill.Order.Quantity);
+            Assert.AreEqual(4, filled1.Fill.Order.FilledQuantity);
+            Assert.AreEqual(0, filled1.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now4, filled1.Fill.Time);
+            Assert.AreEqual(110, filled1.Fill.Price);
+            Assert.AreEqual(4, filled1.Fill.Quantity);
+            Assert.IsFalse(filled1.Fill.IsAggressor);
 
-            Assert.AreEqual(id3, filledArgs[1].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[1].Fill.Order.Security);
-            Assert.AreEqual(now4, filledArgs[1].Fill.Order.CreatedTime);
-            Assert.AreEqual(now4, filledArgs[1].Fill.Order.ModifiedTime);
-            Assert.IsNull(filledArgs[1].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Working, filledArgs[1].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[1].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[1].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Sell, filledArgs[1].Fill.Order.Side);
-            Assert.AreEqual(100, filledArgs[1].Fill.Order.Price);
-            Assert.IsNull(filledArgs[1].Fill.Order.StopPrice);
-            Assert.AreEqual(8, filledArgs[1].Fill.Order.Quantity);
-            Assert.AreEqual(4, filledArgs[1].Fill.Order.FilledQuantity);
-            Assert.AreEqual(4, filledArgs[1].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now4, filledArgs[1].Fill.Time);
-            Assert.AreEqual(110, filledArgs[1].Fill.Price);
-            Assert.AreEqual(4, filledArgs[1].Fill.Quantity);
-            Assert.IsTrue(filledArgs[1].Fill.IsAggressor);
+            var filled2 = events[2] as OrderFilledEvent;
+            Assert.IsNotNull(filled2);
+            Assert.AreEqual(id3, filled2.Fill.Order.Id);
+            Assert.AreEqual(sec, filled2.Fill.Order.Security);
+            Assert.AreEqual(now4, filled2.Fill.Order.CreatedTime);
+            Assert.AreEqual(now4, filled2.Fill.Order.ModifiedTime);
+            Assert.IsNull(filled2.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Working, filled2.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled2.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled2.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Sell, filled2.Fill.Order.Side);
+            Assert.AreEqual(100, filled2.Fill.Order.Price);
+            Assert.IsNull(filled2.Fill.Order.StopPrice);
+            Assert.AreEqual(8, filled2.Fill.Order.Quantity);
+            Assert.AreEqual(4, filled2.Fill.Order.FilledQuantity);
+            Assert.AreEqual(4, filled2.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now4, filled2.Fill.Time);
+            Assert.AreEqual(110, filled2.Fill.Price);
+            Assert.AreEqual(4, filled2.Fill.Quantity);
+            Assert.IsTrue(filled2.Fill.IsAggressor);
 
-            Assert.AreEqual(id2, filledArgs[2].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[2].Fill.Order.Security);
-            Assert.AreEqual(now2, filledArgs[2].Fill.Order.CreatedTime);
-            Assert.AreEqual(now2, filledArgs[2].Fill.Order.ModifiedTime);
-            Assert.IsNull(filledArgs[2].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Working, filledArgs[2].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[2].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[2].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Buy, filledArgs[2].Fill.Order.Side);
-            Assert.AreEqual(110, filledArgs[2].Fill.Order.Price);
-            Assert.IsNull(filledArgs[2].Fill.Order.StopPrice);
-            Assert.AreEqual(5, filledArgs[2].Fill.Order.Quantity);
-            Assert.AreEqual(4, filledArgs[2].Fill.Order.FilledQuantity);
-            Assert.AreEqual(1, filledArgs[2].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now4, filledArgs[2].Fill.Time);
-            Assert.AreEqual(110, filledArgs[2].Fill.Price);
-            Assert.AreEqual(4, filledArgs[2].Fill.Quantity);
-            Assert.IsFalse(filledArgs[2].Fill.IsAggressor);
+            var filled3 = events[3] as OrderFilledEvent;
+            Assert.IsNotNull(filled3);
+            Assert.AreEqual(id2, filled3.Fill.Order.Id);
+            Assert.AreEqual(sec, filled3.Fill.Order.Security);
+            Assert.AreEqual(now2, filled3.Fill.Order.CreatedTime);
+            Assert.AreEqual(now2, filled3.Fill.Order.ModifiedTime);
+            Assert.IsNull(filled3.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Working, filled3.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled3.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled3.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Buy, filled3.Fill.Order.Side);
+            Assert.AreEqual(110, filled3.Fill.Order.Price);
+            Assert.IsNull(filled3.Fill.Order.StopPrice);
+            Assert.AreEqual(5, filled3.Fill.Order.Quantity);
+            Assert.AreEqual(4, filled3.Fill.Order.FilledQuantity);
+            Assert.AreEqual(1, filled3.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now4, filled3.Fill.Time);
+            Assert.AreEqual(110, filled3.Fill.Price);
+            Assert.AreEqual(4, filled3.Fill.Quantity);
+            Assert.IsFalse(filled3.Fill.IsAggressor);
 
-            Assert.AreEqual(id3, filledArgs[3].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[3].Fill.Order.Security);
-            Assert.AreEqual(now4, filledArgs[3].Fill.Order.CreatedTime);
-            Assert.AreEqual(now4, filledArgs[3].Fill.Order.ModifiedTime);
-            Assert.AreEqual(now4, filledArgs[3].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Filled, filledArgs[3].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[3].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[3].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Sell, filledArgs[3].Fill.Order.Side);
-            Assert.AreEqual(100, filledArgs[3].Fill.Order.Price);
-            Assert.IsNull(filledArgs[3].Fill.Order.StopPrice);
-            Assert.AreEqual(8, filledArgs[3].Fill.Order.Quantity);
-            Assert.AreEqual(8, filledArgs[3].Fill.Order.FilledQuantity);
-            Assert.AreEqual(0, filledArgs[3].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now4, filledArgs[3].Fill.Time);
-            Assert.AreEqual(110, filledArgs[3].Fill.Price);
-            Assert.AreEqual(4, filledArgs[3].Fill.Quantity);
-            Assert.IsTrue(filledArgs[3].Fill.IsAggressor);
-
-            Assert.AreEqual(filledArgs[0].Fill, tradedArgs.Fills[0]);
-            Assert.AreEqual(filledArgs[1].Fill, tradedArgs.Fills[1]);
-            Assert.AreEqual(filledArgs[2].Fill, tradedArgs.Fills[2]);
-            Assert.AreEqual(filledArgs[3].Fill, tradedArgs.Fills[3]);
+            var filled4 = events[4] as OrderFilledEvent;
+            Assert.IsNotNull(filled4);
+            Assert.AreEqual(id3, filled4.Fill.Order.Id);
+            Assert.AreEqual(sec, filled4.Fill.Order.Security);
+            Assert.AreEqual(now4, filled4.Fill.Order.CreatedTime);
+            Assert.AreEqual(now4, filled4.Fill.Order.ModifiedTime);
+            Assert.AreEqual(now4, filled4.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Filled, filled4.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled4.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled4.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Sell, filled4.Fill.Order.Side);
+            Assert.AreEqual(100, filled4.Fill.Order.Price);
+            Assert.IsNull(filled4.Fill.Order.StopPrice);
+            Assert.AreEqual(8, filled4.Fill.Order.Quantity);
+            Assert.AreEqual(8, filled4.Fill.Order.FilledQuantity);
+            Assert.AreEqual(0, filled4.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now4, filled4.Fill.Time);
+            Assert.AreEqual(110, filled4.Fill.Price);
+            Assert.AreEqual(4, filled4.Fill.Quantity);
+            Assert.IsTrue(filled4.Fill.IsAggressor);
         }
 
         [Test]
@@ -1386,18 +1354,18 @@ namespace Circus.Tests
             var now = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now);
             var book = new OrderBook.OrderBook(sec, timeProvider);
-
-            OrderCreateRejectedEventArgs rejectedArgs = null;
-            book.OrderCreateRejected += (sender, e) => { rejectedArgs = e; };
             var id = Guid.NewGuid();
 
             // act
-            book.CreateLimitOrder(id, TimeInForce.Day, Side.Buy, 100, 3);
+            var events = book.CreateLimitOrder(id, TimeInForce.Day, Side.Buy, 100, 3).ToList();
 
             // assert
-            Assert.IsNotNull(rejectedArgs);
-            Assert.AreEqual(OrderRejectedReason.MarketClosed, rejectedArgs.Reason);
-            Assert.AreEqual(id, rejectedArgs.OrderId);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(1, events.Count);
+            var rejected = events[0] as OrderCreateRejectedEvent;
+            Assert.IsNotNull(rejected);
+            Assert.AreEqual(OrderRejectedReason.MarketClosed, rejected.Reason);
+            Assert.AreEqual(id, rejected.OrderId);
         }
 
         [TestCase(0)]
@@ -1410,18 +1378,19 @@ namespace Circus.Tests
             var timeProvider = new TestTimeProvider(now);
             var book = new OrderBook.OrderBook(sec, timeProvider);
 
-            OrderCreateRejectedEventArgs rejectedArgs = null;
-            book.OrderCreateRejected += (sender, e) => { rejectedArgs = e; };
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
 
             // act
-            book.CreateLimitOrder(id, TimeInForce.Day, Side.Buy, 100, quantity);
+            var events = book.CreateLimitOrder(id, TimeInForce.Day, Side.Buy, 100, quantity).ToList();
 
             // assert
-            Assert.IsNotNull(rejectedArgs);
-            Assert.AreEqual(OrderRejectedReason.InvalidQuantity, rejectedArgs.Reason);
-            Assert.AreEqual(id, rejectedArgs.OrderId);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(1, events.Count);
+            var rejected = events[0] as OrderCreateRejectedEvent;
+            Assert.IsNotNull(rejected);
+            Assert.AreEqual(OrderRejectedReason.InvalidQuantity, rejected.Reason);
+            Assert.AreEqual(id, rejected.OrderId);
         }
 
         [TestCase(8)]
@@ -1436,18 +1405,19 @@ namespace Circus.Tests
             var timeProvider = new TestTimeProvider(now);
             var book = new OrderBook.OrderBook(sec, timeProvider);
 
-            OrderCreateRejectedEventArgs rejectedArgs = null;
-            book.OrderCreateRejected += (sender, e) => { rejectedArgs = e; };
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
 
             // act
-            book.CreateLimitOrder(id, TimeInForce.Day, Side.Buy, price, 6);
+            var events = book.CreateLimitOrder(id, TimeInForce.Day, Side.Buy, price, 6).ToList();
 
             // assert
-            Assert.IsNotNull(rejectedArgs);
-            Assert.AreEqual(OrderRejectedReason.InvalidPriceIncrement, rejectedArgs.Reason);
-            Assert.AreEqual(id, rejectedArgs.OrderId);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(1, events.Count);
+            var rejected = events[0] as OrderCreateRejectedEvent;
+            Assert.IsNotNull(rejected);
+            Assert.AreEqual(OrderRejectedReason.InvalidPriceIncrement, rejected.Reason);
+            Assert.AreEqual(id, rejected.OrderId);
         }
 
         [Test]
@@ -1459,8 +1429,6 @@ namespace Circus.Tests
             var timeProvider = new TestTimeProvider(now1);
             var book = new OrderBook.OrderBook(sec, timeProvider);
 
-            OrderUpdatedSuccessEventArgs updatedArgs = null;
-            book.OrderUpdated += (sender, e) => { updatedArgs = e; };
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
             book.CreateLimitOrder(id, TimeInForce.Day, Side.Buy, 100, 3);
@@ -1468,24 +1436,27 @@ namespace Circus.Tests
             timeProvider.SetCurrentTime(now2);
 
             // act
-            book.UpdateLimitOrder(id, 110, 5);
+            var events = book.UpdateLimitOrder(id, 110, 5).ToList();
 
             // assert
-            Assert.IsNotNull(updatedArgs);
-            Assert.AreEqual(id, updatedArgs.Order.Id);
-            Assert.AreEqual(sec, updatedArgs.Order.Security);
-            Assert.AreEqual(now1, updatedArgs.Order.CreatedTime);
-            Assert.AreEqual(now2, updatedArgs.Order.ModifiedTime);
-            Assert.IsNull(updatedArgs.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Working, updatedArgs.Order.Status);
-            Assert.AreEqual(OrderType.Limit, updatedArgs.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, updatedArgs.Order.TimeInForce);
-            Assert.AreEqual(Side.Buy, updatedArgs.Order.Side);
-            Assert.AreEqual(110, updatedArgs.Order.Price);
-            Assert.IsNull(updatedArgs.Order.StopPrice);
-            Assert.AreEqual(5, updatedArgs.Order.Quantity);
-            Assert.AreEqual(0, updatedArgs.Order.FilledQuantity);
-            Assert.AreEqual(5, updatedArgs.Order.RemainingQuantity);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(1, events.Count);
+            var updated = events[0] as OrderUpdatedEvent;
+            Assert.IsNotNull(updated);
+            Assert.AreEqual(id, updated.Order.Id);
+            Assert.AreEqual(sec, updated.Order.Security);
+            Assert.AreEqual(now1, updated.Order.CreatedTime);
+            Assert.AreEqual(now2, updated.Order.ModifiedTime);
+            Assert.IsNull(updated.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Working, updated.Order.Status);
+            Assert.AreEqual(OrderType.Limit, updated.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, updated.Order.TimeInForce);
+            Assert.AreEqual(Side.Buy, updated.Order.Side);
+            Assert.AreEqual(110, updated.Order.Price);
+            Assert.IsNull(updated.Order.StopPrice);
+            Assert.AreEqual(5, updated.Order.Quantity);
+            Assert.AreEqual(0, updated.Order.FilledQuantity);
+            Assert.AreEqual(5, updated.Order.RemainingQuantity);
         }
 
         [Test]
@@ -1497,8 +1468,6 @@ namespace Circus.Tests
             var timeProvider = new TestTimeProvider(now1);
             var book = new OrderBook.OrderBook(sec, timeProvider);
 
-            OrderUpdatedSuccessEventArgs updatedArgs = null;
-            book.OrderUpdated += (sender, e) => { updatedArgs = e; };
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
             book.CreateLimitOrder(id, TimeInForce.Day, Side.Buy, 100, 3);
@@ -1506,24 +1475,27 @@ namespace Circus.Tests
             timeProvider.SetCurrentTime(now2);
 
             // act
-            book.UpdateLimitOrder(id, 110, 1);
+            var events = book.UpdateLimitOrder(id, 110, 1).ToList();
 
             // assert
-            Assert.IsNotNull(updatedArgs);
-            Assert.AreEqual(id, updatedArgs.Order.Id);
-            Assert.AreEqual(sec, updatedArgs.Order.Security);
-            Assert.AreEqual(now1, updatedArgs.Order.CreatedTime);
-            Assert.AreEqual(now2, updatedArgs.Order.ModifiedTime);
-            Assert.IsNull(updatedArgs.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Working, updatedArgs.Order.Status);
-            Assert.AreEqual(OrderType.Limit, updatedArgs.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, updatedArgs.Order.TimeInForce);
-            Assert.AreEqual(Side.Buy, updatedArgs.Order.Side);
-            Assert.AreEqual(110, updatedArgs.Order.Price);
-            Assert.IsNull(updatedArgs.Order.StopPrice);
-            Assert.AreEqual(1, updatedArgs.Order.Quantity);
-            Assert.AreEqual(0, updatedArgs.Order.FilledQuantity);
-            Assert.AreEqual(1, updatedArgs.Order.RemainingQuantity);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(1, events.Count);
+            var updated = events[0] as OrderUpdatedEvent;
+            Assert.IsNotNull(updated);
+            Assert.AreEqual(id, updated.Order.Id);
+            Assert.AreEqual(sec, updated.Order.Security);
+            Assert.AreEqual(now1, updated.Order.CreatedTime);
+            Assert.AreEqual(now2, updated.Order.ModifiedTime);
+            Assert.IsNull(updated.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Working, updated.Order.Status);
+            Assert.AreEqual(OrderType.Limit, updated.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, updated.Order.TimeInForce);
+            Assert.AreEqual(Side.Buy, updated.Order.Side);
+            Assert.AreEqual(110, updated.Order.Price);
+            Assert.IsNull(updated.Order.StopPrice);
+            Assert.AreEqual(1, updated.Order.Quantity);
+            Assert.AreEqual(0, updated.Order.FilledQuantity);
+            Assert.AreEqual(1, updated.Order.RemainingQuantity);
         }
 
         [Test]
@@ -1535,8 +1507,6 @@ namespace Circus.Tests
             var timeProvider = new TestTimeProvider(now1);
             var book = new OrderBook.OrderBook(sec, timeProvider);
 
-            OrderCancelledSuccessEventArgs cancelledArgs = null;
-            book.OrderCancelled += (sender, e) => { cancelledArgs = e; };
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
             book.CreateLimitOrder(id, TimeInForce.Day, Side.Buy, 100, 5);
@@ -1545,25 +1515,28 @@ namespace Circus.Tests
             timeProvider.SetCurrentTime(now2);
 
             // act
-            book.UpdateLimitOrder(id, 110, 2);
+            var events = book.UpdateLimitOrder(id, 100, 2).ToList();
 
             // assert
-            Assert.IsNotNull(cancelledArgs);
-            Assert.AreEqual(OrderCancelledReason.UpdatedQuantityLowerThanFilledQuantity, cancelledArgs.Reason);
-            Assert.AreEqual(id, cancelledArgs.Order.Id);
-            Assert.AreEqual(sec, cancelledArgs.Order.Security);
-            Assert.AreEqual(now1, cancelledArgs.Order.CreatedTime);
-            Assert.AreEqual(now1, cancelledArgs.Order.ModifiedTime);
-            Assert.AreEqual(now2, cancelledArgs.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Cancelled, cancelledArgs.Order.Status);
-            Assert.AreEqual(OrderType.Limit, cancelledArgs.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, cancelledArgs.Order.TimeInForce);
-            Assert.AreEqual(Side.Buy, cancelledArgs.Order.Side);
-            Assert.AreEqual(100, cancelledArgs.Order.Price);
-            Assert.IsNull(cancelledArgs.Order.StopPrice);
-            Assert.AreEqual(5, cancelledArgs.Order.Quantity);
-            Assert.AreEqual(4, cancelledArgs.Order.FilledQuantity);
-            Assert.AreEqual(0, cancelledArgs.Order.RemainingQuantity);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(1, events.Count);
+            var cancelled = events[0] as OrderCancelledEvent;
+            Assert.IsNotNull(cancelled);
+            Assert.AreEqual(OrderCancelledReason.UpdatedQuantityLowerThanFilledQuantity, cancelled.Reason);
+            Assert.AreEqual(id, cancelled.Order.Id);
+            Assert.AreEqual(sec, cancelled.Order.Security);
+            Assert.AreEqual(now1, cancelled.Order.CreatedTime);
+            Assert.AreEqual(now1, cancelled.Order.ModifiedTime);
+            Assert.AreEqual(now2, cancelled.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Cancelled, cancelled.Order.Status);
+            Assert.AreEqual(OrderType.Limit, cancelled.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, cancelled.Order.TimeInForce);
+            Assert.AreEqual(Side.Buy, cancelled.Order.Side);
+            Assert.AreEqual(100, cancelled.Order.Price);
+            Assert.IsNull(cancelled.Order.StopPrice);
+            Assert.AreEqual(5, cancelled.Order.Quantity);
+            Assert.AreEqual(4, cancelled.Order.FilledQuantity);
+            Assert.AreEqual(0, cancelled.Order.RemainingQuantity);
         }
 
         [Test]
@@ -1575,8 +1548,6 @@ namespace Circus.Tests
             var timeProvider = new TestTimeProvider(now1);
             var book = new OrderBook.OrderBook(sec, timeProvider);
 
-            OrderUpdateRejectedEventArgs updatedArgs = null;
-            book.OrderUpdateRejected += (sender, e) => { updatedArgs = e; };
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
             book.CreateLimitOrder(id, TimeInForce.Day, Side.Buy, 100, 3);
@@ -1585,12 +1556,15 @@ namespace Circus.Tests
             timeProvider.SetCurrentTime(now2);
 
             // act
-            book.UpdateLimitOrder(id, 110, 5);
+            var events = book.UpdateLimitOrder(id, 110, 5).ToList();
 
             // assert
-            Assert.IsNotNull(updatedArgs);
-            Assert.AreEqual(id, updatedArgs.OrderId);
-            Assert.AreEqual(OrderRejectedReason.TooLateToCancel, updatedArgs.Reason);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(1, events.Count);
+            var rejected = events[0] as OrderUpdateRejectedEvent;
+            Assert.IsNotNull(rejected);
+            Assert.AreEqual(id, rejected.OrderId);
+            Assert.AreEqual(OrderRejectedReason.TooLateToCancel, rejected.Reason);
         }
 
         [Test]
@@ -1602,8 +1576,6 @@ namespace Circus.Tests
             var timeProvider = new TestTimeProvider(now1);
             var book = new OrderBook.OrderBook(sec, timeProvider);
 
-            OrderUpdateRejectedEventArgs updatedArgs = null;
-            book.OrderUpdateRejected += (sender, e) => { updatedArgs = e; };
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
             book.CreateLimitOrder(id, TimeInForce.Day, Side.Buy, 100, 3);
@@ -1612,12 +1584,15 @@ namespace Circus.Tests
             timeProvider.SetCurrentTime(now2);
 
             // act
-            book.UpdateLimitOrder(id, 110, 5);
+            var events = book.UpdateLimitOrder(id, 110, 5).ToList();
 
             // assert
-            Assert.IsNotNull(updatedArgs);
-            Assert.AreEqual(id, updatedArgs.OrderId);
-            Assert.AreEqual(OrderRejectedReason.TooLateToCancel, updatedArgs.Reason);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(1, events.Count);
+            var rejected = events[0] as OrderUpdateRejectedEvent;
+            Assert.IsNotNull(rejected);
+            Assert.AreEqual(id, rejected.OrderId);
+            Assert.AreEqual(OrderRejectedReason.TooLateToCancel, rejected.Reason);
         }
 
         [Test]
@@ -1629,8 +1604,6 @@ namespace Circus.Tests
             var timeProvider = new TestTimeProvider(now1);
             var book = new OrderBook.OrderBook(sec, timeProvider);
 
-            OrderUpdateRejectedEventArgs updatedArgs = null;
-            book.OrderUpdateRejected += (sender, e) => { updatedArgs = e; };
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
             book.CreateLimitOrder(id, TimeInForce.Day, Side.Buy, 100, 3);
@@ -1638,12 +1611,15 @@ namespace Circus.Tests
             book.SetStatus(OrderBookStatus.Open);
 
             // act
-            book.UpdateLimitOrder(id, 110, 5);
+            var events = book.UpdateLimitOrder(id, 110, 5).ToList();
 
             // assert
-            Assert.IsNotNull(updatedArgs);
-            Assert.AreEqual(id, updatedArgs.OrderId);
-            Assert.AreEqual(OrderRejectedReason.TooLateToCancel, updatedArgs.Reason);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(1, events.Count);
+            var rejected = events[0] as OrderUpdateRejectedEvent;
+            Assert.IsNotNull(rejected);
+            Assert.AreEqual(id, rejected.OrderId);
+            Assert.AreEqual(OrderRejectedReason.TooLateToCancel, rejected.Reason);
         }
 
 
@@ -1656,18 +1632,19 @@ namespace Circus.Tests
             var timeProvider = new TestTimeProvider(now);
             var book = new OrderBook.OrderBook(sec, timeProvider);
 
-            OrderUpdateRejectedEventArgs updateArgs = null;
-            book.OrderUpdateRejected += (sender, e) => { updateArgs = e; };
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
 
             // act
-            book.UpdateLimitOrder(id, 110, 5);
+            var events = book.UpdateLimitOrder(id, 110, 5).ToList();
 
             // assert
-            Assert.IsNotNull(updateArgs);
-            Assert.AreEqual(id, updateArgs.OrderId);
-            Assert.AreEqual(OrderRejectedReason.OrderNotInBook, updateArgs.Reason);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(1, events.Count);
+            var rejected = events[0] as OrderUpdateRejectedEvent;
+            Assert.IsNotNull(rejected);
+            Assert.AreEqual(id, rejected.OrderId);
+            Assert.AreEqual(OrderRejectedReason.OrderNotInBook, rejected.Reason);
         }
 
         [Test]
@@ -1679,20 +1656,21 @@ namespace Circus.Tests
             var timeProvider = new TestTimeProvider(now);
             var book = new OrderBook.OrderBook(sec, timeProvider);
 
-            OrderUpdateRejectedEventArgs rejectedArgs = null;
-            book.OrderUpdateRejected += (sender, e) => { rejectedArgs = e; };
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
             book.CreateLimitOrder(id, TimeInForce.Day, Side.Buy, 100, 3);
             book.SetStatus(OrderBookStatus.Closed);
 
             // act
-            book.UpdateLimitOrder(id, 105, 5);
+            var events = book.UpdateLimitOrder(id, 105, 5).ToList();
 
             // assert
-            Assert.IsNotNull(rejectedArgs);
-            Assert.AreEqual(OrderRejectedReason.MarketClosed, rejectedArgs.Reason);
-            Assert.AreEqual(id, rejectedArgs.OrderId);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(1, events.Count);
+            var rejected = events[0] as OrderUpdateRejectedEvent;
+            Assert.IsNotNull(rejected);
+            Assert.AreEqual(OrderRejectedReason.MarketClosed, rejected.Reason);
+            Assert.AreEqual(id, rejected.OrderId);
         }
 
         [TestCase(0)]
@@ -1705,19 +1683,20 @@ namespace Circus.Tests
             var timeProvider = new TestTimeProvider(now);
             var book = new OrderBook.OrderBook(sec, timeProvider);
 
-            OrderUpdateRejectedEventArgs rejectedArgs = null;
-            book.OrderUpdateRejected += (sender, e) => { rejectedArgs = e; };
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
             book.CreateLimitOrder(id, TimeInForce.Day, Side.Buy, 100, 3);
 
             // act
-            book.UpdateLimitOrder(id, 110, quantity);
+            var events = book.UpdateLimitOrder(id, 110, quantity).ToList();
 
             // assert
-            Assert.IsNotNull(rejectedArgs);
-            Assert.AreEqual(OrderRejectedReason.InvalidQuantity, rejectedArgs.Reason);
-            Assert.AreEqual(id, rejectedArgs.OrderId);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(1, events.Count);
+            var rejected = events[0] as OrderUpdateRejectedEvent;
+            Assert.IsNotNull(rejected);
+            Assert.AreEqual(OrderRejectedReason.InvalidQuantity, rejected.Reason);
+            Assert.AreEqual(id, rejected.OrderId);
         }
 
         [TestCase(8)]
@@ -1732,19 +1711,20 @@ namespace Circus.Tests
             var timeProvider = new TestTimeProvider(now);
             var book = new OrderBook.OrderBook(sec, timeProvider);
 
-            OrderUpdateRejectedEventArgs rejectedArgs = null;
-            book.OrderUpdateRejected += (sender, e) => { rejectedArgs = e; };
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
             book.CreateLimitOrder(id, TimeInForce.Day, Side.Buy, 100, 6);
 
             // act
-            book.UpdateLimitOrder(id, price, 6);
+            var events = book.UpdateLimitOrder(id, price, 6).ToList();
 
             // assert
-            Assert.IsNotNull(rejectedArgs);
-            Assert.AreEqual(OrderRejectedReason.InvalidPriceIncrement, rejectedArgs.Reason);
-            Assert.AreEqual(id, rejectedArgs.OrderId);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(1, events.Count);
+            var rejected = events[0] as OrderUpdateRejectedEvent;
+            Assert.IsNotNull(rejected);
+            Assert.AreEqual(OrderRejectedReason.InvalidPriceIncrement, rejected.Reason);
+            Assert.AreEqual(id, rejected.OrderId);
         }
 
         [Test]
@@ -1756,8 +1736,6 @@ namespace Circus.Tests
             var timeProvider = new TestTimeProvider(now1);
             var book = new OrderBook.OrderBook(sec, timeProvider);
 
-            OrderCancelledSuccessEventArgs cancelledArgs = null;
-            book.OrderCancelled += (sender, e) => { cancelledArgs = e; };
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
             book.CreateLimitOrder(id, TimeInForce.Day, Side.Buy, 100, 3);
@@ -1765,25 +1743,28 @@ namespace Circus.Tests
             timeProvider.SetCurrentTime(now2);
 
             // act
-            book.CancelOrder(id);
+            var events = book.CancelOrder(id).ToList();
 
             // assert
-            Assert.IsNotNull(cancelledArgs);
-            Assert.AreEqual(OrderCancelledReason.Cancelled, cancelledArgs.Reason);
-            Assert.AreEqual(id, cancelledArgs.Order.Id);
-            Assert.AreEqual(sec, cancelledArgs.Order.Security);
-            Assert.AreEqual(now1, cancelledArgs.Order.CreatedTime);
-            Assert.AreEqual(now1, cancelledArgs.Order.ModifiedTime);
-            Assert.AreEqual(now2, cancelledArgs.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Cancelled, cancelledArgs.Order.Status);
-            Assert.AreEqual(OrderType.Limit, cancelledArgs.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, cancelledArgs.Order.TimeInForce);
-            Assert.AreEqual(Side.Buy, cancelledArgs.Order.Side);
-            Assert.AreEqual(100, cancelledArgs.Order.Price);
-            Assert.IsNull(cancelledArgs.Order.StopPrice);
-            Assert.AreEqual(3, cancelledArgs.Order.Quantity);
-            Assert.AreEqual(0, cancelledArgs.Order.FilledQuantity);
-            Assert.AreEqual(0, cancelledArgs.Order.RemainingQuantity);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(1, events.Count);
+            var cancelled = events[0] as OrderCancelledEvent;
+            Assert.IsNotNull(cancelled);
+            Assert.AreEqual(OrderCancelledReason.Cancelled, cancelled.Reason);
+            Assert.AreEqual(id, cancelled.Order.Id);
+            Assert.AreEqual(sec, cancelled.Order.Security);
+            Assert.AreEqual(now1, cancelled.Order.CreatedTime);
+            Assert.AreEqual(now1, cancelled.Order.ModifiedTime);
+            Assert.AreEqual(now2, cancelled.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Cancelled, cancelled.Order.Status);
+            Assert.AreEqual(OrderType.Limit, cancelled.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, cancelled.Order.TimeInForce);
+            Assert.AreEqual(Side.Buy, cancelled.Order.Side);
+            Assert.AreEqual(100, cancelled.Order.Price);
+            Assert.IsNull(cancelled.Order.StopPrice);
+            Assert.AreEqual(3, cancelled.Order.Quantity);
+            Assert.AreEqual(0, cancelled.Order.FilledQuantity);
+            Assert.AreEqual(0, cancelled.Order.RemainingQuantity);
         }
 
         [Test]
@@ -1795,18 +1776,19 @@ namespace Circus.Tests
             var timeProvider = new TestTimeProvider(now);
             var book = new OrderBook.OrderBook(sec, timeProvider);
 
-            OrderCancelRejectedEventArgs rejectedArgs = null;
-            book.OrderCancelRejected += (sender, e) => { rejectedArgs = e; };
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
 
             // act
-            book.CancelOrder(id);
+            var events = book.CancelOrder(id).ToList();
 
             // assert
-            Assert.IsNotNull(rejectedArgs);
-            Assert.AreEqual(id, rejectedArgs.OrderId);
-            Assert.AreEqual(OrderRejectedReason.OrderNotInBook, rejectedArgs.Reason);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(1, events.Count);
+            var rejected = events[0] as OrderCancelRejectedEvent;
+            Assert.IsNotNull(rejected);
+            Assert.AreEqual(id, rejected.OrderId);
+            Assert.AreEqual(OrderRejectedReason.OrderNotInBook, rejected.Reason);
         }
 
         [Test]
@@ -1818,20 +1800,21 @@ namespace Circus.Tests
             var timeProvider = new TestTimeProvider(now);
             var book = new OrderBook.OrderBook(sec, timeProvider);
 
-            OrderCancelRejectedEventArgs rejectedArgs = null;
-            book.OrderCancelRejected += (sender, e) => { rejectedArgs = e; };
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
             book.CreateLimitOrder(id, TimeInForce.Day, Side.Buy, 100, 3);
             book.SetStatus(OrderBookStatus.Closed);
 
             // act
-            book.CancelOrder(id);
+            var events = book.CancelOrder(id).ToList();
 
             // assert
-            Assert.IsNotNull(rejectedArgs);
-            Assert.AreEqual(OrderRejectedReason.MarketClosed, rejectedArgs.Reason);
-            Assert.AreEqual(id, rejectedArgs.OrderId);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(1, events.Count);
+            var rejected = events[0] as OrderCancelRejectedEvent;
+            Assert.IsNotNull(rejected);
+            Assert.AreEqual(OrderRejectedReason.MarketClosed, rejected.Reason);
+            Assert.AreEqual(id, rejected.OrderId);
         }
 
         [Test]
@@ -1844,11 +1827,6 @@ namespace Circus.Tests
             var book = new OrderBook.OrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
-            var filledArgs = new List<OrderFilledEventArgs>();
-            book.OrderFilled += (_, e) => filledArgs.Add(e);
-            TradedEventArgs tradedArgs = null;
-            book.Traded += (_, e) => tradedArgs = e;
-
             var id1 = Guid.NewGuid();
             book.CreateLimitOrder(id1, TimeInForce.Day, Side.Buy, 500, 3);
             var now2 = new DateTime(2000, 1, 1, 12, 1, 0);
@@ -1856,51 +1834,53 @@ namespace Circus.Tests
             var id2 = Guid.NewGuid();
 
             // act
-            book.CreateMarketOrder(id2, TimeInForce.Day, Side.Sell, 5);
+            var events = book.CreateMarketOrder(id2, TimeInForce.Day, Side.Sell, 5).ToList();
 
             // assert
-            Assert.IsNotNull(filledArgs);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(3, events.Count);
 
-            Assert.AreEqual(id1, filledArgs[0].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[0].Fill.Order.Security);
-            Assert.AreEqual(now1, filledArgs[0].Fill.Order.CreatedTime);
-            Assert.AreEqual(now1, filledArgs[0].Fill.Order.ModifiedTime);
-            Assert.AreEqual(now2, filledArgs[0].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Filled, filledArgs[0].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[0].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[0].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Buy, filledArgs[0].Fill.Order.Side);
-            Assert.AreEqual(500, filledArgs[0].Fill.Order.Price);
-            Assert.IsNull(filledArgs[0].Fill.Order.StopPrice);
-            Assert.AreEqual(3, filledArgs[0].Fill.Order.Quantity);
-            Assert.AreEqual(3, filledArgs[0].Fill.Order.FilledQuantity);
-            Assert.AreEqual(0, filledArgs[0].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now2, filledArgs[0].Fill.Time);
-            Assert.AreEqual(500, filledArgs[0].Fill.Price);
-            Assert.AreEqual(3, filledArgs[0].Fill.Quantity);
-            Assert.IsFalse(filledArgs[0].Fill.IsAggressor);
+            var filled1 = events[1] as OrderFilledEvent;
+            Assert.IsNotNull(filled1);
+            Assert.AreEqual(id1, filled1.Fill.Order.Id);
+            Assert.AreEqual(sec, filled1.Fill.Order.Security);
+            Assert.AreEqual(now1, filled1.Fill.Order.CreatedTime);
+            Assert.AreEqual(now1, filled1.Fill.Order.ModifiedTime);
+            Assert.AreEqual(now2, filled1.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Filled, filled1.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled1.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled1.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Buy, filled1.Fill.Order.Side);
+            Assert.AreEqual(500, filled1.Fill.Order.Price);
+            Assert.IsNull(filled1.Fill.Order.StopPrice);
+            Assert.AreEqual(3, filled1.Fill.Order.Quantity);
+            Assert.AreEqual(3, filled1.Fill.Order.FilledQuantity);
+            Assert.AreEqual(0, filled1.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now2, filled1.Fill.Time);
+            Assert.AreEqual(500, filled1.Fill.Price);
+            Assert.AreEqual(3, filled1.Fill.Quantity);
+            Assert.IsFalse(filled1.Fill.IsAggressor);
 
-            Assert.AreEqual(id2, filledArgs[1].Fill.Order.Id);
-            Assert.AreEqual(sec, filledArgs[1].Fill.Order.Security);
-            Assert.AreEqual(now2, filledArgs[1].Fill.Order.CreatedTime);
-            Assert.AreEqual(now2, filledArgs[1].Fill.Order.ModifiedTime);
-            Assert.IsNull(filledArgs[1].Fill.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Working, filledArgs[1].Fill.Order.Status);
-            Assert.AreEqual(OrderType.Limit, filledArgs[1].Fill.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, filledArgs[1].Fill.Order.TimeInForce);
-            Assert.AreEqual(Side.Sell, filledArgs[1].Fill.Order.Side);
-            Assert.AreEqual(300, filledArgs[1].Fill.Order.Price);
-            Assert.IsNull(filledArgs[1].Fill.Order.StopPrice);
-            Assert.AreEqual(5, filledArgs[1].Fill.Order.Quantity);
-            Assert.AreEqual(3, filledArgs[1].Fill.Order.FilledQuantity);
-            Assert.AreEqual(2, filledArgs[1].Fill.Order.RemainingQuantity);
-            Assert.AreEqual(now2, filledArgs[1].Fill.Time);
-            Assert.AreEqual(500, filledArgs[1].Fill.Price);
-            Assert.AreEqual(3, filledArgs[1].Fill.Quantity);
-            Assert.IsTrue(filledArgs[1].Fill.IsAggressor);
-
-            Assert.AreEqual(filledArgs[0].Fill, tradedArgs.Fills[0]);
-            Assert.AreEqual(filledArgs[1].Fill, tradedArgs.Fills[1]);
+            var filled2 = events[2] as OrderFilledEvent;
+            Assert.IsNotNull(filled2);
+            Assert.AreEqual(id2, filled2.Fill.Order.Id);
+            Assert.AreEqual(sec, filled2.Fill.Order.Security);
+            Assert.AreEqual(now2, filled2.Fill.Order.CreatedTime);
+            Assert.AreEqual(now2, filled2.Fill.Order.ModifiedTime);
+            Assert.IsNull(filled2.Fill.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Working, filled2.Fill.Order.Status);
+            Assert.AreEqual(OrderType.Limit, filled2.Fill.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, filled2.Fill.Order.TimeInForce);
+            Assert.AreEqual(Side.Sell, filled2.Fill.Order.Side);
+            Assert.AreEqual(300, filled2.Fill.Order.Price);
+            Assert.IsNull(filled2.Fill.Order.StopPrice);
+            Assert.AreEqual(5, filled2.Fill.Order.Quantity);
+            Assert.AreEqual(3, filled2.Fill.Order.FilledQuantity);
+            Assert.AreEqual(2, filled2.Fill.Order.RemainingQuantity);
+            Assert.AreEqual(now2, filled2.Fill.Time);
+            Assert.AreEqual(500, filled2.Fill.Price);
+            Assert.AreEqual(3, filled2.Fill.Quantity);
+            Assert.IsTrue(filled2.Fill.IsAggressor);
         }
 
         [Test]
@@ -1912,17 +1892,18 @@ namespace Circus.Tests
             var timeProvider = new TestTimeProvider(now);
             var book = new OrderBook.OrderBook(sec, timeProvider);
 
-            OrderCreateRejectedEventArgs rejectedArgs = null;
-            book.OrderCreateRejected += (sender, e) => { rejectedArgs = e; };
             var id = Guid.NewGuid();
 
             // act
-            book.CreateMarketOrder(id, TimeInForce.Day, Side.Buy, 3);
+            var events = book.CreateMarketOrder(id, TimeInForce.Day, Side.Buy, 3).ToList();
 
             // assert
-            Assert.IsNotNull(rejectedArgs);
-            Assert.AreEqual(OrderRejectedReason.MarketClosed, rejectedArgs.Reason);
-            Assert.AreEqual(id, rejectedArgs.OrderId);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(1, events.Count);
+            var rejected = events[0] as OrderCreateRejectedEvent;
+            Assert.IsNotNull(rejected);
+            Assert.AreEqual(OrderRejectedReason.MarketClosed, rejected.Reason);
+            Assert.AreEqual(id, rejected.OrderId);
         }
 
         [TestCase(0)]
@@ -1935,18 +1916,19 @@ namespace Circus.Tests
             var timeProvider = new TestTimeProvider(now);
             var book = new OrderBook.OrderBook(sec, timeProvider);
 
-            OrderCreateRejectedEventArgs rejectedArgs = null;
-            book.OrderCreateRejected += (sender, e) => { rejectedArgs = e; };
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
 
             // act
-            book.CreateMarketOrder(id, TimeInForce.Day, Side.Buy, quantity);
+            var events = book.CreateMarketOrder(id, TimeInForce.Day, Side.Buy, quantity).ToList();
 
             // assert
-            Assert.IsNotNull(rejectedArgs);
-            Assert.AreEqual(OrderRejectedReason.InvalidQuantity, rejectedArgs.Reason);
-            Assert.AreEqual(id, rejectedArgs.OrderId);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(1, events.Count);
+            var rejected = events[0] as OrderCreateRejectedEvent;
+            Assert.IsNotNull(rejected);
+            Assert.AreEqual(OrderRejectedReason.InvalidQuantity, rejected.Reason);
+            Assert.AreEqual(id, rejected.OrderId);
         }
 
         [Test]
@@ -1958,18 +1940,19 @@ namespace Circus.Tests
             var timeProvider = new TestTimeProvider(now);
             var book = new OrderBook.OrderBook(sec, timeProvider);
 
-            OrderCreateRejectedEventArgs rejectedArgs = null;
-            book.OrderCreateRejected += (sender, e) => { rejectedArgs = e; };
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
 
             // act
-            book.CreateMarketOrder(id, TimeInForce.Day, Side.Buy, 3);
+            var events = book.CreateMarketOrder(id, TimeInForce.Day, Side.Buy, 3).ToList();
 
             // assert
-            Assert.IsNotNull(rejectedArgs);
-            Assert.AreEqual(OrderRejectedReason.NoOrdersToMatchMarketOrder, rejectedArgs.Reason);
-            Assert.AreEqual(id, rejectedArgs.OrderId);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(1, events.Count);
+            var rejected = events[0] as OrderCreateRejectedEvent;
+            Assert.IsNotNull(rejected);
+            Assert.AreEqual(OrderRejectedReason.NoOrdersToMatchMarketOrder, rejected.Reason);
+            Assert.AreEqual(id, rejected.OrderId);
         }
 
         [Test]
@@ -1981,8 +1964,6 @@ namespace Circus.Tests
             var timeProvider = new TestTimeProvider(now1);
             var book = new OrderBook.OrderBook(sec, timeProvider);
 
-            OrderExpiredEventArgs expiredArgs = null;
-            book.OrderExpired += (sender, e) => { expiredArgs = e; };
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
             book.CreateLimitOrder(id, TimeInForce.Day, Side.Buy, 100, 5);
@@ -1990,24 +1971,27 @@ namespace Circus.Tests
             timeProvider.SetCurrentTime(now2);
 
             // act
-            book.SetStatus(OrderBookStatus.Closed);
+            var events = book.SetStatus(OrderBookStatus.Closed).ToList();
 
             // assert
-            Assert.IsNotNull(expiredArgs);
-            Assert.AreEqual(id, expiredArgs.Order.Id);
-            Assert.AreEqual(sec, expiredArgs.Order.Security);
-            Assert.AreEqual(now1, expiredArgs.Order.CreatedTime);
-            Assert.AreEqual(now1, expiredArgs.Order.ModifiedTime);
-            Assert.AreEqual(now2, expiredArgs.Order.CompletedTime);
-            Assert.AreEqual(OrderStatus.Expired, expiredArgs.Order.Status);
-            Assert.AreEqual(OrderType.Limit, expiredArgs.Order.Type);
-            Assert.AreEqual(TimeInForce.Day, expiredArgs.Order.TimeInForce);
-            Assert.AreEqual(Side.Buy, expiredArgs.Order.Side);
-            Assert.AreEqual(100, expiredArgs.Order.Price);
-            Assert.IsNull(expiredArgs.Order.StopPrice);
-            Assert.AreEqual(5, expiredArgs.Order.Quantity);
-            Assert.AreEqual(0, expiredArgs.Order.FilledQuantity);
-            Assert.AreEqual(0, expiredArgs.Order.RemainingQuantity);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(1, events.Count);
+            var expired = events[0] as OrderExpiredEvent;
+            Assert.IsNotNull(expired);
+            Assert.AreEqual(id, expired.Order.Id);
+            Assert.AreEqual(sec, expired.Order.Security);
+            Assert.AreEqual(now1, expired.Order.CreatedTime);
+            Assert.AreEqual(now1, expired.Order.ModifiedTime);
+            Assert.AreEqual(now2, expired.Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Expired, expired.Order.Status);
+            Assert.AreEqual(OrderType.Limit, expired.Order.Type);
+            Assert.AreEqual(TimeInForce.Day, expired.Order.TimeInForce);
+            Assert.AreEqual(Side.Buy, expired.Order.Side);
+            Assert.AreEqual(100, expired.Order.Price);
+            Assert.IsNull(expired.Order.StopPrice);
+            Assert.AreEqual(5, expired.Order.Quantity);
+            Assert.AreEqual(0, expired.Order.FilledQuantity);
+            Assert.AreEqual(0, expired.Order.RemainingQuantity);
         }
 
         [Test]

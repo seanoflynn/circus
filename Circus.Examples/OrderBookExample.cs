@@ -11,13 +11,11 @@ namespace Circus.Examples
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
 
             var book = new OrderBook.OrderBook(sec, new UtcTimeProvider());
-            book.Traded += (o, e) => { Console.WriteLine("traded qty=" + e.Fills[0].Quantity); };
+            // book.Traded += (o, e) => { Console.WriteLine("traded qty=" + e.Fills[0].Quantity); };
             book.SetStatus(OrderBookStatus.Open);
 
             book.CreateLimitOrder(Guid.NewGuid(), TimeInForce.Day, Side.Buy, 100, 3);
-            book.CreateLimitOrder(Guid.NewGuid(), TimeInForce.Day, Side.Sell, 100, 5);
-
-            Thread.Sleep(100);
+            var events = book.CreateLimitOrder(Guid.NewGuid(), TimeInForce.Day, Side.Sell, 100, 5);
         }
     }
 }

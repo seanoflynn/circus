@@ -39,7 +39,6 @@ Sessions
 
 Market data
 - [ ] Trades
-- [ ] Price/qty/count at top of book
 - [ ] Price/qty/count for x levels
 - [ ] All order updates
 

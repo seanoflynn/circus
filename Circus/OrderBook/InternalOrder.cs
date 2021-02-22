@@ -35,10 +35,8 @@ namespace Circus.OrderBook
             FilledQuantity = 0;
         }
 
-        public override string ToString()
-        {
-            return $"[Order #{Id} {ModifiedTime:HH:mm:ss} {Side,-4} {Quantity}@{Price}]";
-        }
+        public override string ToString() => 
+            $"[Order #{Id} {Status} {ModifiedTime:HH:mm:ss} {Side} {Quantity}@{Price}]";
 
         public Order ToOrder()
         {

@@ -5,6 +5,16 @@ namespace Circus
 {
     public class Exchange
     {
+        // public event EventHandler<OrderCreatedSuccessEventArgs> OrderCreated;
+        // public event EventHandler<OrderUpdatedSuccessEventArgs> OrderUpdated;
+        // public event EventHandler<OrderCancelledSuccessEventArgs> OrderCancelled;
+        // public event EventHandler<OrderCreateRejectedEventArgs> OrderCreateRejected;
+        // public event EventHandler<OrderUpdateRejectedEventArgs> OrderUpdateRejected;
+        // public event EventHandler<OrderCancelRejectedEventArgs> OrderCancelRejected;
+        // public event EventHandler<OrderFilledEventArgs> OrderFilled;
+        // public event EventHandler<OrderExpiredEventArgs> OrderExpired;
+        // public event EventHandler<TradedEventArgs> Traded;
+        
         private readonly Dictionary<Security, OrderBook.OrderBook> _books = new();
         
         // private readonly Dictionary<Security, AggregateBook> _aggregateBooks = new();
