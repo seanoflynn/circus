@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Circus.Util;
@@ -28,6 +29,17 @@ namespace Circus.OrderBook
             _timeProvider = timeProvider;
         }
 
+        public IList<Level> GetLevels(Side side, int maxPrices)
+        {
+            var orders = side == Side.Buy ? _buyOrders : _sellOrders;
+            return orders.Take(maxPrices)
+                .Select(x => new Level(
+                    x.Key,
+                    x.Value.Sum(y => y.Value.Quantity),
+                    x.Value.Count))
+                .ToList();
+        }
+        
         public IEnumerable<OrderBookEvent> CreateLimitOrder(Guid id, TimeInForce tif, Side side, decimal price,
             int quantity)
         {
@@ -346,6 +358,8 @@ namespace Circus.OrderBook
         }
     }
 
+    public record Level(decimal Price, int Quantity, int Count);
+    
     internal static class SortedDictionaryExtensions
     {
         internal static void Add(this SortedDictionary<decimal, SortedDictionary<long, InternalOrder>> orders,
