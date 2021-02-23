@@ -17,7 +17,7 @@ namespace Circus
         }
     }
 
-    public class TradingSession
+    public class SessionProvider
     {
         public event EventHandler<OrderBookStatus> Changed;
 
@@ -27,11 +27,11 @@ namespace Circus
 
         private Timer _timer;
 
-        public TradingSession()
+        public SessionProvider()
         {
         }
 
-        public TradingSession(DateTime date, TimeSpan preOpen, TimeSpan noCancel, TimeSpan open, TimeSpan close)
+        public SessionProvider(DateTime date, TimeSpan preOpen, TimeSpan noCancel, TimeSpan open, TimeSpan close)
         {
             // Events.Add(new TradingSessionEvent(date + preOpen, OrderBookStatus.PreOpen));
             // Events.Add(new TradingSessionEvent(date + noCancel, OrderBookStatus.NoChange));

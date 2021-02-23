@@ -9,12 +9,12 @@ A financial exchange simulator.
 ## To Do
 
 Priority
-- [X] Limit orders
-- [X] Market orders
-- [X] Day orders
-- [ ] Market data
+- [x] Limit orders
+- [x] Market orders
+- [x] Day orders
+- [x] Market data
+- [ ] Sessions (add simulated timers)
 - [ ] Simulator
-- [ ] Sessions (add timers to)
 - [ ] GTC, GTD
 - [ ] Pre-open
 
@@ -38,7 +38,7 @@ Sessions
 - [ ] Market statistics
 
 Market data
-- [ ] Trades
+- [x] Trades
 - [ ] Price/qty/count for x levels
 - [ ] All order updates
 

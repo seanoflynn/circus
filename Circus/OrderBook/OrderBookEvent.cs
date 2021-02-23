@@ -3,21 +3,37 @@ using System.Collections.Generic;
 
 namespace Circus.OrderBook
 {
-    public record OrderBookEvent;
-    
-    public record OrderCreatedEvent(Order Order) : OrderBookEvent;
+    public class OrderBookEventArgs : EventArgs
+    {
+        public OrderBookEventArgs(IList<OrderBookEvent> events)
+        {
+            Events = events;
+        }
 
-    public record OrderCreateRejectedEvent(Guid OrderId, OrderRejectedReason Reason) : OrderBookEvent;
+        public IList<OrderBookEvent> Events { get; }
+    }
 
-    public record OrderUpdatedEvent(Order Order) : OrderBookEvent;
+    public record OrderBookEvent(DateTime Time);
 
-    public record OrderUpdateRejectedEvent(Guid OrderId, OrderRejectedReason Reason) : OrderBookEvent;
+    public record OrderBookStateChangedEvent(DateTime Time, OrderBookStatus Status) : OrderBookEvent(Time);
 
-    public record OrderCancelledEvent(Order Order, OrderCancelledReason Reason) : OrderBookEvent;
+    public record OrderCreatedEvent(DateTime Time, Order Order) : OrderBookEvent(Time);
 
-    public record OrderCancelRejectedEvent(Guid OrderId, OrderRejectedReason Reason) : OrderBookEvent;
+    public record OrderCreateRejectedEvent(DateTime Time, Guid OrderId, OrderRejectedReason Reason) 
+        : OrderBookEvent(Time);
 
-    public record OrderExpiredEvent(Order Order) : OrderBookEvent;
+    public record OrderUpdatedEvent(DateTime Time, Order Order) : OrderBookEvent(Time);
 
-    public record OrderMatchedEvent(Fill Fill, Order Resting, Order Aggressor) : OrderBookEvent;
+    public record OrderUpdateRejectedEvent(DateTime Time, Guid OrderId, OrderRejectedReason Reason) 
+        : OrderBookEvent(Time);
+
+    public record OrderCancelledEvent(DateTime Time, Order Order, OrderCancelledReason Reason) : OrderBookEvent(Time);
+
+    public record OrderCancelRejectedEvent(DateTime Time, Guid OrderId, OrderRejectedReason Reason) 
+        : OrderBookEvent(Time);
+
+    public record OrderExpiredEvent(DateTime Time, Order Order) : OrderBookEvent(Time);
+
+    public record OrderMatchedEvent(DateTime Time, decimal Price, int Quantity, Order Resting, Order Aggressor) 
+        : OrderBookEvent(Time);
 }

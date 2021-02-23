@@ -1,12 +1,12 @@
 ﻿using System;
-using System.Linq;
+using System.Collections.Generic;
 using Circus.OrderBook;
 using NUnit.Framework;
 
 namespace Circus.Tests.OrderBook
 {
     [TestFixture]
-    public class OrderBookTest
+    public class InMemoryOrderBookTests
     {
         [Test]
         public void CreateLimitOrder_Valid_Success()
@@ -15,13 +15,16 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+
             // act
-            var events = book.CreateLimitOrder(id, TimeInForce.Day, Side.Buy, 100, 3).ToList();
+            book.CreateLimitOrder(id, TimeInForce.Day, Side.Buy, 100, 3);
 
             // assert
             Assert.IsNotNull(events);
@@ -52,7 +55,7 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
             var id1 = Guid.NewGuid();
@@ -61,8 +64,11 @@ namespace Circus.Tests.OrderBook
             timeProvider.SetCurrentTime(now2);
             var id2 = Guid.NewGuid();
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.CreateLimitOrder(id2, TimeInForce.Day, Side.Sell, 100, 5).ToList();
+            book.CreateLimitOrder(id2, TimeInForce.Day, Side.Sell, 100, 5);
 
             // assert
             Assert.IsNotNull(events);
@@ -70,9 +76,9 @@ namespace Circus.Tests.OrderBook
 
             var matched = events[1] as OrderMatchedEvent;
             Assert.IsNotNull(matched);
-            Assert.AreEqual(now2, matched.Fill.Time);
-            Assert.AreEqual(100, matched.Fill.Price);
-            Assert.AreEqual(3, matched.Fill.Quantity);
+            Assert.AreEqual(now2, matched.Time);
+            Assert.AreEqual(100, matched.Price);
+            Assert.AreEqual(3, matched.Quantity);
 
             Assert.AreEqual(id1, matched.Resting.Id);
             Assert.AreEqual(sec, matched.Resting.Security);
@@ -112,7 +118,7 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
             var id1 = Guid.NewGuid();
@@ -121,8 +127,11 @@ namespace Circus.Tests.OrderBook
             timeProvider.SetCurrentTime(now2);
             var id2 = Guid.NewGuid();
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.CreateLimitOrder(id2, TimeInForce.Day, Side.Sell, 100, 5).ToList();
+            book.CreateLimitOrder(id2, TimeInForce.Day, Side.Sell, 100, 5);
 
             // assert
             Assert.IsNotNull(events);
@@ -130,9 +139,9 @@ namespace Circus.Tests.OrderBook
 
             var matched = events[1] as OrderMatchedEvent;
             Assert.IsNotNull(matched);
-            Assert.AreEqual(now2, matched.Fill.Time);
-            Assert.AreEqual(110, matched.Fill.Price);
-            Assert.AreEqual(3, matched.Fill.Quantity);
+            Assert.AreEqual(now2, matched.Time);
+            Assert.AreEqual(110, matched.Price);
+            Assert.AreEqual(3, matched.Quantity);
 
             Assert.AreEqual(id1, matched.Resting.Id);
             Assert.AreEqual(sec, matched.Resting.Security);
@@ -173,7 +182,7 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
             var id1 = Guid.NewGuid();
@@ -182,8 +191,11 @@ namespace Circus.Tests.OrderBook
             timeProvider.SetCurrentTime(now2);
             var id2 = Guid.NewGuid();
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.CreateLimitOrder(id2, TimeInForce.Day, Side.Sell, 100, 3).ToList();
+            book.CreateLimitOrder(id2, TimeInForce.Day, Side.Sell, 100, 3);
 
             // assert
             Assert.IsNotNull(events);
@@ -191,9 +203,9 @@ namespace Circus.Tests.OrderBook
 
             var matched = events[1] as OrderMatchedEvent;
             Assert.IsNotNull(matched);
-            Assert.AreEqual(now2, matched.Fill.Time);
-            Assert.AreEqual(110, matched.Fill.Price);
-            Assert.AreEqual(3, matched.Fill.Quantity);
+            Assert.AreEqual(now2, matched.Time);
+            Assert.AreEqual(110, matched.Price);
+            Assert.AreEqual(3, matched.Quantity);
 
             Assert.AreEqual(id1, matched.Resting.Id);
             Assert.AreEqual(sec, matched.Resting.Security);
@@ -233,7 +245,7 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
             var id1 = Guid.NewGuid();
@@ -246,8 +258,11 @@ namespace Circus.Tests.OrderBook
             timeProvider.SetCurrentTime(now3);
             var id3 = Guid.NewGuid();
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.CreateLimitOrder(id3, TimeInForce.Day, Side.Sell, 100, 3).ToList();
+            book.CreateLimitOrder(id3, TimeInForce.Day, Side.Sell, 100, 3);
 
             // assert
             Assert.IsNotNull(events);
@@ -255,9 +270,9 @@ namespace Circus.Tests.OrderBook
 
             var matched = events[1] as OrderMatchedEvent;
             Assert.IsNotNull(matched);
-            Assert.AreEqual(now3, matched.Fill.Time);
-            Assert.AreEqual(120, matched.Fill.Price);
-            Assert.AreEqual(3, matched.Fill.Quantity);
+            Assert.AreEqual(now3, matched.Time);
+            Assert.AreEqual(120, matched.Price);
+            Assert.AreEqual(3, matched.Quantity);
 
             Assert.AreEqual(id2, matched.Resting.Id);
             Assert.AreEqual(sec, matched.Resting.Security);
@@ -297,7 +312,7 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
             var id1 = Guid.NewGuid();
@@ -310,8 +325,11 @@ namespace Circus.Tests.OrderBook
             timeProvider.SetCurrentTime(now3);
             var id3 = Guid.NewGuid();
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.CreateLimitOrder(id3, TimeInForce.Day, Side.Sell, 100, 8).ToList();
+            book.CreateLimitOrder(id3, TimeInForce.Day, Side.Sell, 100, 8);
 
             // assert
             Assert.IsNotNull(events);
@@ -319,9 +337,9 @@ namespace Circus.Tests.OrderBook
 
             var matched1 = events[1] as OrderMatchedEvent;
             Assert.IsNotNull(matched1);
-            Assert.AreEqual(now3, matched1.Fill.Time);
-            Assert.AreEqual(120, matched1.Fill.Price);
-            Assert.AreEqual(5, matched1.Fill.Quantity);
+            Assert.AreEqual(now3, matched1.Time);
+            Assert.AreEqual(120, matched1.Price);
+            Assert.AreEqual(5, matched1.Quantity);
 
             Assert.AreEqual(id2, matched1.Resting.Id);
             Assert.AreEqual(sec, matched1.Resting.Security);
@@ -355,9 +373,9 @@ namespace Circus.Tests.OrderBook
 
             var matched2 = events[2] as OrderMatchedEvent;
             Assert.IsNotNull(matched2);
-            Assert.AreEqual(now3, matched2.Fill.Time);
-            Assert.AreEqual(110, matched2.Fill.Price);
-            Assert.AreEqual(3, matched2.Fill.Quantity);
+            Assert.AreEqual(now3, matched2.Time);
+            Assert.AreEqual(110, matched2.Price);
+            Assert.AreEqual(3, matched2.Quantity);
 
             Assert.AreEqual(id1, matched2.Resting.Id);
             Assert.AreEqual(sec, matched2.Resting.Security);
@@ -397,7 +415,7 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
             var id1 = Guid.NewGuid();
@@ -410,8 +428,11 @@ namespace Circus.Tests.OrderBook
             timeProvider.SetCurrentTime(now3);
             var id3 = Guid.NewGuid();
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.CreateLimitOrder(id3, TimeInForce.Day, Side.Sell, 100, 3).ToList();
+            book.CreateLimitOrder(id3, TimeInForce.Day, Side.Sell, 100, 3);
 
             // assert
             Assert.IsNotNull(events);
@@ -419,9 +440,9 @@ namespace Circus.Tests.OrderBook
 
             var matched = events[1] as OrderMatchedEvent;
             Assert.IsNotNull(matched);
-            Assert.AreEqual(now3, matched.Fill.Time);
-            Assert.AreEqual(110, matched.Fill.Price);
-            Assert.AreEqual(3, matched.Fill.Quantity);
+            Assert.AreEqual(now3, matched.Time);
+            Assert.AreEqual(110, matched.Price);
+            Assert.AreEqual(3, matched.Quantity);
 
             Assert.AreEqual(id1, matched.Resting.Id);
             Assert.AreEqual(sec, matched.Resting.Security);
@@ -461,7 +482,7 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
             var id1 = Guid.NewGuid();
@@ -474,8 +495,11 @@ namespace Circus.Tests.OrderBook
             timeProvider.SetCurrentTime(now3);
             var id3 = Guid.NewGuid();
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.CreateLimitOrder(id3, TimeInForce.Day, Side.Sell, 100, 8).ToList();
+            book.CreateLimitOrder(id3, TimeInForce.Day, Side.Sell, 100, 8);
 
             // assert
             Assert.IsNotNull(events);
@@ -483,9 +507,9 @@ namespace Circus.Tests.OrderBook
 
             var matched1 = events[1] as OrderMatchedEvent;
             Assert.IsNotNull(matched1);
-            Assert.AreEqual(now3, matched1.Fill.Time);
-            Assert.AreEqual(110, matched1.Fill.Price);
-            Assert.AreEqual(5, matched1.Fill.Quantity);
+            Assert.AreEqual(now3, matched1.Time);
+            Assert.AreEqual(110, matched1.Price);
+            Assert.AreEqual(5, matched1.Quantity);
 
             Assert.AreEqual(id1, matched1.Resting.Id);
             Assert.AreEqual(sec, matched1.Resting.Security);
@@ -519,9 +543,9 @@ namespace Circus.Tests.OrderBook
 
             var matched2 = events[2] as OrderMatchedEvent;
             Assert.IsNotNull(matched2);
-            Assert.AreEqual(now3, matched2.Fill.Time);
-            Assert.AreEqual(110, matched2.Fill.Price);
-            Assert.AreEqual(3, matched2.Fill.Quantity);
+            Assert.AreEqual(now3, matched2.Time);
+            Assert.AreEqual(110, matched2.Price);
+            Assert.AreEqual(3, matched2.Quantity);
 
             Assert.AreEqual(id2, matched2.Resting.Id);
             Assert.AreEqual(sec, matched2.Resting.Security);
@@ -561,7 +585,7 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
             var id1 = Guid.NewGuid();
@@ -574,8 +598,11 @@ namespace Circus.Tests.OrderBook
             timeProvider.SetCurrentTime(now3);
             var id3 = Guid.NewGuid();
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.CreateLimitOrder(id3, TimeInForce.Day, Side.Buy, 100, 3).ToList();
+            book.CreateLimitOrder(id3, TimeInForce.Day, Side.Buy, 100, 3);
 
             // assert
             Assert.IsNotNull(events);
@@ -583,9 +610,9 @@ namespace Circus.Tests.OrderBook
 
             var matched = events[1] as OrderMatchedEvent;
             Assert.IsNotNull(matched);
-            Assert.AreEqual(now3, matched.Fill.Time);
-            Assert.AreEqual(80, matched.Fill.Price);
-            Assert.AreEqual(3, matched.Fill.Quantity);
+            Assert.AreEqual(now3, matched.Time);
+            Assert.AreEqual(80, matched.Price);
+            Assert.AreEqual(3, matched.Quantity);
 
             Assert.AreEqual(id2, matched.Resting.Id);
             Assert.AreEqual(sec, matched.Resting.Security);
@@ -625,7 +652,7 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
             var id1 = Guid.NewGuid();
@@ -638,8 +665,11 @@ namespace Circus.Tests.OrderBook
             timeProvider.SetCurrentTime(now3);
             var id3 = Guid.NewGuid();
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.CreateLimitOrder(id3, TimeInForce.Day, Side.Buy, 100, 8).ToList();
+            book.CreateLimitOrder(id3, TimeInForce.Day, Side.Buy, 100, 8);
 
             // assert
             Assert.IsNotNull(events);
@@ -647,9 +677,9 @@ namespace Circus.Tests.OrderBook
 
             var matched1 = events[1] as OrderMatchedEvent;
             Assert.IsNotNull(matched1);
-            Assert.AreEqual(now3, matched1.Fill.Time);
-            Assert.AreEqual(80, matched1.Fill.Price);
-            Assert.AreEqual(5, matched1.Fill.Quantity);
+            Assert.AreEqual(now3, matched1.Time);
+            Assert.AreEqual(80, matched1.Price);
+            Assert.AreEqual(5, matched1.Quantity);
 
             Assert.AreEqual(id2, matched1.Resting.Id);
             Assert.AreEqual(sec, matched1.Resting.Security);
@@ -683,9 +713,9 @@ namespace Circus.Tests.OrderBook
 
             var matched2 = events[2] as OrderMatchedEvent;
             Assert.IsNotNull(matched2);
-            Assert.AreEqual(now3, matched2.Fill.Time);
-            Assert.AreEqual(90, matched2.Fill.Price);
-            Assert.AreEqual(3, matched2.Fill.Quantity);
+            Assert.AreEqual(now3, matched2.Time);
+            Assert.AreEqual(90, matched2.Price);
+            Assert.AreEqual(3, matched2.Quantity);
 
             Assert.AreEqual(id1, matched2.Resting.Id);
             Assert.AreEqual(sec, matched2.Resting.Security);
@@ -725,7 +755,7 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
             var id1 = Guid.NewGuid();
@@ -738,8 +768,11 @@ namespace Circus.Tests.OrderBook
             timeProvider.SetCurrentTime(now3);
             var id3 = Guid.NewGuid();
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.CreateLimitOrder(id3, TimeInForce.Day, Side.Buy, 100, 3).ToList();
+            book.CreateLimitOrder(id3, TimeInForce.Day, Side.Buy, 100, 3);
 
             // assert
             Assert.IsNotNull(events);
@@ -747,9 +780,9 @@ namespace Circus.Tests.OrderBook
 
             var matched = events[1] as OrderMatchedEvent;
             Assert.IsNotNull(matched);
-            Assert.AreEqual(now3, matched.Fill.Time);
-            Assert.AreEqual(90, matched.Fill.Price);
-            Assert.AreEqual(3, matched.Fill.Quantity);
+            Assert.AreEqual(now3, matched.Time);
+            Assert.AreEqual(90, matched.Price);
+            Assert.AreEqual(3, matched.Quantity);
 
             Assert.AreEqual(id1, matched.Resting.Id);
             Assert.AreEqual(sec, matched.Resting.Security);
@@ -789,7 +822,7 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
             var id1 = Guid.NewGuid();
@@ -802,8 +835,11 @@ namespace Circus.Tests.OrderBook
             timeProvider.SetCurrentTime(now3);
             var id3 = Guid.NewGuid();
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.CreateLimitOrder(id3, TimeInForce.Day, Side.Buy, 100, 8).ToList();
+            book.CreateLimitOrder(id3, TimeInForce.Day, Side.Buy, 100, 8);
 
             // assert
             Assert.IsNotNull(events);
@@ -811,9 +847,9 @@ namespace Circus.Tests.OrderBook
 
             var matched1 = events[1] as OrderMatchedEvent;
             Assert.IsNotNull(matched1);
-            Assert.AreEqual(now3, matched1.Fill.Time);
-            Assert.AreEqual(90, matched1.Fill.Price);
-            Assert.AreEqual(5, matched1.Fill.Quantity);
+            Assert.AreEqual(now3, matched1.Time);
+            Assert.AreEqual(90, matched1.Price);
+            Assert.AreEqual(5, matched1.Quantity);
 
             Assert.AreEqual(id1, matched1.Resting.Id);
             Assert.AreEqual(sec, matched1.Resting.Security);
@@ -847,9 +883,9 @@ namespace Circus.Tests.OrderBook
 
             var matched2 = events[2] as OrderMatchedEvent;
             Assert.IsNotNull(matched2);
-            Assert.AreEqual(now3, matched2.Fill.Time);
-            Assert.AreEqual(90, matched2.Fill.Price);
-            Assert.AreEqual(3, matched2.Fill.Quantity);
+            Assert.AreEqual(now3, matched2.Time);
+            Assert.AreEqual(90, matched2.Price);
+            Assert.AreEqual(3, matched2.Quantity);
 
             Assert.AreEqual(id2, matched2.Resting.Id);
             Assert.AreEqual(sec, matched2.Resting.Security);
@@ -889,7 +925,7 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
             var id1 = Guid.NewGuid();
@@ -905,8 +941,11 @@ namespace Circus.Tests.OrderBook
             timeProvider.SetCurrentTime(now4);
             var id3 = Guid.NewGuid();
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.CreateLimitOrder(id3, TimeInForce.Day, Side.Sell, 100, 3).ToList();
+            book.CreateLimitOrder(id3, TimeInForce.Day, Side.Sell, 100, 3);
 
             // assert
             Assert.IsNotNull(events);
@@ -914,9 +953,9 @@ namespace Circus.Tests.OrderBook
 
             var matched = events[1] as OrderMatchedEvent;
             Assert.IsNotNull(matched);
-            Assert.AreEqual(now4, matched.Fill.Time);
-            Assert.AreEqual(110, matched.Fill.Price);
-            Assert.AreEqual(3, matched.Fill.Quantity);
+            Assert.AreEqual(now4, matched.Time);
+            Assert.AreEqual(110, matched.Price);
+            Assert.AreEqual(3, matched.Quantity);
 
             Assert.AreEqual(id2, matched.Resting.Id);
             Assert.AreEqual(sec, matched.Resting.Security);
@@ -956,7 +995,7 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
             var id1 = Guid.NewGuid();
@@ -972,8 +1011,11 @@ namespace Circus.Tests.OrderBook
             timeProvider.SetCurrentTime(now4);
             var id3 = Guid.NewGuid();
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.CreateLimitOrder(id3, TimeInForce.Day, Side.Sell, 100, 8).ToList();
+            book.CreateLimitOrder(id3, TimeInForce.Day, Side.Sell, 100, 8);
 
             // assert
             Assert.IsNotNull(events);
@@ -981,9 +1023,9 @@ namespace Circus.Tests.OrderBook
 
             var matched1 = events[1] as OrderMatchedEvent;
             Assert.IsNotNull(matched1);
-            Assert.AreEqual(now4, matched1.Fill.Time);
-            Assert.AreEqual(110, matched1.Fill.Price);
-            Assert.AreEqual(5, matched1.Fill.Quantity);
+            Assert.AreEqual(now4, matched1.Time);
+            Assert.AreEqual(110, matched1.Price);
+            Assert.AreEqual(5, matched1.Quantity);
 
             Assert.AreEqual(id2, matched1.Resting.Id);
             Assert.AreEqual(sec, matched1.Resting.Security);
@@ -1017,9 +1059,9 @@ namespace Circus.Tests.OrderBook
 
             var matched2 = events[2] as OrderMatchedEvent;
             Assert.IsNotNull(matched2);
-            Assert.AreEqual(now4, matched2.Fill.Time);
-            Assert.AreEqual(110, matched2.Fill.Price);
-            Assert.AreEqual(3, matched2.Fill.Quantity);
+            Assert.AreEqual(now4, matched2.Time);
+            Assert.AreEqual(110, matched2.Price);
+            Assert.AreEqual(3, matched2.Quantity);
 
             Assert.AreEqual(id1, matched2.Resting.Id);
             Assert.AreEqual(sec, matched2.Resting.Security);
@@ -1059,7 +1101,7 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
             var id1 = Guid.NewGuid();
@@ -1075,8 +1117,11 @@ namespace Circus.Tests.OrderBook
             timeProvider.SetCurrentTime(now4);
             var id3 = Guid.NewGuid();
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.CreateLimitOrder(id3, TimeInForce.Day, Side.Sell, 100, 3).ToList();
+            book.CreateLimitOrder(id3, TimeInForce.Day, Side.Sell, 100, 3);
 
             // assert
             Assert.IsNotNull(events);
@@ -1084,9 +1129,9 @@ namespace Circus.Tests.OrderBook
 
             var matched = events[1] as OrderMatchedEvent;
             Assert.IsNotNull(matched);
-            Assert.AreEqual(now4, matched.Fill.Time);
-            Assert.AreEqual(110, matched.Fill.Price);
-            Assert.AreEqual(3, matched.Fill.Quantity);
+            Assert.AreEqual(now4, matched.Time);
+            Assert.AreEqual(110, matched.Price);
+            Assert.AreEqual(3, matched.Quantity);
 
             Assert.AreEqual(id1, matched.Resting.Id);
             Assert.AreEqual(sec, matched.Resting.Security);
@@ -1126,7 +1171,7 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
             var id1 = Guid.NewGuid();
@@ -1142,8 +1187,11 @@ namespace Circus.Tests.OrderBook
             timeProvider.SetCurrentTime(now4);
             var id3 = Guid.NewGuid();
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.CreateLimitOrder(id3, TimeInForce.Day, Side.Sell, 100, 8).ToList();
+            book.CreateLimitOrder(id3, TimeInForce.Day, Side.Sell, 100, 8);
 
             // assert
             Assert.IsNotNull(events);
@@ -1151,9 +1199,9 @@ namespace Circus.Tests.OrderBook
 
             var matched1 = events[1] as OrderMatchedEvent;
             Assert.IsNotNull(matched1);
-            Assert.AreEqual(now4, matched1.Fill.Time);
-            Assert.AreEqual(110, matched1.Fill.Price);
-            Assert.AreEqual(4, matched1.Fill.Quantity);
+            Assert.AreEqual(now4, matched1.Time);
+            Assert.AreEqual(110, matched1.Price);
+            Assert.AreEqual(4, matched1.Quantity);
 
             Assert.AreEqual(id1, matched1.Resting.Id);
             Assert.AreEqual(sec, matched1.Resting.Security);
@@ -1187,9 +1235,9 @@ namespace Circus.Tests.OrderBook
 
             var matched2 = events[2] as OrderMatchedEvent;
             Assert.IsNotNull(matched2);
-            Assert.AreEqual(now4, matched2.Fill.Time);
-            Assert.AreEqual(110, matched2.Fill.Price);
-            Assert.AreEqual(4, matched2.Fill.Quantity);
+            Assert.AreEqual(now4, matched2.Time);
+            Assert.AreEqual(110, matched2.Price);
+            Assert.AreEqual(4, matched2.Quantity);
 
             Assert.AreEqual(id2, matched2.Resting.Id);
             Assert.AreEqual(sec, matched2.Resting.Security);
@@ -1229,11 +1277,14 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
             var id = Guid.NewGuid();
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.CreateLimitOrder(id, TimeInForce.Day, Side.Buy, 100, 3).ToList();
+            book.CreateLimitOrder(id, TimeInForce.Day, Side.Buy, 100, 3);
 
             // assert
             Assert.IsNotNull(events);
@@ -1252,13 +1303,16 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.CreateLimitOrder(id, TimeInForce.Day, Side.Buy, 100, quantity).ToList();
+            book.CreateLimitOrder(id, TimeInForce.Day, Side.Buy, 100, quantity);
 
             // assert
             Assert.IsNotNull(events);
@@ -1279,13 +1333,16 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.CreateLimitOrder(id, TimeInForce.Day, Side.Buy, price, 6).ToList();
+            book.CreateLimitOrder(id, TimeInForce.Day, Side.Buy, price, 6);
 
             // assert
             Assert.IsNotNull(events);
@@ -1303,7 +1360,7 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
@@ -1311,8 +1368,11 @@ namespace Circus.Tests.OrderBook
             var now2 = new DateTime(2000, 1, 1, 12, 1, 0);
             timeProvider.SetCurrentTime(now2);
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.UpdateLimitOrder(id, 110, 5).ToList();
+            book.UpdateLimitOrder(id, 110, 5);
 
             // assert
             Assert.IsNotNull(events);
@@ -1342,7 +1402,7 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
@@ -1350,8 +1410,11 @@ namespace Circus.Tests.OrderBook
             var now2 = new DateTime(2000, 1, 1, 12, 1, 0);
             timeProvider.SetCurrentTime(now2);
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.UpdateLimitOrder(id, 110, 1).ToList();
+            book.UpdateLimitOrder(id, 110, 1);
 
             // assert
             Assert.IsNotNull(events);
@@ -1381,7 +1444,7 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
@@ -1390,8 +1453,11 @@ namespace Circus.Tests.OrderBook
             var now2 = new DateTime(2000, 1, 1, 12, 1, 0);
             timeProvider.SetCurrentTime(now2);
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.UpdateLimitOrder(id, 100, 2).ToList();
+            book.UpdateLimitOrder(id, 100, 2);
 
             // assert
             Assert.IsNotNull(events);
@@ -1422,7 +1488,7 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
@@ -1431,8 +1497,11 @@ namespace Circus.Tests.OrderBook
             var now2 = new DateTime(2000, 1, 1, 12, 1, 0);
             timeProvider.SetCurrentTime(now2);
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.UpdateLimitOrder(id, 110, 5).ToList();
+            book.UpdateLimitOrder(id, 110, 5);
 
             // assert
             Assert.IsNotNull(events);
@@ -1450,7 +1519,7 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
@@ -1459,8 +1528,11 @@ namespace Circus.Tests.OrderBook
             var now2 = new DateTime(2000, 1, 1, 12, 1, 0);
             timeProvider.SetCurrentTime(now2);
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.UpdateLimitOrder(id, 110, 5).ToList();
+            book.UpdateLimitOrder(id, 110, 5);
 
             // assert
             Assert.IsNotNull(events);
@@ -1478,7 +1550,7 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
@@ -1486,8 +1558,11 @@ namespace Circus.Tests.OrderBook
             book.SetStatus(OrderBookStatus.Closed);
             book.SetStatus(OrderBookStatus.Open);
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.UpdateLimitOrder(id, 110, 5).ToList();
+            book.UpdateLimitOrder(id, 110, 5);
 
             // assert
             Assert.IsNotNull(events);
@@ -1497,8 +1572,7 @@ namespace Circus.Tests.OrderBook
             Assert.AreEqual(id, rejected.OrderId);
             Assert.AreEqual(OrderRejectedReason.TooLateToCancel, rejected.Reason);
         }
-
-
+        
         [Test]
         public void UpdateLimitOrder_NotFound_Rejected()
         {
@@ -1506,13 +1580,16 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.UpdateLimitOrder(id, 110, 5).ToList();
+            book.UpdateLimitOrder(id, 110, 5);
 
             // assert
             Assert.IsNotNull(events);
@@ -1530,15 +1607,18 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
             book.CreateLimitOrder(id, TimeInForce.Day, Side.Buy, 100, 3);
             book.SetStatus(OrderBookStatus.Closed);
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.UpdateLimitOrder(id, 105, 5).ToList();
+            book.UpdateLimitOrder(id, 105, 5);
 
             // assert
             Assert.IsNotNull(events);
@@ -1557,14 +1637,17 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
             book.CreateLimitOrder(id, TimeInForce.Day, Side.Buy, 100, 3);
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.UpdateLimitOrder(id, 110, quantity).ToList();
+            book.UpdateLimitOrder(id, 110, quantity);
 
             // assert
             Assert.IsNotNull(events);
@@ -1585,14 +1668,17 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
             book.CreateLimitOrder(id, TimeInForce.Day, Side.Buy, 100, 6);
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.UpdateLimitOrder(id, price, 6).ToList();
+            book.UpdateLimitOrder(id, price, 6);
 
             // assert
             Assert.IsNotNull(events);
@@ -1610,7 +1696,7 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
@@ -1618,8 +1704,11 @@ namespace Circus.Tests.OrderBook
             var now2 = new DateTime(2000, 1, 1, 12, 1, 0);
             timeProvider.SetCurrentTime(now2);
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.CancelOrder(id).ToList();
+            book.CancelOrder(id);
 
             // assert
             Assert.IsNotNull(events);
@@ -1650,13 +1739,16 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.CancelOrder(id).ToList();
+            book.CancelOrder(id);
 
             // assert
             Assert.IsNotNull(events);
@@ -1674,15 +1766,18 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
             book.CreateLimitOrder(id, TimeInForce.Day, Side.Buy, 100, 3);
             book.SetStatus(OrderBookStatus.Closed);
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.CancelOrder(id).ToList();
+            book.CancelOrder(id);
 
             // assert
             Assert.IsNotNull(events);
@@ -1700,7 +1795,7 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10, 20);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
             var id1 = Guid.NewGuid();
@@ -1709,8 +1804,11 @@ namespace Circus.Tests.OrderBook
             timeProvider.SetCurrentTime(now2);
             var id2 = Guid.NewGuid();
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.CreateMarketOrder(id2, TimeInForce.Day, Side.Sell, 5).ToList();
+            book.CreateMarketOrder(id2, TimeInForce.Day, Side.Sell, 5);
 
             // assert
             Assert.IsNotNull(events);
@@ -1718,9 +1816,9 @@ namespace Circus.Tests.OrderBook
 
             var matched = events[1] as OrderMatchedEvent;
             Assert.IsNotNull(matched);
-            Assert.AreEqual(now2, matched.Fill.Time);
-            Assert.AreEqual(500, matched.Fill.Price);
-            Assert.AreEqual(3, matched.Fill.Quantity);
+            Assert.AreEqual(now2, matched.Time);
+            Assert.AreEqual(500, matched.Price);
+            Assert.AreEqual(3, matched.Quantity);
 
             Assert.AreEqual(id1, matched.Resting.Id);
             Assert.AreEqual(sec, matched.Resting.Security);
@@ -1743,7 +1841,7 @@ namespace Circus.Tests.OrderBook
             Assert.AreEqual(now2, matched.Aggressor.ModifiedTime);
             Assert.IsNull(matched.Aggressor.CompletedTime);
             Assert.AreEqual(OrderStatus.Working, matched.Aggressor.Status);
-            Assert.AreEqual(OrderType.Limit, matched.Aggressor.Type);
+            Assert.AreEqual(OrderType.Market, matched.Aggressor.Type);
             Assert.AreEqual(TimeInForce.Day, matched.Aggressor.TimeInForce);
             Assert.AreEqual(Side.Sell, matched.Aggressor.Side);
             Assert.AreEqual(300, matched.Aggressor.Price);
@@ -1752,7 +1850,7 @@ namespace Circus.Tests.OrderBook
             Assert.AreEqual(3, matched.Aggressor.FilledQuantity);
             Assert.AreEqual(2, matched.Aggressor.RemainingQuantity);
         }
-
+        
         [Test]
         public void CreateMarketOrder_MarketClosed_Rejected()
         {
@@ -1760,12 +1858,15 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
 
             var id = Guid.NewGuid();
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.CreateMarketOrder(id, TimeInForce.Day, Side.Buy, 3).ToList();
+            book.CreateMarketOrder(id, TimeInForce.Day, Side.Buy, 3);
 
             // assert
             Assert.IsNotNull(events);
@@ -1784,13 +1885,16 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.CreateMarketOrder(id, TimeInForce.Day, Side.Buy, quantity).ToList();
+            book.CreateMarketOrder(id, TimeInForce.Day, Side.Buy, quantity);
 
             // assert
             Assert.IsNotNull(events);
@@ -1808,13 +1912,16 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.CreateMarketOrder(id, TimeInForce.Day, Side.Buy, 3).ToList();
+            book.CreateMarketOrder(id, TimeInForce.Day, Side.Buy, 3);
 
             // assert
             Assert.IsNotNull(events);
@@ -1832,7 +1939,7 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
 
             book.SetStatus(OrderBookStatus.Open);
             var id = Guid.NewGuid();
@@ -1840,8 +1947,11 @@ namespace Circus.Tests.OrderBook
             var now2 = new DateTime(2000, 1, 1, 12, 1, 0);
             timeProvider.SetCurrentTime(now2);
 
+            IList<OrderBookEvent> events = null;
+            book.OrderBookEvent += (_, args) => events = args.Events;
+            
             // act
-            var events = book.SetStatus(OrderBookStatus.Closed).ToList();
+            book.SetStatus(OrderBookStatus.Closed);
 
             // assert
             Assert.IsNotNull(events);
@@ -1871,7 +1981,7 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
 
             // act & assert
             Assert.Throws<Exception>(() => book.SetStatus(OrderBookStatus.Closed));
@@ -1884,7 +1994,7 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
             var now1 = new DateTime(2000, 1, 1, 12, 0, 0);
             var timeProvider = new TestTimeProvider(now1);
-            var book = new Circus.OrderBook.OrderBook(sec, timeProvider);
+            var book = new InMemoryOrderBook(sec, timeProvider);
             book.SetStatus(OrderBookStatus.Open);
 
             // act & assert

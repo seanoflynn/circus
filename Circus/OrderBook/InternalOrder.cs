@@ -10,6 +10,7 @@ namespace Circus.OrderBook
         public DateTime CreatedTime { get; }
         public DateTime ModifiedTime { get; private set; }
         public DateTime? CompletedTime { get; private set; }
+        public OrderType Type { get; private set; }
         public TimeInForce TimeInForce { get; }
         public Side Side { get; }
         public decimal Price { get; private set; }
@@ -18,14 +19,14 @@ namespace Circus.OrderBook
         public int FilledQuantity { get; private set; }
         public OrderStatus Status { get; private set; } = OrderStatus.Working;
 
-        public InternalOrder(long sequenceNumber, Guid id, Security security, DateTime time, TimeInForce timeInForce,
-            Side side,
-            decimal price, int quantity)
+        public InternalOrder(long sequenceNumber, Guid id, Security security, DateTime time, OrderType type, 
+            TimeInForce timeInForce, Side side, decimal price, int quantity)
         {
             SequenceNumber = sequenceNumber;
             Id = id;
             Security = security;
             CreatedTime = time;
+            Type = type;
             ModifiedTime = time;
             TimeInForce = timeInForce;
             Side = side;
@@ -40,7 +41,7 @@ namespace Circus.OrderBook
 
         public Order ToOrder()
         {
-            return new(Id, Security, CreatedTime, ModifiedTime, CompletedTime, Status, OrderType.Limit, TimeInForce,
+            return new(Id, Security, CreatedTime, ModifiedTime, CompletedTime, Status, Type, TimeInForce,
                 Side, Price, null, Quantity, FilledQuantity, RemainingQuantity);
         }
 
@@ -85,6 +86,11 @@ namespace Circus.OrderBook
                 Status = OrderStatus.Filled;
                 CompletedTime = time;
             }
+        }
+
+        public void ConvertToLimit()
+        {
+            Type = OrderType.Limit;
         }
     }
 }
