@@ -3,6 +3,7 @@ namespace Circus.OrderBook
     public enum OrderRejectedReason
     {
         MarketClosed,
+        MarketPreOpen,
         InvalidQuantity,
         InvalidPriceIncrement,
         OrderNotInBook,

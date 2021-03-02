@@ -1,6 +1,7 @@
 ﻿using System;
 using Circus.DataProducers;
 using Circus.OrderBook;
+using Circus.TimeProviders;
 using NUnit.Framework;
 
 namespace Circus.Tests.DataProducers

@@ -9,21 +9,24 @@ A financial exchange simulator.
 ## To Do
 
 Priority
-- [x] Limit orders
-- [x] Market orders
-- [x] Day orders
-- [x] Market data
-- [ ] Sessions (add simulated timers)
+- [x] Sessions
 - [ ] Simulator
+- [ ] Stop orders
 - [ ] GTC, GTD
-- [ ] Pre-open
 
 ## Features
 
 Order types
 - [x] Limit orders
 - [x] Market orders
-- [ ] Stop orders
+- [ ] Market limit orders
+- [ ] Stop market orders
+- [ ] Stop limit orders
+- [ ] OCO orders
+
+Order properties
+- [ ] Min quantity
+- [ ] Max visible quantity
 
 Time in force/order validity
 - [x] Day orders
@@ -33,14 +36,14 @@ Time in force/order validity
 
 Sessions
 - [x] Time provider
-- [ ] Sessions
-- [ ] Indicative open
+- [x] Sessions
 - [ ] Market statistics
 
 Market data
 - [x] Trades
-- [ ] Price/qty/count for x levels
+- [x] Price/qty/count for x levels
 - [ ] All order updates
+- [ ] Indicative open
 
 Safety features
 - [ ] Banding
@@ -50,15 +53,14 @@ Safety features
 - [ ] Self-match prevention
 
 Matching algorithms
-- [x] FIFO matching algorithm
-- [ ] Allocation matching algorithm
-- [ ] Pro-Rata matching algorithm
-- [ ] Indicative open, open algorithm
+- [x] FIFO
+- [ ] Open auction
+- [ ] Allocation
+- [ ] Pro-rata
 
 Contract types
-- [ ] Futures
-- [ ] Calendar/spread contracts
+- [ ] Futures (expiry)
+- [ ] Calendar/spread contracts (implied pricing)
 
 ## Examples
 
-## Known Issues

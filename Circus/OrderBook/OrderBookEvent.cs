@@ -15,7 +15,7 @@ namespace Circus.OrderBook
 
     public record OrderBookEvent(DateTime Time);
 
-    public record OrderBookStateChangedEvent(DateTime Time, OrderBookStatus Status) : OrderBookEvent(Time);
+    public record OrderBookStatusChangedEvent(DateTime Time, OrderBookStatus Status) : OrderBookEvent(Time);
 
     public record OrderCreatedEvent(DateTime Time, Order Order) : OrderBookEvent(Time);
 

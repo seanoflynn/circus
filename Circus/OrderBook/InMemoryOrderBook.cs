@@ -1,13 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Circus.TimeProviders;
 using Circus.Util;
 
 namespace Circus.OrderBook
 {
     public class InMemoryOrderBook : IOrderBook
     {
-        public event EventHandler<OrderBookEventArgs> OrderBookEvent;
+        public event EventHandler<OrderBookEventArgs>? OrderBookEvent;
 
         public Security Security { get; }
         public OrderBookStatus Status { get; private set; } = OrderBookStatus.Closed;
@@ -58,24 +59,30 @@ namespace Circus.OrderBook
 
             Console.WriteLine($"order added: {order}");
 
-            var events = new List<OrderBookEvent> {new OrderCreatedEvent(Now(), order.ToOrder())}
-                .Concat(Match()).ToArray();
-            FireEvents(events);
+            var events = new List<OrderBookEvent> {new OrderCreatedEvent(Now(), order.ToOrder())};
+
+            if (Status == OrderBookStatus.Open)
+            {
+                events.AddRange(Match());
+            }
+
+            FireEvents(events.ToArray());
         }
 
         public void CreateMarketOrder(Guid id, TimeInForce tif, Side side, int quantity)
         {
             if (ValidateCreate(id, OrderRejectedReason.MarketClosed, () => Status == OrderBookStatus.Closed)) return;
+            if (ValidateCreate(id, OrderRejectedReason.MarketPreOpen, () => Status == OrderBookStatus.PreOpen)) return;
             if (ValidateCreate(id, OrderRejectedReason.InvalidQuantity, () => quantity < 1)) return;
 
             var oppositeOrders = (side == Side.Buy ? _sellOrders : _buyOrders);
             if (ValidateCreate(id, OrderRejectedReason.NoOrdersToMatchMarketOrder, () => !oppositeOrders.Any())) return;
-            
+
             // set price as best offer + protection ticks for buy orders, best bid - protection ticks for sell orders
             // TODO: option to use best bid + protection tickets for buy orders, etc (eurex)
             var price = oppositeOrders.First().Key +
                         ((side == Side.Buy ? 1 : -1) * (Security.MarketOrderProtectionTicks * Security.TickSize));
-            
+
             _nextSequenceNumber++;
             var order = new InternalOrder(_nextSequenceNumber, id, Security, Now(), OrderType.Market, tif, side, price,
                 quantity);
@@ -86,15 +93,15 @@ namespace Circus.OrderBook
 
             Console.WriteLine($"order added: {order}");
 
-            var events = new List<OrderBookEvent> {new OrderCreatedEvent(Now(), order.ToOrder())}
-                .Concat(Match()).ToArray();
+            var events = new List<OrderBookEvent> {new OrderCreatedEvent(Now(), order.ToOrder())};
+            events.AddRange(Match());
 
             if (order.Status == OrderStatus.Working)
             {
                 order.ConvertToLimit();
             }
-            
-            FireEvents(events);
+
+            FireEvents(events.ToArray());
         }
 
         public void UpdateLimitOrder(Guid id, decimal price, int quantity)
@@ -138,11 +145,12 @@ namespace Circus.OrderBook
             }
 
             Console.WriteLine($"order updated: {order}");
-            IEnumerable<OrderBookEvent> events = 
-                new List<OrderBookEvent> {new OrderUpdatedEvent(Now(), order.ToOrder())};
-            if (isPriceChange)
+
+            var events = new List<OrderBookEvent> {new OrderUpdatedEvent(Now(), order.ToOrder())};
+
+            if (Status == OrderBookStatus.Open && isPriceChange)
             {
-                events = events.Concat(Match());
+                events.AddRange(Match());
             }
 
             FireEvents(events.ToArray());
@@ -221,7 +229,7 @@ namespace Circus.OrderBook
 
             while (buy != null && sell != null && buy.Price >= sell.Price)
             {
-                var resting = buy.CreatedTime < sell.CreatedTime ? buy : sell;
+                var resting = buy.ModifiedTime < sell.ModifiedTime ? buy : sell;
                 var aggressor = buy == resting ? sell : buy;
 
                 var quantity = Math.Min(resting.RemainingQuantity, aggressor.RemainingQuantity);
@@ -302,43 +310,43 @@ namespace Circus.OrderBook
         {
             switch (status)
             {
-                case OrderBookStatus.Closed:
-                    CloseMarket();
+                case OrderBookStatus.PreOpen:
+                    PreOpenMarket();
                     break;
                 case OrderBookStatus.Open:
                     OpenMarket();
+                    break;
+                case OrderBookStatus.Closed:
+                    CloseMarket();
                     break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(status), status, null);
             }
         }
 
-        private void OpenMarket()
+        private void PreOpenMarket()
         {
-            ValidateSetStatus("cannot open market, market must in closed state",
-                () => Status != OrderBookStatus.Closed);
-            // TODO: move to closed -> pre open transition, consider scenario where market opens multiple times per day
+            // TODO: need better system for multiple sessions per day
             var date = Now();
             _nextSequenceNumber = ((date.Year * 10000) + (date.Month * 100) + date.Day) * 10000000000L;
+            Status = OrderBookStatus.PreOpen;
+            FireEvents(new OrderBookStatusChangedEvent(Now(), Status));
+        }
+
+        private void OpenMarket()
+        {
             Status = OrderBookStatus.Open;
-            var events = Match();
+            var events = new List<OrderBookEvent> {new OrderBookStatusChangedEvent(Now(), Status)};
+            events.AddRange(Match());
             FireEvents(events.ToArray());
         }
 
         private void CloseMarket()
         {
-            ValidateSetStatus("cannot close market, market must in open state", () => Status != OrderBookStatus.Open);
             Status = OrderBookStatus.Closed;
-            var events = ExpireDayOrders();
+            var events = new List<OrderBookEvent> {new OrderBookStatusChangedEvent(Now(), Status)};
+            events.AddRange(ExpireDayOrders());
             FireEvents(events.ToArray());
-        }
-
-        private void ValidateSetStatus(string message, Func<bool> validation)
-        {
-            if (validation.Invoke())
-            {
-                throw new Exception($"error changing market state: {message}");
-            }
         }
 
         private IEnumerable<OrderBookEvent> ExpireDayOrders()

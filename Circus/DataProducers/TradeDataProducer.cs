@@ -8,7 +8,7 @@ namespace Circus.DataProducers
 
     public class TradeDataProducer : IDataProducer
     {
-        public event EventHandler<TradedMarketDataArgs> Traded;
+        public event EventHandler<TradedMarketDataArgs>? Traded;
 
         public void Process(IOrderBook book, IEnumerable<OrderBookEvent> events)
         {

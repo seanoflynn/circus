@@ -9,7 +9,7 @@ namespace Circus.DataProducers
 
     public class LevelDataProducer : IDataProducer
     {
-        public event EventHandler<LevelsUpdatedMarketDataArgs> LevelsUpdated;
+        public event EventHandler<LevelsUpdatedMarketDataArgs>? LevelsUpdated;
         private readonly int _maxLevels;
 
         public LevelDataProducer(int maxLevels)
