@@ -10,7 +10,7 @@ namespace Circus.DataProducers
     {
         public event EventHandler<TradedMarketDataArgs>? Traded;
 
-        public void Process(IOrderBook book, IEnumerable<OrderBookEvent> events)
+        public void Process(IOrderBook book, IList<OrderBookEvent> events)
         {
             foreach (var ev in events)
             {

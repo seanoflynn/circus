@@ -10,41 +10,38 @@ namespace Circus.Tests.OrderBook
     public class InMemoryOrderBookTests
     {
         private static readonly Security Sec = new("GCZ6", SecurityType.Future, 10, 10);
-        
+
         private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
         private static readonly DateTime Now2 = new(2000, 1, 1, 12, 1, 0);
         private static readonly DateTime Now3 = new(2000, 1, 1, 12, 2, 0);
         private static readonly DateTime Now4 = new(2000, 1, 1, 12, 3, 0);
-        
+
         private static TestTimeProvider TimeProvider;
         private static IOrderBook Book;
-        
+
         private static readonly Guid ClientId1 = Guid.NewGuid();
         private static readonly Guid ClientId2 = Guid.NewGuid();
         private static readonly Guid ClientId3 = Guid.NewGuid();
-        
+
         private static readonly Guid OrderId1 = Guid.NewGuid();
         private static readonly Guid OrderId2 = Guid.NewGuid();
         private static readonly Guid OrderId3 = Guid.NewGuid();
-        
+
         [SetUp]
         public void SetUp()
         {
             TimeProvider = new TestTimeProvider(Now1);
             Book = new InMemoryOrderBook(Sec, TimeProvider);
         }
-        
+
         [Test]
         public void CreateLimitOrder_Valid_Success()
         {
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
-            
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
 
             // act
-            Book.CreateLimitOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, 100, 3);
+            var events = Book.CreateLimitOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, 100, 3);
 
             // assert
             Assert.IsNotNull(events);
@@ -79,12 +76,9 @@ namespace Circus.Tests.OrderBook
             Book.UpdateStatus(OrderBookStatus.Open);
             Book.CreateLimitOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, 100, 3);
             TimeProvider.SetCurrentTime(Now2);
-            
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
 
             // act
-            Book.CreateLimitOrder(ClientId2, OrderId2, OrderValidity.Day, Side.Sell, 100, 5);
+            var events = Book.CreateLimitOrder(ClientId2, OrderId2, OrderValidity.Day, Side.Sell, 100, 5);
 
             // assert
             Assert.IsNotNull(events);
@@ -137,12 +131,9 @@ namespace Circus.Tests.OrderBook
             Book.UpdateStatus(OrderBookStatus.Open);
             Book.CreateLimitOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, 110, 3);
             TimeProvider.SetCurrentTime(Now2);
-            
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
 
             // act
-            Book.CreateLimitOrder(ClientId2, OrderId2, OrderValidity.Day, Side.Sell, 100, 5);
+            var events = Book.CreateLimitOrder(ClientId2, OrderId2, OrderValidity.Day, Side.Sell, 100, 5);
 
             // assert
             Assert.IsNotNull(events);
@@ -197,11 +188,8 @@ namespace Circus.Tests.OrderBook
             Book.CreateLimitOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, 110, 5);
             TimeProvider.SetCurrentTime(Now2);
 
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
-
             // act
-            Book.CreateLimitOrder(ClientId2, OrderId2, OrderValidity.Day, Side.Sell, 100, 3);
+            var events = Book.CreateLimitOrder(ClientId2, OrderId2, OrderValidity.Day, Side.Sell, 100, 3);
 
             // assert
             Assert.IsNotNull(events);
@@ -256,12 +244,9 @@ namespace Circus.Tests.OrderBook
             TimeProvider.SetCurrentTime(Now2);
             Book.CreateLimitOrder(ClientId2, OrderId2, OrderValidity.Day, Side.Buy, 120, 5);
             TimeProvider.SetCurrentTime(Now3);
-            
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
 
             // act
-            Book.CreateLimitOrder(ClientId3, OrderId3, OrderValidity.Day, Side.Sell, 100, 3);
+            var events = Book.CreateLimitOrder(ClientId3, OrderId3, OrderValidity.Day, Side.Sell, 100, 3);
 
             // assert
             Assert.IsNotNull(events);
@@ -317,11 +302,8 @@ namespace Circus.Tests.OrderBook
             Book.CreateLimitOrder(ClientId2, OrderId2, OrderValidity.Day, Side.Buy, 120, 5);
             TimeProvider.SetCurrentTime(Now3);
 
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
-
             // act
-            Book.CreateLimitOrder(ClientId3, OrderId3, OrderValidity.Day, Side.Sell, 100, 8);
+            var events = Book.CreateLimitOrder(ClientId3, OrderId3, OrderValidity.Day, Side.Sell, 100, 8);
 
             // assert
             Assert.IsNotNull(events);
@@ -415,12 +397,9 @@ namespace Circus.Tests.OrderBook
             TimeProvider.SetCurrentTime(Now2);
             Book.CreateLimitOrder(ClientId2, OrderId2, OrderValidity.Day, Side.Buy, 110, 5);
             TimeProvider.SetCurrentTime(Now3);
-            
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
 
             // act
-            Book.CreateLimitOrder(ClientId3, OrderId3, OrderValidity.Day, Side.Sell, 100, 3);
+            var events = Book.CreateLimitOrder(ClientId3, OrderId3, OrderValidity.Day, Side.Sell, 100, 3);
 
             // assert
             Assert.IsNotNull(events);
@@ -475,12 +454,9 @@ namespace Circus.Tests.OrderBook
             TimeProvider.SetCurrentTime(Now2);
             Book.CreateLimitOrder(ClientId2, OrderId2, OrderValidity.Day, Side.Buy, 110, 5);
             TimeProvider.SetCurrentTime(Now3);
-            
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
 
             // act
-            Book.CreateLimitOrder(ClientId3, OrderId3, OrderValidity.Day, Side.Sell, 100, 8);
+            var events = Book.CreateLimitOrder(ClientId3, OrderId3, OrderValidity.Day, Side.Sell, 100, 8);
 
             // assert
             Assert.IsNotNull(events);
@@ -574,12 +550,9 @@ namespace Circus.Tests.OrderBook
             TimeProvider.SetCurrentTime(Now2);
             Book.CreateLimitOrder(ClientId2, OrderId2, OrderValidity.Day, Side.Sell, 80, 5);
             TimeProvider.SetCurrentTime(Now3);
-            
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
 
             // act
-            Book.CreateLimitOrder(ClientId3, OrderId3, OrderValidity.Day, Side.Buy, 100, 3);
+            var events = Book.CreateLimitOrder(ClientId3, OrderId3, OrderValidity.Day, Side.Buy, 100, 3);
 
             // assert
             Assert.IsNotNull(events);
@@ -634,12 +607,9 @@ namespace Circus.Tests.OrderBook
             TimeProvider.SetCurrentTime(Now2);
             Book.CreateLimitOrder(ClientId2, OrderId2, OrderValidity.Day, Side.Sell, 80, 5);
             TimeProvider.SetCurrentTime(Now3);
-            
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
 
             // act
-            Book.CreateLimitOrder(ClientId3, OrderId3, OrderValidity.Day, Side.Buy, 100, 8);
+            var events = Book.CreateLimitOrder(ClientId3, OrderId3, OrderValidity.Day, Side.Buy, 100, 8);
 
             // assert
             Assert.IsNotNull(events);
@@ -733,12 +703,9 @@ namespace Circus.Tests.OrderBook
             TimeProvider.SetCurrentTime(Now2);
             Book.CreateLimitOrder(ClientId2, OrderId2, OrderValidity.Day, Side.Sell, 90, 5);
             TimeProvider.SetCurrentTime(Now3);
-            
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
 
             // act
-            Book.CreateLimitOrder(ClientId3, OrderId3, OrderValidity.Day, Side.Buy, 100, 3);
+            var events = Book.CreateLimitOrder(ClientId3, OrderId3, OrderValidity.Day, Side.Buy, 100, 3);
 
             // assert
             Assert.IsNotNull(events);
@@ -794,11 +761,8 @@ namespace Circus.Tests.OrderBook
             Book.CreateLimitOrder(ClientId2, OrderId2, OrderValidity.Day, Side.Sell, 90, 5);
             TimeProvider.SetCurrentTime(Now3);
 
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
-
             // act
-            Book.CreateLimitOrder(ClientId3, OrderId3, OrderValidity.Day, Side.Buy, 100, 8);
+            var events = Book.CreateLimitOrder(ClientId3, OrderId3, OrderValidity.Day, Side.Buy, 100, 8);
 
             // assert
             Assert.IsNotNull(events);
@@ -894,12 +858,9 @@ namespace Circus.Tests.OrderBook
             TimeProvider.SetCurrentTime(Now3);
             Book.UpdateLimitOrder(ClientId1, OrderId1, 110, 7);
             TimeProvider.SetCurrentTime(Now4);
-            
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
 
             // act
-            Book.CreateLimitOrder(ClientId3, OrderId3, OrderValidity.Day, Side.Sell, 100, 3);
+            var events = Book.CreateLimitOrder(ClientId3, OrderId3, OrderValidity.Day, Side.Sell, 100, 3);
 
             // assert
             Assert.IsNotNull(events);
@@ -956,12 +917,9 @@ namespace Circus.Tests.OrderBook
             TimeProvider.SetCurrentTime(Now3);
             Book.UpdateLimitOrder(ClientId1, OrderId1, 110, 6);
             TimeProvider.SetCurrentTime(Now4);
-            
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
 
             // act
-            Book.CreateLimitOrder(ClientId3, OrderId3, OrderValidity.Day, Side.Sell, 100, 8);
+            var events = Book.CreateLimitOrder(ClientId3, OrderId3, OrderValidity.Day, Side.Sell, 100, 8);
 
             // assert
             Assert.IsNotNull(events);
@@ -1058,11 +1016,8 @@ namespace Circus.Tests.OrderBook
             Book.UpdateLimitOrder(ClientId1, OrderId1, 110, 4);
             TimeProvider.SetCurrentTime(Now4);
 
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
-
             // act
-            Book.CreateLimitOrder(ClientId3, OrderId3, OrderValidity.Day, Side.Sell, 100, 3);
+            var events = Book.CreateLimitOrder(ClientId3, OrderId3, OrderValidity.Day, Side.Sell, 100, 3);
 
             // assert
             Assert.IsNotNull(events);
@@ -1119,12 +1074,9 @@ namespace Circus.Tests.OrderBook
             TimeProvider.SetCurrentTime(Now3);
             Book.UpdateLimitOrder(ClientId1, OrderId1, 110, 4);
             TimeProvider.SetCurrentTime(Now4);
-            
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
 
             // act
-            Book.CreateLimitOrder(ClientId3, OrderId3, OrderValidity.Day, Side.Sell, 100, 8);
+            var events = Book.CreateLimitOrder(ClientId3, OrderId3, OrderValidity.Day, Side.Sell, 100, 8);
 
             // assert
             Assert.IsNotNull(events);
@@ -1213,11 +1165,8 @@ namespace Circus.Tests.OrderBook
         public void CreateLimitOrder_MarketClosed_Rejected()
         {
             // arrange
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
-
             // act
-            Book.CreateLimitOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, 100, 3);
+            var events = Book.CreateLimitOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, 100, 3);
 
             // assert
             Assert.IsNotNull(events);
@@ -1237,12 +1186,9 @@ namespace Circus.Tests.OrderBook
         {
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
-            
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
 
             // act
-            Book.CreateLimitOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, 100, quantity);
+            var events = Book.CreateLimitOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, 100, quantity);
 
             // assert
             Assert.IsNotNull(events);
@@ -1265,11 +1211,8 @@ namespace Circus.Tests.OrderBook
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
 
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
-
             // act
-            Book.CreateLimitOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, price, 6);
+            var events = Book.CreateLimitOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, price, 6);
 
             // assert
             Assert.IsNotNull(events);
@@ -1291,11 +1234,8 @@ namespace Circus.Tests.OrderBook
             Book.CreateLimitOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, 100, 3);
             TimeProvider.SetCurrentTime(Now2);
 
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
-
             // act
-            Book.UpdateLimitOrder(ClientId1, OrderId1, 110, 5);
+            var events = Book.UpdateLimitOrder(ClientId1, OrderId1, 110, 5);
 
             // assert
             Assert.IsNotNull(events);
@@ -1330,11 +1270,8 @@ namespace Circus.Tests.OrderBook
             Book.CreateLimitOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, 100, 3);
             TimeProvider.SetCurrentTime(Now2);
 
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
-
             // act
-            Book.UpdateLimitOrder(ClientId1, OrderId1, 110, 1);
+            var events = Book.UpdateLimitOrder(ClientId1, OrderId1, 110, 1);
 
             // assert
             Assert.IsNotNull(events);
@@ -1370,11 +1307,8 @@ namespace Circus.Tests.OrderBook
             Book.CreateLimitOrder(ClientId2, OrderId2, OrderValidity.Day, Side.Sell, 100, 4);
             TimeProvider.SetCurrentTime(Now2);
 
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
-
             // act
-            Book.UpdateLimitOrder(ClientId1, OrderId1, 100, 2);
+            var events = Book.UpdateLimitOrder(ClientId1, OrderId1, 100, 2);
 
             // assert
             Assert.IsNotNull(events);
@@ -1412,11 +1346,8 @@ namespace Circus.Tests.OrderBook
             Book.CreateLimitOrder(ClientId2, OrderId2, OrderValidity.Day, Side.Buy, 80, 5);
             TimeProvider.SetCurrentTime(Now3);
 
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
-
             // act
-            Book.UpdateLimitOrder(ClientId1, OrderId1, 70, 3);
+            var events = Book.UpdateLimitOrder(ClientId1, OrderId1, 70, 3);
 
             // assert
             Assert.IsNotNull(events);
@@ -1461,7 +1392,7 @@ namespace Circus.Tests.OrderBook
             Assert.AreEqual(3, matched.Aggressor.FilledQuantity);
             Assert.AreEqual(0, matched.Aggressor.RemainingQuantity);
         }
-        
+
         [Test]
         public void UpdateLimitOrder_OrderFilled_Rejected()
         {
@@ -1471,11 +1402,8 @@ namespace Circus.Tests.OrderBook
             Book.CreateLimitOrder(ClientId2, OrderId2, OrderValidity.Day, Side.Sell, 100, 3);
             TimeProvider.SetCurrentTime(Now2);
 
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
-
             // act
-            Book.UpdateLimitOrder(ClientId1, OrderId1, 110, 5);
+            var events = Book.UpdateLimitOrder(ClientId1, OrderId1, 110, 5);
 
             // assert
             Assert.IsNotNull(events);
@@ -1498,11 +1426,8 @@ namespace Circus.Tests.OrderBook
             Book.CancelOrder(ClientId1, OrderId1);
             TimeProvider.SetCurrentTime(Now2);
 
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
-
             // act
-            Book.UpdateLimitOrder(ClientId1, OrderId1, 110, 5);
+            var events = Book.UpdateLimitOrder(ClientId1, OrderId1, 110, 5);
 
             // assert
             Assert.IsNotNull(events);
@@ -1525,11 +1450,8 @@ namespace Circus.Tests.OrderBook
             Book.UpdateStatus(OrderBookStatus.Closed);
             Book.UpdateStatus(OrderBookStatus.Open);
 
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
-
             // act
-            Book.UpdateLimitOrder(ClientId1, OrderId1, 110, 5);
+            var events = Book.UpdateLimitOrder(ClientId1, OrderId1, 110, 5);
 
             // assert
             Assert.IsNotNull(events);
@@ -1548,12 +1470,9 @@ namespace Circus.Tests.OrderBook
         {
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
-            
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
 
             // act
-            Book.UpdateLimitOrder(ClientId1, OrderId1, 110, 5);
+            var events = Book.UpdateLimitOrder(ClientId1, OrderId1, 110, 5);
 
             // assert
             Assert.IsNotNull(events);
@@ -1575,11 +1494,8 @@ namespace Circus.Tests.OrderBook
             Book.CreateLimitOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, 100, 3);
             Book.UpdateStatus(OrderBookStatus.Closed);
 
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
-
             // act
-            Book.UpdateLimitOrder(ClientId1, OrderId1, 105, 5);
+            var events = Book.UpdateLimitOrder(ClientId1, OrderId1, 105, 5);
 
             // assert
             Assert.IsNotNull(events);
@@ -1601,11 +1517,8 @@ namespace Circus.Tests.OrderBook
             Book.UpdateStatus(OrderBookStatus.Open);
             Book.CreateLimitOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, 100, 3);
 
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
-
             // act
-            Book.UpdateLimitOrder(ClientId1, OrderId1, 110, quantity);
+            var events = Book.UpdateLimitOrder(ClientId1, OrderId1, 110, quantity);
 
             // assert
             Assert.IsNotNull(events);
@@ -1629,11 +1542,8 @@ namespace Circus.Tests.OrderBook
             Book.UpdateStatus(OrderBookStatus.Open);
             Book.CreateLimitOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, 100, 6);
 
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
-
             // act
-            Book.UpdateLimitOrder(ClientId1, OrderId1, price, 6);
+            var events = Book.UpdateLimitOrder(ClientId1, OrderId1, price, 6);
 
             // assert
             Assert.IsNotNull(events);
@@ -1655,11 +1565,8 @@ namespace Circus.Tests.OrderBook
             Book.CreateLimitOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, 100, 3);
             TimeProvider.SetCurrentTime(Now2);
 
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
-
             // act
-            Book.CancelOrder(ClientId1, OrderId1);
+            var events = Book.CancelOrder(ClientId1, OrderId1);
 
             // assert
             Assert.IsNotNull(events);
@@ -1692,12 +1599,9 @@ namespace Circus.Tests.OrderBook
         {
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
-            
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
 
             // act
-            Book.CancelOrder(ClientId1, OrderId1);
+            var events = Book.CancelOrder(ClientId1, OrderId1);
 
             // assert
             Assert.IsNotNull(events);
@@ -1719,11 +1623,8 @@ namespace Circus.Tests.OrderBook
             Book.CreateLimitOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, 100, 3);
             Book.UpdateStatus(OrderBookStatus.Closed);
 
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
-
             // act
-            Book.CancelOrder(ClientId1, OrderId1);
+            var events = Book.CancelOrder(ClientId1, OrderId1);
 
             // assert
             Assert.IsNotNull(events);
@@ -1746,12 +1647,9 @@ namespace Circus.Tests.OrderBook
             book.UpdateStatus(OrderBookStatus.Open);
             book.CreateLimitOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, 500, 3);
             TimeProvider.SetCurrentTime(Now2);
-            
-            IList<OrderBookEvent> events = null;
-            book.OrderBookEvent += (_, args) => events = args.Events;
 
             // act
-            book.CreateMarketOrder(ClientId2, OrderId2, OrderValidity.Day, Side.Sell, 5);
+            var events = book.CreateMarketOrder(ClientId2, OrderId2, OrderValidity.Day, Side.Sell, 5);
 
             // assert
             Assert.IsNotNull(events);
@@ -1801,11 +1699,8 @@ namespace Circus.Tests.OrderBook
         public void CreateMarketOrder_MarketClosed_Rejected()
         {
             // arrange
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
-
             // act
-            Book.CreateMarketOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, 3);
+            var events = Book.CreateMarketOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, 3);
 
             // assert
             Assert.IsNotNull(events);
@@ -1825,11 +1720,8 @@ namespace Circus.Tests.OrderBook
             // arrange
             Book.UpdateStatus(OrderBookStatus.PreOpen);
 
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
-
             // act
-            Book.CreateMarketOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, 3);
+            var events = Book.CreateMarketOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, 3);
 
             // assert
             Assert.IsNotNull(events);
@@ -1849,12 +1741,9 @@ namespace Circus.Tests.OrderBook
         {
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
-            
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
 
             // act
-            Book.CreateMarketOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, quantity);
+            var events = Book.CreateMarketOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, quantity);
 
             // assert
             Assert.IsNotNull(events);
@@ -1873,12 +1762,9 @@ namespace Circus.Tests.OrderBook
         {
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
-            
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
 
             // act
-            Book.CreateMarketOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, 3);
+            var events = Book.CreateMarketOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, 3);
 
             // assert
             Assert.IsNotNull(events);
@@ -1898,11 +1784,8 @@ namespace Circus.Tests.OrderBook
         public void UpdateStatus_StatusChanged(OrderBookStatus status)
         {
             // arrange
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
-
             // act
-            Book.UpdateStatus(status);
+            var events = Book.UpdateStatus(status);
 
             // assert
             Assert.IsNotNull(events);
@@ -1924,11 +1807,8 @@ namespace Circus.Tests.OrderBook
             Book.CreateLimitOrder(ClientId2, OrderId2, OrderValidity.Day, Side.Sell, 100, 5);
             TimeProvider.SetCurrentTime(Now3);
 
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
-
             // act
-            Book.UpdateStatus(OrderBookStatus.Open);
+            var events = Book.UpdateStatus(OrderBookStatus.Open);
 
             // assert
             Assert.IsNotNull(events);
@@ -1981,11 +1861,8 @@ namespace Circus.Tests.OrderBook
             Book.CreateLimitOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, 100, 5);
             TimeProvider.SetCurrentTime(Now2);
 
-            IList<OrderBookEvent> events = null;
-            Book.OrderBookEvent += (_, args) => events = args.Events;
-
             // act
-            Book.UpdateStatus(OrderBookStatus.Closed);
+            var events = Book.UpdateStatus(OrderBookStatus.Closed);
 
             // assert
             Assert.IsNotNull(events);
@@ -2012,7 +1889,7 @@ namespace Circus.Tests.OrderBook
             Assert.AreEqual(0, expired.Order.FilledQuantity);
             Assert.AreEqual(0, expired.Order.RemainingQuantity);
         }
-        
+
         [Test]
         public void Process_CreateLimitOrder_Success()
         {
@@ -2033,14 +1910,14 @@ namespace Circus.Tests.OrderBook
             // act
             Book.Process(new UpdateLimitOrder(Sec, ClientId1, OrderId1, 100, 3));
         }
-        
+
         [Test]
         public void Process_CancelOrder_Success()
         {
             // act
             Book.Process(new CancelOrder(Sec, ClientId1, OrderId1));
         }
-        
+
         [Test]
         public void Process_UpdateStatus_Success()
         {

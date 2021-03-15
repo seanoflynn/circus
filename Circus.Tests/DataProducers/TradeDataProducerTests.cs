@@ -18,15 +18,15 @@ namespace Circus.Tests.DataProducers
             var producer = new TradeDataProducer();
 
             var book = new InMemoryOrderBook(sec, timeProvider);
-            book.OrderBookEvent += (_, args) => producer.Process(book, args.Events);
             book.UpdateStatus(OrderBookStatus.Open);
             book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 100, 3);
-
+            var events = book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Sell, 100, 3);
+            
             TradedMarketDataArgs traded = null;
             producer.Traded += (_, args) => traded = args;
             
             // act
-            book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Sell, 100, 3);
+            producer.Process(book, events);
 
             // assert
             Assert.IsNotNull(traded);

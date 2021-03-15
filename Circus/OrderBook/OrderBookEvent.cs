@@ -1,18 +1,7 @@
 using System;
-using System.Collections.Generic;
 
 namespace Circus.OrderBook
 {
-    public class OrderBookEventArgs : EventArgs
-    {
-        public OrderBookEventArgs(IList<OrderBookEvent> events)
-        {
-            Events = events;
-        }
-
-        public IList<OrderBookEvent> Events { get; }
-    }
-
     public record OrderBookEvent(Security Security, DateTime Time);
 
     public record StatusChanged(Security Security, DateTime Time, OrderBookStatus Status)

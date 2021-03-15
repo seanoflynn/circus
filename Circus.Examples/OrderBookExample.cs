@@ -1,5 +1,5 @@
 using System;
-using System.Linq;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Circus.OrderBook;
@@ -16,7 +16,6 @@ namespace Circus.Examples
 
             var timeProvider = new TestTimeProvider(DateTime.Now);
             IOrderBook book = new InMemoryOrderBook(sec, timeProvider);
-            book.OrderBookEvent += (_, args) => args.Events.ToList().ForEach(x => Console.WriteLine(args));
 
             var preOpen = new TimeSpan(1, 0, 0);
             var open = new TimeSpan(1, 10, 0);
@@ -25,8 +24,8 @@ namespace Circus.Examples
             sessionProvider.Changed += (_, args) => book.UpdateStatus(args.Status);
             sessionProvider.Update(new DateTime(2020, 1, 1, 1, 30, 0));
 
-            book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 100, 3);
-            book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Sell, 100, 5);
+            Print(book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 100, 3));
+            Print(book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Sell, 100, 5));
         }
 
         public static void BackTestExample()
@@ -35,7 +34,6 @@ namespace Circus.Examples
 
             var timeProvider = new TestTimeProvider(DateTime.Now);
             IOrderBook book = new InMemoryOrderBook(sec, timeProvider);
-            book.OrderBookEvent += (_, args) => args.Events.ToList().ForEach(x => Console.WriteLine(args));
 
             var preOpen = new TimeSpan(1, 0, 0);
             var open = new TimeSpan(1, 10, 0);
@@ -57,7 +55,7 @@ namespace Circus.Examples
                 // set data time
                 timeProvider.SetCurrentTime(time);
                 // pass in data
-                book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 100, 3);
+                Print(book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 100, 3));
             }
         }
 
@@ -67,7 +65,6 @@ namespace Circus.Examples
 
             var timeProvider = new UtcTimeProvider();
             IOrderBook book = new InMemoryOrderBook(sec, timeProvider);
-            book.OrderBookEvent += (_, args) => args.Events.ToList().ForEach(x => Console.WriteLine(args));
 
             var preOpen = new TimeSpan(1, 0, 0);
             var open = new TimeSpan(1, 10, 0);
@@ -86,8 +83,16 @@ namespace Circus.Examples
                 }
             });
 
-            book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 100, 3);
-            book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Sell, 100, 5);
+            Print(book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 100, 3));
+            Print(book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Sell, 100, 5));
+        }
+
+        private static void Print(IEnumerable<OrderBookEvent> events)
+        {
+            foreach (var @event in events)
+            {
+                Console.WriteLine(@event);
+            }
         }
     }
 }

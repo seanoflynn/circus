@@ -5,6 +5,6 @@ namespace Circus.DataProducers
 {
     public interface IDataProducer
     {
-        void Process(IOrderBook book, IEnumerable<OrderBookEvent> events);
+        void Process(IOrderBook book, IList<OrderBookEvent> events);
     }
 }
