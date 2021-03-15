@@ -3,6 +3,20 @@
     <PropertyGroup>
         <TargetFramework>net5.0</TargetFramework>
         <Nullable>enable</Nullable>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <PackageVersion>0.1.3</PackageVersion>
+        <Title>Circus</Title>
+        <Authors>seanoflynn</Authors>
+        <Description>Financial exchange simulator.</Description>
+        <Copyright>Copyright 2021</Copyright>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageProjectUrl>https://github.com/seanoflynn/circus</PackageProjectUrl>
+        <PackageTags>finance financial exchange orderbook trading simulator simulation backtest</PackageTags>
+    </PropertyGroup>
+    
+    <PropertyGroup>
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     </PropertyGroup>
 
 </Project>

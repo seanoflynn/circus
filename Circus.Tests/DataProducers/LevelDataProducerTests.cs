@@ -19,13 +19,13 @@ namespace Circus.Tests.DataProducers
 
             var book = new InMemoryOrderBook(sec, timeProvider);
             book.OrderBookEvent += (_, args) => producer.Process(book, args.Events);
-            book.SetStatus(OrderBookStatus.Open);
+            book.UpdateStatus(OrderBookStatus.Open);
 
             LevelsUpdatedMarketDataArgs updatedArgs = null;
             producer.LevelsUpdated += (_, args) => updatedArgs = args;
             
             // act
-            book.CreateLimitOrder(Guid.NewGuid(), TimeInForce.Day, Side.Sell, 100, 3);
+            book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Sell, 100, 3);
 
             // assert
             Assert.IsNotNull(updatedArgs);
@@ -50,14 +50,14 @@ namespace Circus.Tests.DataProducers
 
             var book = new InMemoryOrderBook(sec, timeProvider);
             book.OrderBookEvent += (_, args) => producer.Process(book, args.Events);
-            book.SetStatus(OrderBookStatus.Open);
-            book.CreateLimitOrder(Guid.NewGuid(), TimeInForce.Day, Side.Sell, 100, 5);
+            book.UpdateStatus(OrderBookStatus.Open);
+            book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Sell, 100, 5);
             
             LevelsUpdatedMarketDataArgs updatedArgs = null;
             producer.LevelsUpdated += (_, args) => updatedArgs = args;
             
             // act
-            book.CreateLimitOrder(Guid.NewGuid(), TimeInForce.Day, Side.Sell, 100, 3);
+            book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Sell, 100, 3);
 
             // assert
             Assert.IsNotNull(updatedArgs);
@@ -82,14 +82,14 @@ namespace Circus.Tests.DataProducers
 
             var book = new InMemoryOrderBook(sec, timeProvider);
             book.OrderBookEvent += (_, args) => producer.Process(book, args.Events);
-            book.SetStatus(OrderBookStatus.Open);
-            book.CreateLimitOrder(Guid.NewGuid(), TimeInForce.Day, Side.Sell, 100, 5);
+            book.UpdateStatus(OrderBookStatus.Open);
+            book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Sell, 100, 5);
             
             LevelsUpdatedMarketDataArgs updatedArgs = null;
             producer.LevelsUpdated += (_, args) => updatedArgs = args;
             
             // act
-            book.CreateLimitOrder(Guid.NewGuid(), TimeInForce.Day, Side.Sell, 110, 3);
+            book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Sell, 110, 3);
 
             // assert
             Assert.IsNotNull(updatedArgs);
@@ -117,14 +117,14 @@ namespace Circus.Tests.DataProducers
 
             var book = new InMemoryOrderBook(sec, timeProvider);
             book.OrderBookEvent += (_, args) => producer.Process(book, args.Events);
-            book.SetStatus(OrderBookStatus.Open);
-            book.CreateLimitOrder(Guid.NewGuid(), TimeInForce.Day, Side.Buy, 100, 5);
+            book.UpdateStatus(OrderBookStatus.Open);
+            book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 100, 5);
             
             LevelsUpdatedMarketDataArgs updatedArgs = null;
             producer.LevelsUpdated += (_, args) => updatedArgs = args;
             
             // act
-            book.CreateLimitOrder(Guid.NewGuid(), TimeInForce.Day, Side.Buy, 110, 3);
+            book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 110, 3);
 
             // assert
             Assert.IsNotNull(updatedArgs);
@@ -152,14 +152,14 @@ namespace Circus.Tests.DataProducers
 
             var book = new InMemoryOrderBook(sec, timeProvider);
             book.OrderBookEvent += (_, args) => producer.Process(book, args.Events);
-            book.SetStatus(OrderBookStatus.Open);
-            book.CreateLimitOrder(Guid.NewGuid(), TimeInForce.Day, Side.Buy, 100, 5);
+            book.UpdateStatus(OrderBookStatus.Open);
+            book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 100, 5);
             
             LevelsUpdatedMarketDataArgs updatedArgs = null;
             producer.LevelsUpdated += (_, args) => updatedArgs = args;
             
             // act
-            book.CreateLimitOrder(Guid.NewGuid(), TimeInForce.Day, Side.Sell, 110, 3);
+            book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Sell, 110, 3);
 
             // assert
             Assert.IsNotNull(updatedArgs);
@@ -187,15 +187,15 @@ namespace Circus.Tests.DataProducers
 
             var book = new InMemoryOrderBook(sec, timeProvider);
             book.OrderBookEvent += (_, args) => producer.Process(book, args.Events);
-            book.SetStatus(OrderBookStatus.Open);
-            book.CreateLimitOrder(Guid.NewGuid(), TimeInForce.Day, Side.Buy, 110, 3);
-            book.CreateLimitOrder(Guid.NewGuid(), TimeInForce.Day, Side.Buy, 120, 4);
+            book.UpdateStatus(OrderBookStatus.Open);
+            book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 110, 3);
+            book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 120, 4);
             
             LevelsUpdatedMarketDataArgs updatedArgs = null;
             producer.LevelsUpdated += (_, args) => updatedArgs = args;
             
             // act
-            book.CreateLimitOrder(Guid.NewGuid(), TimeInForce.Day, Side.Buy, 130, 5);
+            book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 130, 5);
 
             // assert
             Assert.IsNotNull(updatedArgs);
@@ -223,15 +223,15 @@ namespace Circus.Tests.DataProducers
 
             var book = new InMemoryOrderBook(sec, timeProvider);
             book.OrderBookEvent += (_, args) => producer.Process(book, args.Events);
-            book.SetStatus(OrderBookStatus.Open);
-            book.CreateLimitOrder(Guid.NewGuid(), TimeInForce.Day, Side.Buy, 110, 3);
-            book.CreateLimitOrder(Guid.NewGuid(), TimeInForce.Day, Side.Buy, 120, 4);
+            book.UpdateStatus(OrderBookStatus.Open);
+            book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 110, 3);
+            book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 120, 4);
             
             LevelsUpdatedMarketDataArgs updatedArgs = null;
             producer.LevelsUpdated += (_, args) => updatedArgs = args;
             
             // act
-            book.CreateLimitOrder(Guid.NewGuid(), TimeInForce.Day, Side.Sell, 100, 5);
+            book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Sell, 100, 5);
 
             // assert
             Assert.IsNotNull(updatedArgs);

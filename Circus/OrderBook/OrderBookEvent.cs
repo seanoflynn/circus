@@ -13,27 +13,46 @@ namespace Circus.OrderBook
         public IList<OrderBookEvent> Events { get; }
     }
 
-    public record OrderBookEvent(DateTime Time);
+    public record OrderBookEvent(Security Security, DateTime Time);
 
-    public record OrderBookStatusChangedEvent(DateTime Time, OrderBookStatus Status) : OrderBookEvent(Time);
+    public record StatusChanged(Security Security, DateTime Time, OrderBookStatus Status)
+        : OrderBookEvent(Security, Time);
 
-    public record OrderCreatedEvent(DateTime Time, Order Order) : OrderBookEvent(Time);
+    public record OrderEvent(Security Security, DateTime Time, Guid ClientId)
+        : OrderBookEvent(Security, Time);
 
-    public record OrderCreateRejectedEvent(DateTime Time, Guid OrderId, OrderRejectedReason Reason) 
-        : OrderBookEvent(Time);
+    public record OrderRejectedEvent(Security Security, DateTime Time, Guid ClientId, Guid OrderId)
+        : OrderEvent(Security, Time, ClientId);
 
-    public record OrderUpdatedEvent(DateTime Time, Order Order) : OrderBookEvent(Time);
+    public record OrderConfirmedEvent(Security Security, DateTime Time, Guid ClientId, Order Order)
+        : OrderEvent(Security, Time, ClientId);
 
-    public record OrderUpdateRejectedEvent(DateTime Time, Guid OrderId, OrderRejectedReason Reason) 
-        : OrderBookEvent(Time);
+    public record CreateOrderConfirmed(Security Security, DateTime Time, Guid ClientId, Order Order)
+        : OrderConfirmedEvent(Security, Time, ClientId, Order);
 
-    public record OrderCancelledEvent(DateTime Time, Order Order, OrderCancelledReason Reason) : OrderBookEvent(Time);
+    public record CreateOrderRejected(Security Security, DateTime Time, Guid ClientId, Guid OrderId,
+            OrderRejectedReason Reason)
+        : OrderRejectedEvent(Security, Time, ClientId, OrderId);
 
-    public record OrderCancelRejectedEvent(DateTime Time, Guid OrderId, OrderRejectedReason Reason) 
-        : OrderBookEvent(Time);
+    public record UpdateOrderConfirmed(Security Security, DateTime Time, Guid ClientId, Order Order)
+        : OrderConfirmedEvent(Security, Time, ClientId, Order);
 
-    public record OrderExpiredEvent(DateTime Time, Order Order) : OrderBookEvent(Time);
+    public record UpdateOrderRejected(Security Security, DateTime Time, Guid ClientId, Guid OrderId,
+            OrderRejectedReason Reason)
+        : OrderRejectedEvent(Security, Time, ClientId, OrderId);
 
-    public record OrderMatchedEvent(DateTime Time, decimal Price, int Quantity, Order Resting, Order Aggressor) 
-        : OrderBookEvent(Time);
+    public record CancelOrderConfirmed(Security Security, DateTime Time, Guid ClientId, Order Order,
+            OrderCancelledReason Reason)
+        : OrderConfirmedEvent(Security, Time, ClientId, Order);
+
+    public record CancelOrderRejected(Security Security, DateTime Time, Guid ClientId, Guid OrderId,
+            OrderRejectedReason Reason)
+        : OrderRejectedEvent(Security, Time, ClientId, OrderId);
+
+    public record ExpireOrderConfirmed(Security Security, DateTime Time, Guid ClientId, Order Order)
+        : OrderConfirmedEvent(Security, Time, ClientId, Order);
+
+    public record OrderMatched(Security Security, DateTime Time, decimal Price, int Quantity, Order Resting,
+            Order Aggressor)
+        : OrderBookEvent(Security, Time);
 }

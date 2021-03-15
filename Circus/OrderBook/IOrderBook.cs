@@ -7,14 +7,21 @@ namespace Circus.OrderBook
     {
         public event EventHandler<OrderBookEventArgs> OrderBookEvent;
 
+        void Process(OrderBookAction action);
+
         Security Security { get; }
         OrderBookStatus Status { get; }
         IList<Level> GetLevels(Side side, int maxPrices);
 
-        void CreateLimitOrder(Guid id, TimeInForce tif, Side side, decimal price, int quantity);
-        void CreateMarketOrder(Guid id, TimeInForce tif, Side side, int quantity);
-        void UpdateLimitOrder(Guid id, decimal price, int quantity);
-        void CancelOrder(Guid id);
-        void SetStatus(OrderBookStatus status);
+        void CreateLimitOrder(Guid clientId, Guid orderId, OrderValidity validity, Side side, decimal price,
+            int quantity);
+
+        void CreateMarketOrder(Guid clientId, Guid orderId, OrderValidity validity, Side side, int quantity);
+
+        void UpdateLimitOrder(Guid clientId, Guid orderId, decimal price, int quantity);
+
+        void CancelOrder(Guid clientId, Guid id);
+
+        void UpdateStatus(OrderBookStatus status);
     }
 }

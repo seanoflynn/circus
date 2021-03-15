@@ -18,8 +18,8 @@ namespace Circus.Examples
             IOrderBook book1 = new InMemoryOrderBook(sec1, time);
             book1.OrderBookEvent += (_, args) => tradeDataProducer.Process(book1, args.Events);
 
-            book1.CreateLimitOrder(Guid.NewGuid(), TimeInForce.Day, Side.Buy, 100, 3);
-            book1.CreateLimitOrder(Guid.NewGuid(), TimeInForce.Day, Side.Sell, 100, 5);
+            book1.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 100, 3);
+            book1.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Sell, 100, 5);
         }
     }
 }

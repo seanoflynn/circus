@@ -5,13 +5,14 @@ namespace Circus.OrderBook
     internal class InternalOrder
     {
         public long SequenceNumber { get; private set; }
-        public Guid Id { get; }
+        public Guid ClientId { get; }
+        public Guid OrderId { get; }
         public Security Security { get; }
         public DateTime CreatedTime { get; }
         public DateTime ModifiedTime { get; private set; }
         public DateTime? CompletedTime { get; private set; }
         public OrderType Type { get; private set; }
-        public TimeInForce TimeInForce { get; }
+        public OrderValidity Validity { get; }
         public Side Side { get; }
         public decimal Price { get; private set; }
         public int Quantity { get; private set; }
@@ -19,16 +20,17 @@ namespace Circus.OrderBook
         public int FilledQuantity { get; private set; }
         public OrderStatus Status { get; private set; } = OrderStatus.Working;
 
-        public InternalOrder(long sequenceNumber, Guid id, Security security, DateTime time, OrderType type, 
-            TimeInForce timeInForce, Side side, decimal price, int quantity)
+        public InternalOrder(long sequenceNumber, Guid clientId, Guid orderId, Security security, DateTime time,
+            OrderType type, OrderValidity validity, Side side, decimal price, int quantity)
         {
             SequenceNumber = sequenceNumber;
-            Id = id;
+            ClientId = clientId;
+            OrderId = orderId;
             Security = security;
             CreatedTime = time;
             Type = type;
             ModifiedTime = time;
-            TimeInForce = timeInForce;
+            Validity = validity;
             Side = side;
             Price = price;
             Quantity = quantity;
@@ -37,11 +39,11 @@ namespace Circus.OrderBook
         }
 
         public override string ToString() => 
-            $"[Order #{Id} {Status} {ModifiedTime:HH:mm:ss} {Side} {Quantity}@{Price}]";
+            $"[Order #{OrderId} {Status} {ModifiedTime:HH:mm:ss} {Side} {Quantity}@{Price}]";
 
         public Order ToOrder()
         {
-            return new(Id, Security, CreatedTime, ModifiedTime, CompletedTime, Status, Type, TimeInForce,
+            return new(ClientId, OrderId, Security, CreatedTime, ModifiedTime, CompletedTime, Status, Type, Validity,
                 Side, Price, null, Quantity, FilledQuantity, RemainingQuantity);
         }
 

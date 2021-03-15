@@ -14,7 +14,7 @@ namespace Circus.DataProducers
         {
             foreach (var ev in events)
             {
-                if (ev is OrderMatchedEvent matched)
+                if (ev is OrderMatched matched)
                 {
                     Traded?.Invoke(this,
                         new TradedMarketDataArgs(matched.Time, matched.Price, matched.Quantity));

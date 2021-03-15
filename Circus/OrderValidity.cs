@@ -1,6 +1,6 @@
 namespace Circus
 {
-    public enum TimeInForce
+    public enum OrderValidity
     {
         Day,
         GoodTilCancel

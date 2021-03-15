@@ -10,6 +10,30 @@ namespace Circus.OrderBook
     {
         public event EventHandler<OrderBookEventArgs>? OrderBookEvent;
 
+        public void Process(OrderBookAction action)
+        {
+            switch (action)
+            {
+                case CreateLimitOrder create:
+                    CreateLimitOrder(create.ClientId, create.OrderId, create.OrderValidity, create.Side, create.Price, create.Quantity);
+                    break;
+                case CreateMarketOrder create:
+                    CreateMarketOrder(create.ClientId, create.OrderId, create.OrderValidity, create.Side, create.Quantity);
+                    break;
+                case UpdateLimitOrder update:
+                    UpdateLimitOrder(update.ClientId, update.OrderId, update.Price, update.Quantity);
+                    break;
+                case CancelOrder cancel:
+                    CancelOrder(cancel.ClientId, cancel.OrderId);
+                    break;
+                case UpdateStatus update:
+                    UpdateStatus(update.Status);
+                    break;
+                default:
+                    throw new ArgumentException("Unknown order book action");
+            }
+        }
+
         public Security Security { get; }
         public OrderBookStatus Status { get; private set; } = OrderBookStatus.Closed;
 
@@ -42,24 +66,27 @@ namespace Circus.OrderBook
                 .ToList();
         }
 
-        public void CreateLimitOrder(Guid id, TimeInForce tif, Side side, decimal price, int quantity)
+        public void CreateLimitOrder(Guid clientId, Guid orderId, OrderValidity validity, Side side, decimal price,
+            int quantity)
         {
-            if (ValidateCreate(id, OrderRejectedReason.MarketClosed, () => Status == OrderBookStatus.Closed)) return;
-            if (ValidateCreate(id, OrderRejectedReason.InvalidPriceIncrement,
+            if (ValidateCreate(clientId, orderId, OrderRejectedReason.MarketClosed, 
+                () => Status == OrderBookStatus.Closed)) return;
+            if (ValidateCreate(clientId, orderId, OrderRejectedReason.InvalidPriceIncrement,
                 () => price % Security.TickSize != 0)) return;
-            if (ValidateCreate(id, OrderRejectedReason.InvalidQuantity, () => quantity < 1)) return;
+            if (ValidateCreate(clientId, orderId, OrderRejectedReason.InvalidQuantity, 
+                () => quantity < 1)) return;
 
             _nextSequenceNumber++;
-            var order = new InternalOrder(_nextSequenceNumber, id, Security, Now(), OrderType.Limit, tif, side, price,
+            var order = new InternalOrder(_nextSequenceNumber, clientId, orderId, Security, Now(), OrderType.Limit, validity, side, price,
                 quantity);
-            _orders.Add(order.Id, order);
+            _orders.Add(order.OrderId, order);
 
             var orders = order.Side == Side.Buy ? _buyOrders : _sellOrders;
             orders.Add(order);
 
             Console.WriteLine($"order added: {order}");
 
-            var events = new List<OrderBookEvent> {new OrderCreatedEvent(Now(), order.ToOrder())};
+            var events = new List<OrderBookEvent> {new CreateOrderConfirmed(Security, Now(), clientId, order.ToOrder())};
 
             if (Status == OrderBookStatus.Open)
             {
@@ -69,14 +96,18 @@ namespace Circus.OrderBook
             FireEvents(events.ToArray());
         }
 
-        public void CreateMarketOrder(Guid id, TimeInForce tif, Side side, int quantity)
+        public void CreateMarketOrder(Guid clientId, Guid orderId, OrderValidity validity, Side side, int quantity)
         {
-            if (ValidateCreate(id, OrderRejectedReason.MarketClosed, () => Status == OrderBookStatus.Closed)) return;
-            if (ValidateCreate(id, OrderRejectedReason.MarketPreOpen, () => Status == OrderBookStatus.PreOpen)) return;
-            if (ValidateCreate(id, OrderRejectedReason.InvalidQuantity, () => quantity < 1)) return;
+            if (ValidateCreate(clientId, orderId, OrderRejectedReason.MarketClosed, 
+                () => Status == OrderBookStatus.Closed)) return;
+            if (ValidateCreate(clientId, orderId, OrderRejectedReason.MarketPreOpen, 
+                () => Status == OrderBookStatus.PreOpen)) return;
+            if (ValidateCreate(clientId, orderId, OrderRejectedReason.InvalidQuantity, 
+                () => quantity < 1)) return;
 
-            var oppositeOrders = (side == Side.Buy ? _sellOrders : _buyOrders);
-            if (ValidateCreate(id, OrderRejectedReason.NoOrdersToMatchMarketOrder, () => !oppositeOrders.Any())) return;
+            var oppositeOrders = side == Side.Buy ? _sellOrders : _buyOrders;
+            if (ValidateCreate(clientId, orderId, OrderRejectedReason.NoOrdersToMatchMarketOrder, 
+                () => !oppositeOrders.Any())) return;
 
             // set price as best offer + protection ticks for buy orders, best bid - protection ticks for sell orders
             // TODO: option to use best bid + protection tickets for buy orders, etc (eurex)
@@ -84,16 +115,16 @@ namespace Circus.OrderBook
                         ((side == Side.Buy ? 1 : -1) * (Security.MarketOrderProtectionTicks * Security.TickSize));
 
             _nextSequenceNumber++;
-            var order = new InternalOrder(_nextSequenceNumber, id, Security, Now(), OrderType.Market, tif, side, price,
+            var order = new InternalOrder(_nextSequenceNumber, clientId, orderId, Security, Now(), OrderType.Market, validity, side, price,
                 quantity);
-            _orders.Add(order.Id, order);
+            _orders.Add(order.OrderId, order);
 
             var orders = order.Side == Side.Buy ? _buyOrders : _sellOrders;
             orders.Add(order);
 
             Console.WriteLine($"order added: {order}");
 
-            var events = new List<OrderBookEvent> {new OrderCreatedEvent(Now(), order.ToOrder())};
+            var events = new List<OrderBookEvent> {new CreateOrderConfirmed(Security, Now(), order.ClientId, order.ToOrder())};
             events.AddRange(Match());
 
             if (order.Status == OrderStatus.Working)
@@ -104,15 +135,19 @@ namespace Circus.OrderBook
             FireEvents(events.ToArray());
         }
 
-        public void UpdateLimitOrder(Guid id, decimal price, int quantity)
+        public void UpdateLimitOrder(Guid clientId, Guid orderId, decimal price, int quantity)
         {
-            if (ValidateUpdate(id, OrderRejectedReason.MarketClosed, () => Status == OrderBookStatus.Closed)) return;
-            if (ValidateUpdate(id, OrderRejectedReason.InvalidPriceIncrement,
+            if (ValidateUpdate(clientId, orderId, OrderRejectedReason.MarketClosed, 
+                () => Status == OrderBookStatus.Closed)) return;
+            if (ValidateUpdate(clientId, orderId, OrderRejectedReason.InvalidPriceIncrement,
                 () => price % Security.TickSize != 0)) return;
-            if (ValidateUpdate(id, OrderRejectedReason.InvalidQuantity, () => quantity < 1)) return;
-            if (ValidateUpdate(id, OrderRejectedReason.TooLateToCancel, () => _completedOrders.ContainsKey(id))) return;
-            if (ValidateUpdate(id, OrderRejectedReason.OrderNotInBook, () => !_orders.ContainsKey(id))) return;
-            var order = _orders[id];
+            if (ValidateUpdate(clientId, orderId, OrderRejectedReason.InvalidQuantity, 
+                () => quantity < 1)) return;
+            if (ValidateUpdate(clientId, orderId, OrderRejectedReason.TooLateToCancel, 
+                () => _completedOrders.ContainsKey(orderId))) return;
+            if (ValidateUpdate(clientId, orderId, OrderRejectedReason.OrderNotInBook, 
+                () => !_orders.ContainsKey(orderId))) return;
+            var order = _orders[orderId];
 
             if (quantity <= order.FilledQuantity)
             {
@@ -121,7 +156,7 @@ namespace Circus.OrderBook
 
                 Console.WriteLine($"order cancelled on update as new quantity <= filled quantity: {order}");
 
-                FireEvents(new OrderCancelledEvent(Now(), order.ToOrder(),
+                FireEvents(new CancelOrderConfirmed(Security, Now(), order.ClientId, order.ToOrder(),
                     OrderCancelledReason.UpdatedQuantityLowerThanFilledQuantity));
                 return;
             }
@@ -146,7 +181,7 @@ namespace Circus.OrderBook
 
             Console.WriteLine($"order updated: {order}");
 
-            var events = new List<OrderBookEvent> {new OrderUpdatedEvent(Now(), order.ToOrder())};
+            var events = new List<OrderBookEvent> {new UpdateOrderConfirmed(Security, Now(), order.ClientId, order.ToOrder())};
 
             if (Status == OrderBookStatus.Open && isPriceChange)
             {
@@ -156,19 +191,22 @@ namespace Circus.OrderBook
             FireEvents(events.ToArray());
         }
 
-        public void CancelOrder(Guid id)
+        public void CancelOrder(Guid clientId, Guid orderId)
         {
-            if (ValidateCancel(id, OrderRejectedReason.MarketClosed, () => Status == OrderBookStatus.Closed)) return;
-            if (ValidateCancel(id, OrderRejectedReason.TooLateToCancel, () => _completedOrders.ContainsKey(id))) return;
-            if (ValidateCancel(id, OrderRejectedReason.OrderNotInBook, () => !_orders.ContainsKey(id))) return;
-            var order = _orders[id];
+            if (ValidateCancel(clientId, orderId, OrderRejectedReason.MarketClosed, 
+                () => Status == OrderBookStatus.Closed)) return;
+            if (ValidateCancel(clientId, orderId, OrderRejectedReason.TooLateToCancel, 
+                () => _completedOrders.ContainsKey(orderId))) return;
+            if (ValidateCancel(clientId, orderId, OrderRejectedReason.OrderNotInBook, 
+                () => !_orders.ContainsKey(orderId))) return;
+            var order = _orders[orderId];
 
             order.Cancel(Now());
             CompleteOrder(order);
 
             Console.WriteLine($"order cancelled: {order}");
 
-            FireEvents(new OrderCancelledEvent(Now(), order.ToOrder(), OrderCancelledReason.Cancelled));
+            FireEvents(new CancelOrderConfirmed(Security, Now(), order.ClientId, order.ToOrder(), OrderCancelledReason.Cancelled));
         }
 
         private void FireEvents(params OrderBookEvent[] events)
@@ -176,27 +214,27 @@ namespace Circus.OrderBook
             OrderBookEvent?.Invoke(this, new OrderBookEventArgs(events));
         }
 
-        private bool ValidateCreate(Guid id, OrderRejectedReason reason, Func<bool> validation)
+        private bool ValidateCreate(Guid clientId, Guid orderId, OrderRejectedReason reason, Func<bool> validation)
         {
             if (!validation.Invoke()) return false;
 
-            FireEvents(new OrderCreateRejectedEvent(Now(), id, reason));
+            FireEvents(new CreateOrderRejected(Security, Now(), clientId, orderId, reason));
             return true;
         }
 
-        private bool ValidateUpdate(Guid id, OrderRejectedReason reason, Func<bool> validation)
+        private bool ValidateUpdate(Guid clientId, Guid orderId, OrderRejectedReason reason, Func<bool> validation)
         {
             if (!validation.Invoke()) return false;
 
-            FireEvents(new OrderUpdateRejectedEvent(Now(), id, reason));
+            FireEvents(new UpdateOrderRejected(Security, Now(), clientId, orderId, reason));
             return true;
         }
 
-        private bool ValidateCancel(Guid id, OrderRejectedReason reason, Func<bool> validation)
+        private bool ValidateCancel(Guid clientId, Guid orderId, OrderRejectedReason reason, Func<bool> validation)
         {
             if (!validation.Invoke()) return false;
 
-            FireEvents(new OrderCancelRejectedEvent(Now(), id, reason));
+            FireEvents(new CancelOrderRejected(Security, Now(), clientId, orderId, reason));
             return true;
         }
 
@@ -207,15 +245,15 @@ namespace Circus.OrderBook
 
             Console.WriteLine($"order expired: {order}");
 
-            return new OrderExpiredEvent(Now(), order.ToOrder());
+            return new ExpireOrderConfirmed(Security, Now(), order.ClientId, order.ToOrder());
         }
 
         private void CompleteOrder(InternalOrder order)
         {
             var orders = order.Side == Side.Buy ? _buyOrders : _sellOrders;
             orders.Remove(order);
-            _orders.Remove(order.Id);
-            _completedOrders.Add(order.Id, order);
+            _orders.Remove(order.OrderId);
+            _completedOrders.Add(order.OrderId, order);
         }
 
         private IEnumerable<OrderBookEvent> Match()
@@ -242,7 +280,7 @@ namespace Circus.OrderBook
                 FillOrder(resting, time, quantity);
                 FillOrder(aggressor, time, quantity);
 
-                events.Add(new OrderMatchedEvent(
+                events.Add(new OrderMatched(Security,
                     time, price, quantity,
                     resting.ToOrder(),
                     aggressor.ToOrder()
@@ -306,7 +344,7 @@ namespace Circus.OrderBook
         //     }
         // }
 
-        public void SetStatus(OrderBookStatus status)
+        public void UpdateStatus(OrderBookStatus status)
         {
             switch (status)
             {
@@ -330,13 +368,13 @@ namespace Circus.OrderBook
             var date = Now();
             _nextSequenceNumber = ((date.Year * 10000) + (date.Month * 100) + date.Day) * 10000000000L;
             Status = OrderBookStatus.PreOpen;
-            FireEvents(new OrderBookStatusChangedEvent(Now(), Status));
+            FireEvents(new StatusChanged(Security, Now(), Status));
         }
 
         private void OpenMarket()
         {
             Status = OrderBookStatus.Open;
-            var events = new List<OrderBookEvent> {new OrderBookStatusChangedEvent(Now(), Status)};
+            var events = new List<OrderBookEvent> {new StatusChanged(Security, Now(), Status)};
             events.AddRange(Match());
             FireEvents(events.ToArray());
         }
@@ -344,14 +382,14 @@ namespace Circus.OrderBook
         private void CloseMarket()
         {
             Status = OrderBookStatus.Closed;
-            var events = new List<OrderBookEvent> {new OrderBookStatusChangedEvent(Now(), Status)};
+            var events = new List<OrderBookEvent> {new StatusChanged(Security, Now(), Status)};
             events.AddRange(ExpireDayOrders());
             FireEvents(events.ToArray());
         }
 
         private IEnumerable<OrderBookEvent> ExpireDayOrders()
         {
-            var orders = _orders.Values.Where(o => o.TimeInForce == TimeInForce.Day).ToList();
+            var orders = _orders.Values.Where(o => o.Validity == OrderValidity.Day).ToList();
 
             return orders.Select(ExpireOrder).ToList();
         }

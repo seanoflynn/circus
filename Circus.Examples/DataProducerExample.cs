@@ -23,9 +23,9 @@ namespace Circus.Examples
                 tradeDataProducer.Process(book1, args.Events);
                 levelDataProducer.Process(book1, args.Events);
             };
-            book1.SetStatus(OrderBookStatus.Open);
-            book1.CreateLimitOrder(Guid.NewGuid(), TimeInForce.Day, Side.Buy, 100, 3);
-            book1.CreateLimitOrder(Guid.NewGuid(), TimeInForce.Day, Side.Sell, 100, 5);
+            book1.UpdateStatus(OrderBookStatus.Open);
+            book1.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 100, 3);
+            book1.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Sell, 100, 5);
 
             var sec2 = new Security("SIZ6", SecurityType.Future, 10, 10);
             IOrderBook book2 = new InMemoryOrderBook(sec2, time);
@@ -34,9 +34,9 @@ namespace Circus.Examples
                 tradeDataProducer.Process(book2, args.Events);
                 levelDataProducer.Process(book2, args.Events);
             };
-            book2.SetStatus(OrderBookStatus.Open);
-            book2.CreateLimitOrder(Guid.NewGuid(), TimeInForce.Day, Side.Buy, 100, 3);
-            book2.CreateLimitOrder(Guid.NewGuid(), TimeInForce.Day, Side.Sell, 100, 5);
+            book2.UpdateStatus(OrderBookStatus.Open);
+            book2.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 100, 3);
+            book2.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Sell, 100, 5);
         }
     }
 }
