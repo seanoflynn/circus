@@ -7,9 +7,8 @@ namespace Circus.DataProducers
 {
     // TODO: only send changes in book?
 
-    public class LevelDataProducer : IDataProducer
+    public class LevelDataProducer : IDataProducer<LevelsDataEvent>
     {
-        public event EventHandler<LevelsUpdatedMarketDataArgs>? LevelsUpdated;
         private readonly int _maxLevels;
 
         public LevelDataProducer(int maxLevels)
@@ -17,14 +16,14 @@ namespace Circus.DataProducers
             _maxLevels = maxLevels;
         }
 
-        public void Process(IOrderBook book, IList<OrderBookEvent> events)
+        public IList<LevelsDataEvent> Process(IOrderBook book, IList<OrderBookEvent> events)
         {
             var bids = book.GetLevels(Side.Buy, _maxLevels);
             var offers = book.GetLevels(Side.Sell, _maxLevels);
 
-            LevelsUpdated?.Invoke(this, new LevelsUpdatedMarketDataArgs(events.First().Time, bids, offers));
+            return new[] {new LevelsDataEvent(events.First().Time, bids, offers)};
         }
     }
 
-    public record LevelsUpdatedMarketDataArgs(DateTime Time, IList<Level> Bids, IList<Level> Offers);
+    public record LevelsDataEvent(DateTime Time, IList<Level> Bids, IList<Level> Offers);
 }

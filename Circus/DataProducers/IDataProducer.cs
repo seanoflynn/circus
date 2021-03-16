@@ -3,8 +3,8 @@ using Circus.OrderBook;
 
 namespace Circus.DataProducers
 {
-    public interface IDataProducer
+    public interface IDataProducer<T>
     {
-        void Process(IOrderBook book, IList<OrderBookEvent> events);
+        IList<T> Process(IOrderBook book, IList<OrderBookEvent> events);
     }
 }

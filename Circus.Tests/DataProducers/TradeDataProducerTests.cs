@@ -20,19 +20,18 @@ namespace Circus.Tests.DataProducers
             var book = new InMemoryOrderBook(sec, timeProvider);
             book.UpdateStatus(OrderBookStatus.Open);
             book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 100, 3);
-            var events = book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Sell, 100, 3);
-            
-            TradedMarketDataArgs traded = null;
-            producer.Traded += (_, args) => traded = args;
-            
+            var bookEvents =
+                book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Sell, 100, 3);
+
             // act
-            producer.Process(book, events);
+            var events = producer.Process(book, bookEvents);
 
             // assert
-            Assert.IsNotNull(traded);
-            Assert.AreEqual(now, traded.Time);
-            Assert.AreEqual(100, traded.Price);
-            Assert.AreEqual(3, traded.Quantity);
+            Assert.IsNotNull(events);
+            Assert.AreEqual(1, events.Count);
+            Assert.AreEqual(now, events[0].Time);
+            Assert.AreEqual(100, events[0].Price);
+            Assert.AreEqual(3, events[0].Quantity);
         }
     }
 }

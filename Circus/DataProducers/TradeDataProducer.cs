@@ -4,24 +4,23 @@ using Circus.OrderBook;
 
 namespace Circus.DataProducers
 {
-    // TODO: merge into 1 event?
-
-    public class TradeDataProducer : IDataProducer
+    public class TradeDataProducer : IDataProducer<TradedDataEvent>
     {
-        public event EventHandler<TradedMarketDataArgs>? Traded;
-
-        public void Process(IOrderBook book, IList<OrderBookEvent> events)
+        public IList<TradedDataEvent> Process(IOrderBook book, IList<OrderBookEvent> events)
         {
+            var output = new List<TradedDataEvent>();
+
             foreach (var ev in events)
             {
                 if (ev is OrderMatched matched)
                 {
-                    Traded?.Invoke(this,
-                        new TradedMarketDataArgs(matched.Time, matched.Price, matched.Quantity));
+                    output.Add(new TradedDataEvent(matched.Time, matched.Price, matched.Quantity));
                 }
             }
+
+            return output;
         }
     }
 
-    public record TradedMarketDataArgs(DateTime Time, decimal Price, int Quantity);
+    public record TradedDataEvent(DateTime Time, decimal Price, int Quantity);
 }
