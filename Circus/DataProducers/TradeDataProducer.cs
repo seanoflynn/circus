@@ -12,7 +12,7 @@ namespace Circus.DataProducers
 
             foreach (var ev in events)
             {
-                if (ev is OrderMatched matched)
+                if (ev is OrdersMatched matched)
                 {
                     output.Add(new TradedDataEvent(matched.Time, matched.Price, matched.Quantity));
                 }
