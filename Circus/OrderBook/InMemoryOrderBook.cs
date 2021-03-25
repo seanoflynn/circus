@@ -297,10 +297,10 @@ namespace Circus.OrderBook
                     _security, time, price, quantity,
                     new[]
                     {
-                        new OrderFilled(_security, time, resting.ClientId, resting.OrderId, resting.ToOrder(), price,
-                            quantity, true),
-                        new OrderFilled(_security, time, aggressor.ClientId, aggressor.OrderId, aggressor.ToOrder(),
-                            price, quantity, false)
+                        new FillOrderConfirmed(_security, time, resting.ClientId, resting.ToOrder(), price, quantity,
+                            true),
+                        new FillOrderConfirmed(_security, time, aggressor.ClientId, aggressor.ToOrder(), price,
+                            quantity, false)
                     }
                 ));
 
