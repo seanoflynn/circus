@@ -20,4 +20,5 @@ jobs:
         uses: rohith/publish-nuget@c12b8546b67672ee38ac87bea491ac94a587f7cc
         with:
           PROJECT_FILE_PATH: Circus/Circus.csproj
+          VERSION_REGEX: ^\s*<PackageVersion>(.*)<\/PackageVersion>\s*$          
           INCLUDE_SYMBOLS: true
