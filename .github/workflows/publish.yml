@@ -1,0 +1,23 @@
+name: publish to nuget
+on:
+  push:
+    branches:
+      - main
+jobs:
+  publish:
+    name: build, pack & publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Setup dotnet
+        uses: actions/setup-dotnet@v1
+        with:
+          dotnet-version: 5.0.x
+
+      - name: publish on version change
+        id: publish_nuget
+        uses: rohith/publish-nuget@c12b8546b67672ee38ac87bea491ac94a587f7cc
+        with:
+          PROJECT_FILE_PATH: Circus/Circus.csproj
+          INCLUDE_SYMBOLS: true

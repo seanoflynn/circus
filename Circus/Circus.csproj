@@ -4,7 +4,7 @@
         <TargetFramework>net5.0</TargetFramework>
         <Nullable>enable</Nullable>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-        <PackageVersion>0.3.2</PackageVersion>
+        <PackageVersion>0.3.3</PackageVersion>
         <Title>Circus</Title>
         <Authors>seanoflynn</Authors>
         <Description>Financial exchange simulator.</Description>
