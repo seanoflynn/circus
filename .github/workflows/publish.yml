@@ -22,3 +22,4 @@ jobs:
           PROJECT_FILE_PATH: Circus/Circus.csproj
           VERSION_REGEX: ^\s*<PackageVersion>(.*)<\/PackageVersion>\s*$          
           INCLUDE_SYMBOLS: true
+          NUGET_KEY: ${{secrets.NUGET_API_KEY}}
