@@ -12,7 +12,6 @@ Priority
 - [x] Sessions
 - [ ] Simulator
 - [ ] Stop orders
-- [ ] GTC, GTD
 
 ## Features
 
@@ -30,7 +29,7 @@ Order properties
 
 Time in force/order validity
 - [x] Day orders
-- [ ] GTC orders
+- [x] GTC orders
 - [ ] GTD orders
 - [ ] FAK/FOK orders
 

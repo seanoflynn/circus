@@ -1514,7 +1514,84 @@ namespace Circus.Tests.OrderBook
             Assert.AreEqual(8, matched2.Fills[1].Order.FilledQuantity);
             Assert.AreEqual(0, matched2.Fills[1].Order.RemainingQuantity);
         }
+        
+        
+        [Test]
+        public void CreateLimitOrder_MatchGoodTilCanceledAfterReopen()
+        {
+            // arrange
+            Book.UpdateStatus(OrderBookStatus.Open);
+            Book.CreateLimitOrder(ClientId1, OrderId1, OrderValidity.GoodTilCanceled, Side.Buy, 100, 5);
+            TimeProvider.SetCurrentTime(Now2);
+            Book.UpdateStatus(OrderBookStatus.Closed);
+            TimeProvider.SetCurrentTime(Now3);
+            Book.UpdateStatus(OrderBookStatus.Open);
+            TimeProvider.SetCurrentTime(Now4);
 
+            // act
+            var events = Book.CreateLimitOrder(ClientId2, OrderId2, OrderValidity.Day, Side.Sell, 100, 8);
+
+            // assert
+            Assert.IsNotNull(events);
+            Assert.AreEqual(2, events.Count);
+
+            var matched = events[1] as OrdersMatched;
+            Assert.IsNotNull(matched);
+            Assert.AreEqual(Sec, matched.Security);
+            Assert.AreEqual(Now4, matched.Time);
+            Assert.AreEqual(100, matched.Price);
+            Assert.AreEqual(5, matched.Quantity);
+            Assert.IsNotNull(matched.Fills);
+            Assert.AreEqual(2, matched.Fills.Count);
+
+            Assert.AreEqual(Sec, matched.Fills[0].Security);
+            Assert.AreEqual(Now4, matched.Fills[0].Time);
+            Assert.AreEqual(ClientId1, matched.Fills[0].ClientId);
+            Assert.AreEqual(OrderId1, matched.Fills[0].OrderId);
+            Assert.AreEqual(100, matched.Fills[0].Price);
+            Assert.AreEqual(5, matched.Fills[0].Quantity);
+            Assert.AreEqual(true, matched.Fills[0].IsResting);
+            Assert.AreEqual(ClientId1, matched.Fills[0].Order.ClientId);
+            Assert.AreEqual(OrderId1, matched.Fills[0].Order.OrderId);
+            Assert.AreEqual(Sec, matched.Fills[0].Order.Security);
+            Assert.AreEqual(Now1, matched.Fills[0].Order.CreatedTime);
+            Assert.AreEqual(Now1, matched.Fills[0].Order.ModifiedTime);
+            Assert.AreEqual(Now4, matched.Fills[0].Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Filled, matched.Fills[0].Order.Status);
+            Assert.AreEqual(OrderType.Limit, matched.Fills[0].Order.Type);
+            Assert.AreEqual(OrderValidity.GoodTilCanceled, matched.Fills[0].Order.OrderValidity);
+            Assert.AreEqual(Side.Buy, matched.Fills[0].Order.Side);
+            Assert.AreEqual(100, matched.Fills[0].Order.Price);
+            Assert.IsNull(matched.Fills[0].Order.StopPrice);
+            Assert.AreEqual(5, matched.Fills[0].Order.Quantity);
+            Assert.AreEqual(5, matched.Fills[0].Order.FilledQuantity);
+            Assert.AreEqual(0, matched.Fills[0].Order.RemainingQuantity);
+
+            Assert.AreEqual(Sec, matched.Fills[1].Security);
+            Assert.AreEqual(Now4, matched.Fills[1].Time);
+            Assert.AreEqual(ClientId2, matched.Fills[1].ClientId);
+            Assert.AreEqual(OrderId2, matched.Fills[1].OrderId);
+            Assert.AreEqual(100, matched.Fills[1].Price);
+            Assert.AreEqual(5, matched.Fills[1].Quantity);
+            Assert.AreEqual(false, matched.Fills[1].IsResting);
+            Assert.AreEqual(ClientId2, matched.Fills[1].Order.ClientId);
+            Assert.AreEqual(OrderId2, matched.Fills[1].Order.OrderId);
+            Assert.AreEqual(Sec, matched.Fills[1].Order.Security);
+            Assert.AreEqual(Now4, matched.Fills[1].Order.CreatedTime);
+            Assert.AreEqual(Now4, matched.Fills[1].Order.ModifiedTime);
+            Assert.IsNull(matched.Fills[1].Order.CompletedTime);
+            Assert.AreEqual(OrderStatus.Working, matched.Fills[1].Order.Status);
+            Assert.AreEqual(OrderType.Limit, matched.Fills[1].Order.Type);
+            Assert.AreEqual(OrderValidity.Day, matched.Fills[1].Order.OrderValidity);
+            Assert.AreEqual(Side.Sell, matched.Fills[1].Order.Side);
+            Assert.AreEqual(100, matched.Fills[1].Order.Price);
+            Assert.IsNull(matched.Fills[1].Order.StopPrice);
+            Assert.AreEqual(8, matched.Fills[1].Order.Quantity);
+            Assert.AreEqual(5, matched.Fills[1].Order.FilledQuantity);
+            Assert.AreEqual(3, matched.Fills[1].Order.RemainingQuantity);
+        }
+        
+        
         [Test]
         public void CreateLimitOrder_MarketClosed_Rejected()
         {
@@ -2290,6 +2367,28 @@ namespace Circus.Tests.OrderBook
             Assert.AreEqual(5, expired.Order.Quantity);
             Assert.AreEqual(0, expired.Order.FilledQuantity);
             Assert.AreEqual(0, expired.Order.RemainingQuantity);
+        }
+        
+        [Test]
+        public void UpdateStatus_Closed_LeaveGoodTilCanceledOrders()
+        {
+            // arrange
+            Book.UpdateStatus(OrderBookStatus.Open);
+            Book.CreateLimitOrder(ClientId1, OrderId1, OrderValidity.GoodTilCanceled, Side.Buy, 100, 5);
+            TimeProvider.SetCurrentTime(Now2);
+
+            // act
+            var events = Book.UpdateStatus(OrderBookStatus.Closed);
+
+            // assert
+            Assert.IsNotNull(events);
+            Assert.AreEqual(1, events.Count);
+            
+            var statusChanged = events[0] as StatusChanged;
+            Assert.IsNotNull(statusChanged);
+            Assert.AreEqual(Sec, statusChanged.Security);
+            Assert.AreEqual(OrderBookStatus.Closed, statusChanged.Status);
+            Assert.AreEqual(Now2, statusChanged.Time);
         }
 
         [Test]
