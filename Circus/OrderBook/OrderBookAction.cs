@@ -10,15 +10,12 @@ namespace Circus.OrderBook
     public record OrderAction(Security Security, Guid ClientId, Guid OrderId)
         : OrderBookAction(Security);
 
-    public record CreateLimitOrder(Security Security, Guid ClientId, Guid OrderId, OrderValidity OrderValidity,
-            Side Side, decimal Price, int Quantity)
+    public record CreateOrder(Security Security, Guid ClientId, Guid OrderId, OrderValidity OrderValidity, Side Side,
+            int Quantity, decimal? Price = null, decimal? TriggerPrice = null)
         : OrderAction(Security, ClientId, OrderId);
 
-    public record CreateMarketOrder(Security Security, Guid ClientId, Guid OrderId, OrderValidity OrderValidity,
-            Side Side, int Quantity)
-        : OrderAction(Security, ClientId, OrderId);
-
-    public record UpdateLimitOrder(Security Security, Guid ClientId, Guid OrderId, decimal Price, int Quantity)
+    public record UpdateOrder(Security Security, Guid ClientId, Guid OrderId, int? Quantity = null,
+            decimal? Price = null, decimal? TriggerPrice = null)
         : OrderAction(Security, ClientId, OrderId);
 
     public record CancelOrder(Security Security, Guid ClientId, Guid OrderId)

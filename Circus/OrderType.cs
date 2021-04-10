@@ -4,8 +4,7 @@ namespace Circus
     {
         Market,
         Limit,
-        Stop,
-        StopLimit,
-        MarketLimit
+        StopMarket,
+        StopLimit
     }
 }

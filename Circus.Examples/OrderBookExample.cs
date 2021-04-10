@@ -24,8 +24,8 @@ namespace Circus.Examples
             sessionProvider.Changed += (_, args) => book.UpdateStatus(args.Status);
             sessionProvider.Update(new DateTime(2020, 1, 1, 1, 30, 0));
 
-            Print(book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 100, 3));
-            Print(book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Sell, 100, 5));
+            Print(book.CreateOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 3, 100));
+            Print(book.CreateOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Sell, 5, 100));
         }
 
         public static void BackTestExample()
@@ -55,7 +55,7 @@ namespace Circus.Examples
                 // set data time
                 timeProvider.SetCurrentTime(time);
                 // pass in data
-                Print(book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 100, 3));
+                Print(book.CreateOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 3, 100));
             }
         }
 
@@ -83,8 +83,8 @@ namespace Circus.Examples
                 }
             });
 
-            Print(book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 100, 3));
-            Print(book.CreateLimitOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Sell, 100, 5));
+            Print(book.CreateOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 3, 100));
+            Print(book.CreateOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Sell, 5, 100));
         }
 
         private static void Print(IEnumerable<OrderBookEvent> events)

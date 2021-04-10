@@ -13,10 +13,10 @@ namespace Circus
         OrderType Type,
         OrderValidity OrderValidity,
         Side Side,
-        decimal Price,
-        decimal? StopPrice,
         int Quantity,
         int FilledQuantity,
-        int RemainingQuantity
+        int RemainingQuantity,
+        decimal? Price,
+        decimal? TriggerPrice
     );
 }

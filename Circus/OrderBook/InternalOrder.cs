@@ -11,31 +11,35 @@ namespace Circus.OrderBook
         public DateTime CreatedTime { get; }
         public DateTime ModifiedTime { get; private set; }
         public DateTime? CompletedTime { get; private set; }
+        public OrderStatus Status { get; private set; }
         public OrderType Type { get; private set; }
         public OrderValidity Validity { get; }
         public Side Side { get; }
-        public decimal Price { get; private set; }
         public int Quantity { get; private set; }
         public int RemainingQuantity { get; private set; }
         public int FilledQuantity { get; private set; }
-        public OrderStatus Status { get; private set; } = OrderStatus.Working;
-
+        public decimal? Price { get; private set; }
+        public decimal? TriggerPrice { get; private set; }
+        
         public InternalOrder(long sequenceNumber, Guid clientId, Guid orderId, Security security, DateTime time,
-            OrderType type, OrderValidity validity, Side side, decimal price, int quantity)
+            OrderStatus status, OrderType type, OrderValidity validity, Side side, int quantity, decimal? price,
+            decimal? triggerPrice)
         {
             SequenceNumber = sequenceNumber;
             ClientId = clientId;
             OrderId = orderId;
             Security = security;
             CreatedTime = time;
-            Type = type;
             ModifiedTime = time;
+            Status = status;
+            Type = type;
             Validity = validity;
             Side = side;
-            Price = price;
             Quantity = quantity;
             RemainingQuantity = Quantity;
             FilledQuantity = 0;
+            Price = price;
+            TriggerPrice = triggerPrice;
         }
 
         public override string ToString() => 
@@ -44,7 +48,7 @@ namespace Circus.OrderBook
         public Order ToOrder()
         {
             return new(ClientId, OrderId, Security, CreatedTime, ModifiedTime, CompletedTime, Status, Type, Validity,
-                Side, Price, null, Quantity, FilledQuantity, RemainingQuantity);
+                Side, Quantity, FilledQuantity, RemainingQuantity, Price, TriggerPrice);
         }
 
         public void Cancel(DateTime time)
@@ -61,19 +65,25 @@ namespace Circus.OrderBook
             Status = OrderStatus.Expired;
         }
 
-        public void Update(long sequenceNumber, DateTime time, decimal price, int quantity)
+        public void Update(long sequenceNumber, DateTime time, int? quantity, decimal? triggerPrice, decimal? price)
         {
-            // TODO: validate quantity
-
-            if (price != Price || quantity > Quantity)
+            SequenceNumber = sequenceNumber;
+            ModifiedTime = time;
+            if (quantity.HasValue)
             {
-                SequenceNumber = sequenceNumber;
+                RemainingQuantity -= (Quantity - quantity.Value);
+                Quantity = quantity.Value;
             }
 
-            ModifiedTime = time;
-            Price = price;
-            RemainingQuantity -= (Quantity - quantity);
-            Quantity = quantity;
+            if (triggerPrice.HasValue)
+            {
+                TriggerPrice = triggerPrice;
+            }
+
+            if (price.HasValue)
+            {
+                Price = price;
+            }
         }
 
         public void Fill(DateTime time, int quantity)
@@ -90,8 +100,15 @@ namespace Circus.OrderBook
             }
         }
 
-        public void ConvertToLimit()
+        public void ConvertToLimit(DateTime time, long sequenceNumber, decimal? price = null)
         {
+            if (price.HasValue)
+            {
+                Price = price;
+            }
+
+            SequenceNumber = sequenceNumber;
+            ModifiedTime = time;
             Type = OrderType.Limit;
         }
     }

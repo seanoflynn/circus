@@ -13,14 +13,11 @@ namespace Circus.OrderBook
 
         IList<OrderBookEvent> Process(OrderBookAction action);
 
-        IList<OrderBookEvent> CreateLimitOrder(Guid clientId, Guid orderId, OrderValidity validity, Side side,
-            decimal price,
-            int quantity);
+        IList<OrderBookEvent> CreateOrder(Guid clientId, Guid orderId, OrderValidity validity, Side side, int quantity,
+            decimal? price = null, decimal? triggerPrice = null);
 
-        IList<OrderBookEvent> CreateMarketOrder(Guid clientId, Guid orderId, OrderValidity validity, Side side,
-            int quantity);
-
-        IList<OrderBookEvent> UpdateLimitOrder(Guid clientId, Guid orderId, decimal price, int quantity);
+        IList<OrderBookEvent> UpdateOrder(Guid clientId, Guid orderId, int? quantity = null, decimal? price = null,
+            decimal? triggerPrice = null);
 
         IList<OrderBookEvent> CancelOrder(Guid clientId, Guid id);
 
