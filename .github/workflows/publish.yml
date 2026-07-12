@@ -7,6 +7,8 @@ jobs:
   publish:
     name: build, pack & publish
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write # required to request the OIDC token for trusted publishing
     steps:
       - uses: actions/checkout@v4
 
@@ -15,11 +17,17 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: publish on version change
-        id: publish_nuget
-        uses: rohith/publish-nuget@c12b8546b67672ee38ac87bea491ac94a587f7cc
+      - name: Build
+        run: dotnet build Circus/Circus.csproj -c Release
+
+      - name: Pack
+        run: dotnet pack Circus/Circus.csproj -c Release -o artifacts --no-build
+
+      - name: NuGet login (OIDC -> temporary API key)
+        uses: NuGet/login@v1
+        id: login
         with:
-          PROJECT_FILE_PATH: Circus/Circus.csproj
-          VERSION_REGEX: ^\s*<PackageVersion>(.*)<\/PackageVersion>\s*$          
-          INCLUDE_SYMBOLS: true
-          NUGET_KEY: ${{secrets.NUGET_API_KEY}}
+          user: seanoflynn
+
+      - name: Push to NuGet
+        run: dotnet nuget push "artifacts/*.nupkg" --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
