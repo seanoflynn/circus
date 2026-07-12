@@ -110,6 +110,7 @@ namespace Circus.OrderBook
             SequenceNumber = sequenceNumber;
             ModifiedTime = time;
             Type = OrderType.Limit;
+            Status = OrderStatus.Working;
         }
     }
 }
