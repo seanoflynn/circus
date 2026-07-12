@@ -4,7 +4,7 @@ A financial exchange simulator.
 
 ## Dependencies
 
-[.NET 5](https://dotnet.microsoft.com/download) is required. There are no other dependencies.
+[.NET 10](https://dotnet.microsoft.com/download) is required. There are no other dependencies.
 
 ## To Do
 
