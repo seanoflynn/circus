@@ -13,22 +13,13 @@ A financial exchange simulator.
 - A resting order that is partially filled, then modified, rests short by exactly its pre-modify filled quantity
 - Process(OrderBookAction) swaps Price and TriggerPrice for both CreateOrder and UpdateOrder
 
-## To Do
-
-Priority
-- [x] Sessions
-- [ ] Simulator
-- [ ] Stop orders
-
 ## Features
 
 Order types
 - [x] Limit orders
 - [x] Market orders
-- [ ] Market limit orders
-- [ ] Stop market orders
-- [ ] Stop limit orders
-- [ ] OCO orders
+- [x] Stop market orders
+- [x] Stop limit orders
 
 Order properties
 - [ ] Min quantity
@@ -37,8 +28,8 @@ Order properties
 Time in force/order validity
 - [x] Day orders
 - [x] GTC orders
+- [x] FAK/FOK orders
 - [ ] GTD orders
-- [ ] FAK/FOK orders
 
 Sessions
 - [x] Time provider
@@ -63,10 +54,3 @@ Matching algorithms
 - [ ] Open auction
 - [ ] Allocation
 - [ ] Pro-rata
-
-Contract types
-- [ ] Futures (expiry)
-- [ ] Calendar/spread contracts (implied pricing)
-
-## Examples
-

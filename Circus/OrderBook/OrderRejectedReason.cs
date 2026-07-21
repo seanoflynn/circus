@@ -16,6 +16,7 @@ namespace Circus.OrderBook
         TriggerPriceMustBeLessThanPrice,
         TriggerPriceMustBeGreaterThanPrice,
         NoChange,
+        InsufficientLiquidityForFillOrKill,
         // PendingCancelOrReplace,
         // PriceExceedsCurrentPrice,
         // PriceExceedsCurrentPriceBand,

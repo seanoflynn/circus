@@ -109,6 +109,10 @@ namespace Circus.OrderBook
                     return RejectCreate(clientId, orderId, OrderRejectedReason.NoOrdersToMatchMarketOrder);
             }
 
+            if (validity == OrderValidity.FillOrKill && !triggerPrice.HasValue &&
+                !HasSufficientLiquidity(side, price!.Value, quantity))
+                return RejectCreate(clientId, orderId, OrderRejectedReason.InsufficientLiquidityForFillOrKill);
+
             _nextSequenceNumber++;
             var order = new InternalOrder(_nextSequenceNumber, clientId, orderId, _security, Now(), status, type,
                 validity, side, quantity, price, triggerPrice);
@@ -122,6 +126,10 @@ namespace Circus.OrderBook
             List<OrderBookEvent> events = new();
             events.Add(new CreateOrderConfirmed(_security, Now(), clientId, order.ToOrder()));
             events.AddRange(Match());
+
+            if (order.Validity == OrderValidity.FillAndKill && order.Status == OrderStatus.Working)
+                events.Add(CancelRemainder(order, OrderCancelledReason.FillAndKillNotFilled));
+
             return events;
         }
 
@@ -137,6 +145,31 @@ namespace Circus.OrderBook
             price = opposing.First().Key +
                     ((side == Side.Buy ? 1 : -1) * (_security.MarketOrderProtectionTicks * _security.TickSize));
             return true;
+        }
+
+        private bool HasSufficientLiquidity(Side side, decimal price, int quantity)
+        {
+            var opposing = _working[side == Side.Buy ? Side.Sell : Side.Buy];
+            var total = 0;
+            foreach (var level in opposing)
+            {
+                var crosses = side == Side.Buy ? level.Key <= price : level.Key >= price;
+                if (!crosses)
+                    break;
+
+                total += level.Value.Sum(o => o.Value.RemainingQuantity);
+                if (total >= quantity)
+                    return true;
+            }
+
+            return total >= quantity;
+        }
+
+        private OrderBookEvent CancelRemainder(InternalOrder order, OrderCancelledReason reason)
+        {
+            order.Cancel(Now());
+            CompleteOrder(order);
+            return new CancelOrderConfirmed(_security, Now(), order.ClientId, order.ToOrder(), reason);
         }
 
         public IList<OrderBookEvent> UpdateOrder(Guid clientId, Guid orderId, int? quantity = null, decimal? price = null,
@@ -392,6 +425,12 @@ namespace Circus.OrderBook
             {
                 events.AddRange(TriggerStops(triggered, time));
                 events.AddRange(Match());
+
+                foreach (var order in triggered.Values)
+                {
+                    if (order.Validity == OrderValidity.FillAndKill && order.RemainingQuantity > 0)
+                        events.Add(CancelRemainder(order, OrderCancelledReason.FillAndKillNotFilled));
+                }
             }
 
             return events;
@@ -404,7 +443,7 @@ namespace Circus.OrderBook
             foreach (var (_, order) in orders)
             {
                 // calculate price for stop market orders
-                decimal? newPrice = null;
+                decimal? newPrice = order.Price;
                 if (order.Type == OrderType.StopMarket && !TryGetLimitPrice(order.Side, out newPrice))
                 {
                     order.Cancel(Now());
@@ -415,7 +454,19 @@ namespace Circus.OrderBook
                         OrderCancelledReason.NoOrdersToMatchMarketOrder));
                     continue;
                 }
-                
+
+                if (order.Validity == OrderValidity.FillOrKill &&
+                    !HasSufficientLiquidity(order.Side, newPrice!.Value, order.RemainingQuantity))
+                {
+                    order.Cancel(Now());
+                    FinishOrder(order);
+                    Console.WriteLine($"order cancelled, insufficient liquidity when fill-or-kill order triggered: {order}");
+
+                    events.Add(new CancelOrderConfirmed(_security, Now(), order.ClientId, order.ToOrder(),
+                        OrderCancelledReason.FillOrKillNotFilled));
+                    continue;
+                }
+
                 _nextSequenceNumber++;
                 order.ConvertToLimit(time, _nextSequenceNumber, newPrice);
 
