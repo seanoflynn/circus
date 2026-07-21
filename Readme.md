@@ -10,7 +10,6 @@ A financial exchange simulator.
 
 - Add price validation against tick size
 - An order id that has ever completed (by cancel or fill) permanently poisons that id — reusing it crashes the engine
-- Process(OrderBookAction) swaps Price and TriggerPrice for both CreateOrder and UpdateOrder
 
 ## Features
 
