@@ -10,7 +10,7 @@ jobs:
     permissions:
       id-token: write # required to request the OIDC token for trusted publishing
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup dotnet
         uses: actions/setup-dotnet@v4
