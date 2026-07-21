@@ -9,8 +9,6 @@ A financial exchange simulator.
 ## Known bugs
 
 - Add price validation against tick size
-- A resting order that is partially filled, then modified, rests short by exactly its pre-modify filled quantity
-- Process(OrderBookAction) swaps Price and TriggerPrice for both CreateOrder and UpdateOrder
 
 ## Features
 

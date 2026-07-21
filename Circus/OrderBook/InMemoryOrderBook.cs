@@ -58,9 +58,9 @@ namespace Circus.OrderBook
             return action switch
             {
                 CreateOrder create => CreateOrder(create.ClientId, create.OrderId, create.OrderValidity, create.Side,
-                    create.Quantity, create.TriggerPrice, create.Price),
-                UpdateOrder update => UpdateOrder(update.ClientId, update.OrderId, update.Quantity, update.TriggerPrice,
-                    update.Price),
+                    create.Quantity, create.Price, create.TriggerPrice),
+                UpdateOrder update => UpdateOrder(update.ClientId, update.OrderId, update.Quantity, update.Price,
+                    update.TriggerPrice),
                 CancelOrder cancel => CancelOrder(cancel.ClientId, cancel.OrderId),
                 UpdateStatus update => UpdateStatus(update.Status),
                 _ => throw new ArgumentException("Unknown order book action")
