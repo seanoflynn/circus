@@ -3,6 +3,8 @@ namespace Circus
     public enum OrderValidity
     {
         Day,
-        GoodTilCanceled
+        GoodTilCanceled,
+        FillAndKill,
+        FillOrKill
     }
 }

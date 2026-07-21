@@ -4,6 +4,8 @@ namespace Circus.OrderBook
     {
         Cancelled,
         UpdatedQuantityLowerThanFilledQuantity,
-        NoOrdersToMatchMarketOrder
+        NoOrdersToMatchMarketOrder,
+        FillAndKillNotFilled,
+        FillOrKillNotFilled
     }
 }
