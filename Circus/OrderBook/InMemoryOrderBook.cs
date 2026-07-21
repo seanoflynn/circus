@@ -101,6 +101,8 @@ namespace Circus.OrderBook
                 return RejectCreate(clientId, orderId, OrderRejectedReason.TriggerPriceMustBeLessThanLastTradedPrice);
             if (_orders.ContainsKey(orderId))
                 return RejectCreate(clientId, orderId, OrderRejectedReason.OrderInBook);
+            if (_completedOrders.ContainsKey(orderId))
+                return RejectCreate(clientId, orderId, OrderRejectedReason.OrderIdAlreadyUsed);
 
             if (type == OrderType.Market)
             {

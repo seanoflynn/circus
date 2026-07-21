@@ -2028,5 +2028,47 @@ namespace Circus.Tests.OrderBook
             Assert.AreEqual(OrderRejectedReason.OrderInBook, rejected.Reason);
         }
 
+        [Test]
+        public void OrderIdReusedAfterCancel_Rejected()
+        {
+            // arrange
+            Book.UpdateStatus(OrderBookStatus.Open);
+            Book.CreateOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, 3, 100);
+            Book.CancelOrder(ClientId1, OrderId1);
+
+            // act
+            var events = Book.CreateOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Sell, 5, 100);
+
+            // assert
+            Assert.IsNotNull(events);
+            Assert.AreEqual(1, events.Count);
+            var rejected = events[0] as CreateOrderRejected;
+            Assert.IsNotNull(rejected);
+            Assert.AreEqual(ClientId1, rejected.ClientId);
+            Assert.AreEqual(OrderId1, rejected.OrderId);
+            Assert.AreEqual(OrderRejectedReason.OrderIdAlreadyUsed, rejected.Reason);
+        }
+
+        [Test]
+        public void OrderIdReusedAfterFullFill_Rejected()
+        {
+            // arrange
+            Book.UpdateStatus(OrderBookStatus.Open);
+            Book.CreateOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Sell, 3, 100);
+            Book.CreateOrder(ClientId2, OrderId2, OrderValidity.Day, Side.Buy, 3, 100); // fully fills OrderId1
+
+            // act
+            var events = Book.CreateOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Sell, 5, 100);
+
+            // assert
+            Assert.IsNotNull(events);
+            Assert.AreEqual(1, events.Count);
+            var rejected = events[0] as CreateOrderRejected;
+            Assert.IsNotNull(rejected);
+            Assert.AreEqual(ClientId1, rejected.ClientId);
+            Assert.AreEqual(OrderId1, rejected.OrderId);
+            Assert.AreEqual(OrderRejectedReason.OrderIdAlreadyUsed, rejected.Reason);
+        }
+
     }
 }
