@@ -25,8 +25,8 @@ namespace Circus.OrderBook
         private readonly Dictionary<Side, SortedDictionary<decimal, SortedDictionary<long, InternalOrder>>> _stops =
             new()
             {
-                {Side.Buy, new(new DescendingComparer())},
-                {Side.Sell, new()}
+                {Side.Buy, new()},
+                {Side.Sell, new(new DescendingComparer())}
             };
 
         private readonly Dictionary<Guid, InternalOrder> _orders = new();
@@ -278,6 +278,11 @@ namespace Circus.OrderBook
                 _working[order.Side].Remove(price, order.SequenceNumber);
             }
 
+            FinishOrder(order);
+        }
+
+        private void FinishOrder(InternalOrder order)
+        {
             _orders.Remove(order.OrderId);
             _completedOrders.Add(order.OrderId, order);
         }
@@ -359,7 +364,7 @@ namespace Circus.OrderBook
 
             var buys = _stops[Side.Buy].FirstOrDefault();
             while (!buys.Equals(default(KeyValuePair<decimal, SortedDictionary<long, InternalOrder>>)) &&
-                   buys.Key >= _lastTradedPrice)
+                   buys.Key <= _lastTradedPrice)
             {
                 foreach (var (seqNum, order) in buys.Value)
                 {
@@ -371,7 +376,7 @@ namespace Circus.OrderBook
 
             var sells = _stops[Side.Sell].FirstOrDefault();
             while (!sells.Equals(default(KeyValuePair<decimal, SortedDictionary<long, InternalOrder>>)) &&
-                   sells.Key <= _lastTradedPrice)
+                   sells.Key >= _lastTradedPrice)
             {
                 foreach (var (seqNum, order) in sells.Value)
                 {
@@ -403,7 +408,7 @@ namespace Circus.OrderBook
                 if (order.Type == OrderType.StopMarket && !TryGetLimitPrice(order.Side, out newPrice))
                 {
                     order.Cancel(Now());
-                    CompleteOrder(order);
+                    FinishOrder(order);
                     Console.WriteLine($"order cancelled, book empty when order triggered: {order}");
 
                     events.Add(new CancelOrderConfirmed(_security, Now(), order.ClientId, order.ToOrder(),
@@ -416,7 +421,7 @@ namespace Circus.OrderBook
 
                 var limitPrice = order.Price ?? throw new Exception("missing price");
                 _working[order.Side].Add(limitPrice, order.SequenceNumber, order);
-                
+
                 events.Add(new UpdateOrderConfirmed(_security, time, order.ClientId, order.ToOrder()));
             }
 
