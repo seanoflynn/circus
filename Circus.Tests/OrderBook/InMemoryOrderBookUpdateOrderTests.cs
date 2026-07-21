@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using Circus.OrderBook;
 using Circus.TimeProviders;
 using NUnit.Framework;
@@ -378,6 +379,33 @@ namespace Circus.Tests.OrderBook
             Assert.AreEqual(5, cancelled.Order.Quantity);
             Assert.AreEqual(4, cancelled.Order.FilledQuantity);
             Assert.AreEqual(0, cancelled.Order.RemainingQuantity);
+        }
+
+        [Test]
+        public void UpdateQuantityAfterPartialFill_RemainingReflectsNewTotalMinusFilled()
+        {
+            // arrange - quantity on UpdateOrder is the order's new TOTAL size (filled + remaining),
+            // not the new remaining/resting amount (see issue #1, finding 2)
+            Book.UpdateStatus(OrderBookStatus.Open);
+            Book.CreateOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Sell, 10, 100);
+            Book.CreateOrder(ClientId2, OrderId2, OrderValidity.Day, Side.Buy, 4, 100); // partial fill: 4@100
+            TimeProvider.SetCurrentTime(Now2);
+
+            // act
+            var events = Book.UpdateOrder(ClientId1, OrderId1, 6, 110);
+
+            // assert
+            Assert.IsNotNull(events);
+            var updated = events[0] as UpdateOrderConfirmed;
+            Assert.IsNotNull(updated);
+            Assert.AreEqual(6, updated.Order.Quantity);
+            Assert.AreEqual(4, updated.Order.FilledQuantity);
+            Assert.AreEqual(2, updated.Order.RemainingQuantity);
+
+            // a follow-up buy for the full new total should only find the 2 that remain
+            var matched = Book.CreateOrder(ClientId3, OrderId3, OrderValidity.Day, Side.Buy, 6, 110)
+                .OfType<OrdersMatched>().Single();
+            Assert.AreEqual(2, matched.Quantity);
         }
 
         [Test]

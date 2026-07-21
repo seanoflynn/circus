@@ -71,6 +71,7 @@ namespace Circus.OrderBook
             ModifiedTime = time;
             if (quantity.HasValue)
             {
+                // quantity is the new total size, so remaining = new total - already filled
                 RemainingQuantity -= (Quantity - quantity.Value);
                 Quantity = quantity.Value;
             }
