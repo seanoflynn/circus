@@ -1850,6 +1850,24 @@ namespace Circus.Tests.OrderBook
             Assert.AreEqual(OrderId1, rejected.OrderId);
         }
 
+        [TestCase(-10)]
+        [TestCase(-100)]
+        public void NegativePriceOnTick_Success(decimal price)
+        {
+            // arrange - negative prices are legitimate (e.g. calendar spreads, or the 2020 WTI
+            // crude event) and must still be accepted as long as they're on a valid tick
+            Book.UpdateStatus(OrderBookStatus.Open);
+
+            // act
+            var events = Book.CreateOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, 6, price);
+
+            // assert
+            Assert.IsNotNull(events);
+            var created = events[0] as CreateOrderConfirmed;
+            Assert.IsNotNull(created);
+            Assert.AreEqual(price, created.Order.Price);
+        }
+
         [TestCase(8)]
         [TestCase(-8)]
         [TestCase(-108)]

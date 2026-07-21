@@ -6,10 +6,6 @@ A financial exchange simulator.
 
 [.NET 10](https://dotnet.microsoft.com/download) is required. There are no other dependencies.
 
-## Known bugs
-
-- Add price validation against tick size
-
 ## Features
 
 Order types
