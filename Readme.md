@@ -9,7 +9,6 @@ A financial exchange simulator.
 ## Known bugs
 
 - Add price validation against tick size
-- An order id that has ever completed (by cancel or fill) permanently poisons that id — reusing it crashes the engine
 
 ## Features
 

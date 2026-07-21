@@ -215,10 +215,13 @@ namespace Circus.Tests.OrderBook
             Assert.AreEqual(OrderCancelledReason.NoOrdersToMatchMarketOrder, cancelled.Reason);
             Assert.AreEqual(OrderStatus.Cancelled, cancelled.Order.Status);
 
-            // it should be safe to reuse the order id now it's completed, proving book state is consistent
+            // an order id is a permanent identity once it completes - reuse is rejected, not silently
+            // accepted (see issue #1), and book state remains consistent either way
             TimeProvider.SetCurrentTime(Now6);
             var recreate = Book.CreateOrder(ClientId3, OrderId3, OrderValidity.Day, Side.Buy, 1, 510);
-            Assert.IsInstanceOf<CreateOrderConfirmed>(recreate[0]);
+            var rejected = recreate[0] as CreateOrderRejected;
+            Assert.IsNotNull(rejected);
+            Assert.AreEqual(OrderRejectedReason.OrderIdAlreadyUsed, rejected.Reason);
         }
 
         [Test]

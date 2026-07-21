@@ -8,6 +8,7 @@ namespace Circus.OrderBook
         InvalidPriceIncrement,
         OrderNotInBook,
         OrderInBook,
+        OrderIdAlreadyUsed,
         TooLateToCancel,
         NoOrdersToMatchMarketOrder,
         NoLastTradedPrice,
