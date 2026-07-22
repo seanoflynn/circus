@@ -243,3 +243,6 @@ ModelManifest.xml
 
 .DS_Store
 .idea
+
+# BenchmarkDotNet run output
+BenchmarkDotNet.Artifacts/
