@@ -82,10 +82,6 @@ namespace Circus.Tests.OrderBook
             Assert.AreEqual(2, matched.Quantity);
 
             var restingOrder = matched.Fills[1].Order;
-            // stays reportable as MarketLimit at the order-entry level - neither this nor a
-            // plain Market order collapses to Limit. Market data feeds like CME's MDP 3.0 never
-            // expose order type either way, since TradeDataProducer/LevelDataProducer only ever
-            // consume price/quantity/depth, never Order.Type.
             Assert.AreEqual(OrderType.MarketLimit, restingOrder.Type);
             Assert.AreEqual(OrderStatus.Working, restingOrder.Status);
             Assert.AreEqual(100, restingOrder.Price);
