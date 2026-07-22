@@ -48,21 +48,21 @@ namespace Circus.Tests.OrderBook
 
             var created = events[0] as CreateOrderConfirmed;
             Assert.IsNotNull(created);
-            Assert.AreEqual(OrderType.MarketLimit, created.Order.Type);
+            Assert.AreEqual(OrderType.Limit, created.Order.Type);
             Assert.AreEqual(100, created.Order.Price);
 
             var matched = events[1] as OrdersMatched;
             Assert.IsNotNull(matched);
             Assert.AreEqual(100, matched.Price);
             Assert.AreEqual(3, matched.Quantity);
-            Assert.AreEqual(OrderType.MarketLimit, matched.Fills[1].Order.Type);
+            Assert.AreEqual(OrderType.Limit, matched.Fills[1].Order.Type);
             Assert.AreEqual(OrderStatus.Filled, matched.Fills[1].Order.Status);
             Assert.AreEqual(3, matched.Fills[1].Order.FilledQuantity);
             Assert.AreEqual(0, matched.Fills[1].Order.RemainingQuantity);
         }
 
         [Test]
-        public void PartialFillAtBestLevel_RestsAtBestPrice_TypeStaysMarketLimit()
+        public void PartialFillAtBestLevel_RestsAtBestPrice_TypeCollapsesToLimit()
         {
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
@@ -82,8 +82,10 @@ namespace Circus.Tests.OrderBook
             Assert.AreEqual(2, matched.Quantity);
 
             var restingOrder = matched.Fills[1].Order;
-            // not collapsed to Limit the way a plain Market order is - stays reportable
-            Assert.AreEqual(OrderType.MarketLimit, restingOrder.Type);
+            // collapses to Limit immediately, same as a plain Market order - MarketLimit is
+            // never observable outside this method once accepted (see MDP 3.0: a market-limit
+            // order is only ever seen on the wire as a trade print plus a resting limit order)
+            Assert.AreEqual(OrderType.Limit, restingOrder.Type);
             Assert.AreEqual(OrderStatus.Working, restingOrder.Status);
             Assert.AreEqual(100, restingOrder.Price);
             Assert.AreEqual(2, restingOrder.FilledQuantity);
@@ -133,7 +135,7 @@ namespace Circus.Tests.OrderBook
             Assert.AreEqual(500, matched.Price);
             Assert.AreEqual(2, matched.Quantity);
             var restingOrder = matched.Fills[1].Order;
-            Assert.AreEqual(OrderType.MarketLimit, restingOrder.Type);
+            Assert.AreEqual(OrderType.Limit, restingOrder.Type);
             Assert.AreEqual(500, restingOrder.Price);
             Assert.AreEqual(2, restingOrder.FilledQuantity);
             Assert.AreEqual(3, restingOrder.RemainingQuantity);
@@ -186,7 +188,7 @@ namespace Circus.Tests.OrderBook
             var cancelled = events[2] as CancelOrderConfirmed;
             Assert.IsNotNull(cancelled);
             Assert.AreEqual(OrderCancelledReason.FillAndKillNotFilled, cancelled.Reason);
-            Assert.AreEqual(OrderType.MarketLimit, cancelled.Order.Type);
+            Assert.AreEqual(OrderType.Limit, cancelled.Order.Type);
             Assert.AreEqual(OrderStatus.Cancelled, cancelled.Order.Status);
             Assert.AreEqual(2, cancelled.Order.FilledQuantity);
             Assert.AreEqual(0, cancelled.Order.RemainingQuantity);
@@ -226,20 +228,25 @@ namespace Circus.Tests.OrderBook
         [Test]
         public void Process_CreateOrder_MarketLimitFlagRoutesThrough()
         {
-            // arrange
-            Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Sell, 3, 100);
+            // arrange - a wide protection-tick band so we can tell whether the marketLimit flag
+            // actually reached CreateOrder: Type collapses to Limit either way, but the resolved
+            // price differs (best price only, vs best +/- protection ticks for a plain Market order)
+            var sec = new Security("GCZ6", SecurityType.Future, 10, 10, 20);
+            var book = new InMemoryOrderBook(sec, TimeProvider);
+            book.UpdateStatus(OrderBookStatus.Open);
+            book.CreateOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Sell, 3, 100);
             TimeProvider.SetCurrentTime(Now2);
 
             // act
-            var events = Book.Process(new CreateOrder(Sec, ClientId2, OrderId2, OrderValidity.Day, Side.Buy, 3,
+            var events = book.Process(new CreateOrder(sec, ClientId2, OrderId2, OrderValidity.Day, Side.Buy, 3,
                 MarketLimit: true));
 
             // assert
             Assert.IsNotNull(events);
             var created = events[0] as CreateOrderConfirmed;
             Assert.IsNotNull(created);
-            Assert.AreEqual(OrderType.MarketLimit, created.Order.Type);
+            Assert.AreEqual(OrderType.Limit, created.Order.Type);
+            Assert.AreEqual(100, created.Order.Price);
         }
     }
 }

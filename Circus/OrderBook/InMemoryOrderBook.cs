@@ -113,8 +113,7 @@ namespace Circus.OrderBook
                 var protectionTicks = type == OrderType.MarketLimit ? 0 : _security.MarketOrderProtectionTicks;
                 if(!TryGetLimitPrice(side, protectionTicks, out price))
                     return RejectCreate(clientId, orderId, OrderRejectedReason.NoOrdersToMatchMarketOrder);
-                if (type == OrderType.Market)
-                    type = OrderType.Limit;
+                type = OrderType.Limit;
             }
 
             if (validity == OrderValidity.FillOrKill && !triggerPrice.HasValue &&
