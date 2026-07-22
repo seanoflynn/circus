@@ -29,8 +29,8 @@ namespace Circus.OrderBook
                 {Side.Sell, new(new DescendingComparer())}
             };
 
-        private readonly Dictionary<long, InternalOrder> _orders = new();
-        private readonly Dictionary<long, InternalOrder> _completedOrders = new();
+        private readonly Dictionary<string, InternalOrder> _orders = new();
+        private readonly Dictionary<string, InternalOrder> _completedOrders = new();
 
         // every (companyId, clientOrderId) pair ever assigned by a client, permanently reserved -
         // used for per-client uniqueness checks, ownership enforcement, and Update/Cancel lookups
@@ -352,7 +352,7 @@ namespace Circus.OrderBook
             new() {new CreateOrderRejected(_security, Now(), companyId, clientOrderId, reason)};
 
         private List<OrderBookEvent> RejectUpdate(string companyId, string clientOrderId, string previousClientOrderId,
-                OrderRejectedReason reason, long? exchangeOrderId = null) =>
+                OrderRejectedReason reason, string? exchangeOrderId = null) =>
             new()
             {
                 new UpdateOrderRejected(_security, Now(), companyId, clientOrderId, previousClientOrderId,
@@ -360,7 +360,7 @@ namespace Circus.OrderBook
             };
 
         private List<OrderBookEvent> RejectCancel(string companyId, string clientOrderId, string previousClientOrderId,
-                OrderRejectedReason reason, long? exchangeOrderId = null) =>
+                OrderRejectedReason reason, string? exchangeOrderId = null) =>
             new()
             {
                 new CancelOrderRejected(_security, Now(), companyId, clientOrderId, previousClientOrderId,

@@ -6,7 +6,7 @@ namespace Circus.OrderBook
     {
         public long SequenceNumber { get; private set; }
         public string CompanyId { get; }
-        public long ExchangeOrderId { get; }
+        public string ExchangeOrderId { get; }
         public string ClientOrderId { get; private set; }
         public Security Security { get; }
         public DateTime CreatedTime { get; }
@@ -29,7 +29,7 @@ namespace Circus.OrderBook
         {
             SequenceNumber = sequenceNumber;
             CompanyId = companyId;
-            ExchangeOrderId = sequenceNumber;
+            ExchangeOrderId = sequenceNumber.ToString();
             ClientOrderId = clientOrderId;
             Security = security;
             CreatedTime = time;

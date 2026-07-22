@@ -21,9 +21,9 @@ namespace Circus.Simulator
 
         private readonly InMemoryOrderBook _shadowBook;
 
-        private readonly List<long> _liveIds = new();
-        private readonly Dictionary<long, int> _liveIndex = new();
-        private readonly Dictionary<long, LiveOrderInfo> _liveInfo = new();
+        private readonly List<string> _liveIds = new();
+        private readonly Dictionary<string, int> _liveIndex = new();
+        private readonly Dictionary<string, LiveOrderInfo> _liveInfo = new();
 
         // deterministic (derived from the seeded action sequence, not Guid.NewGuid()) so traces
         // stay reproducible for a given seed
@@ -108,7 +108,7 @@ namespace Circus.Simulator
                 order.Price, order.TriggerPrice);
         }
 
-        private void RemoveLive(long exchangeOrderId)
+        private void RemoveLive(string exchangeOrderId)
         {
             if (!_liveIndex.TryGetValue(exchangeOrderId, out var index))
                 return;
@@ -123,11 +123,11 @@ namespace Circus.Simulator
             _liveInfo.Remove(exchangeOrderId);
         }
 
-        private bool TryPickLive(out long exchangeOrderId, out LiveOrderInfo info)
+        private bool TryPickLive(out string exchangeOrderId, out LiveOrderInfo info)
         {
             if (_liveIds.Count == 0)
             {
-                exchangeOrderId = default;
+                exchangeOrderId = default!;
                 info = default!;
                 return false;
             }

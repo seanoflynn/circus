@@ -4,7 +4,7 @@ namespace Circus
 {
     public record Order(
         string CompanyId,
-        long ExchangeOrderId,
+        string ExchangeOrderId,
         string ClientOrderId,
         Security Security,
         DateTime CreatedTime,

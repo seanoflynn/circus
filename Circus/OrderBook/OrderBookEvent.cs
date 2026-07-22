@@ -9,7 +9,7 @@ namespace Circus.OrderBook
         : OrderBookEvent(Security, Time);
 
     public record OrderEvent(Security Security, DateTime Time, string CompanyId, string ClientOrderId,
-            long? ExchangeOrderId)
+            string? ExchangeOrderId)
         : OrderBookEvent(Security, Time);
 
     public record OrderConfirmedEvent(Security Security, DateTime Time, string CompanyId, Order Order)
@@ -34,7 +34,7 @@ namespace Circus.OrderBook
         : OrderConfirmedEvent(Security, Time, CompanyId, Order);
 
     public record OrderRejectedEvent(Security Security, DateTime Time, string CompanyId, string ClientOrderId,
-            long? ExchangeOrderId, OrderRejectedReason Reason)
+            string? ExchangeOrderId, OrderRejectedReason Reason)
         : OrderEvent(Security, Time, CompanyId, ClientOrderId, ExchangeOrderId);
 
     // Create is always rejected before an order (and thus an ExchangeOrderId) exists.
@@ -45,11 +45,11 @@ namespace Circus.OrderBook
     // ExchangeOrderId is populated once the target order has been located (null for rejections
     // that occur before lookup, e.g. MarketClosed or an invalid ClientOrderId).
     public record UpdateOrderRejected(Security Security, DateTime Time, string CompanyId, string ClientOrderId,
-            string PreviousClientOrderId, long? ExchangeOrderId, OrderRejectedReason Reason)
+            string PreviousClientOrderId, string? ExchangeOrderId, OrderRejectedReason Reason)
         : OrderRejectedEvent(Security, Time, CompanyId, ClientOrderId, ExchangeOrderId, Reason);
 
     public record CancelOrderRejected(Security Security, DateTime Time, string CompanyId, string ClientOrderId,
-            string PreviousClientOrderId, long? ExchangeOrderId, OrderRejectedReason Reason)
+            string PreviousClientOrderId, string? ExchangeOrderId, OrderRejectedReason Reason)
         : OrderRejectedEvent(Security, Time, CompanyId, ClientOrderId, ExchangeOrderId, Reason);
 
     public record OrdersMatched(Security Security, DateTime Time, decimal Price, int Quantity,
