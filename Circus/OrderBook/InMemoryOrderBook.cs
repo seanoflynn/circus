@@ -58,7 +58,7 @@ namespace Circus.OrderBook
             return action switch
             {
                 CreateOrder create => CreateOrder(create.ClientId, create.OrderId, create.OrderValidity, create.Side,
-                    create.Quantity, create.Price, create.TriggerPrice, create.MarketLimit),
+                    create.Quantity, create.Price, create.TriggerPrice, create.MarketLimit, create.GoodTilDate),
                 UpdateOrder update => UpdateOrder(update.ClientId, update.OrderId, update.Quantity, update.Price,
                     update.TriggerPrice),
                 CancelOrder cancel => CancelOrder(cancel.ClientId, cancel.OrderId),
@@ -68,7 +68,8 @@ namespace Circus.OrderBook
         }
 
         public IList<OrderBookEvent> CreateOrder(Guid clientId, Guid orderId, OrderValidity validity, Side side,
-            int quantity, decimal? price = null, decimal? triggerPrice = null, bool marketLimit = false)
+            int quantity, decimal? price = null, decimal? triggerPrice = null, bool marketLimit = false,
+            DateOnly? goodTilDate = null)
         {
             var type = price.HasValue ? OrderType.Limit : OrderType.Market;
             var status = OrderStatus.Working;
@@ -118,10 +119,14 @@ namespace Circus.OrderBook
             if (validity == OrderValidity.FillOrKill && !triggerPrice.HasValue &&
                 !HasSufficientLiquidity(side, price!.Value, quantity))
                 return RejectCreate(clientId, orderId, OrderRejectedReason.InsufficientLiquidityForFillOrKill);
+            if (validity == OrderValidity.GoodTilDate && !goodTilDate.HasValue)
+                return RejectCreate(clientId, orderId, OrderRejectedReason.GoodTilDateRequired);
+            if (goodTilDate.HasValue && goodTilDate.Value < DateOnly.FromDateTime(Now()))
+                return RejectCreate(clientId, orderId, OrderRejectedReason.InvalidExpireDate);
 
             _nextSequenceNumber++;
             var order = new InternalOrder(_nextSequenceNumber, clientId, orderId, _security, Now(), status, type,
-                validity, side, quantity, price, triggerPrice);
+                validity, side, quantity, price, triggerPrice, goodTilDate);
 
             _orders.Add(orderId, order);
             var orders = (triggerPrice.HasValue ? _stops : _working);
@@ -518,13 +523,16 @@ namespace Circus.OrderBook
         {
             _status = OrderBookStatus.Closed;
             var events = new List<OrderBookEvent> {new StatusChanged(_security, Now(), _status)};
-            events.AddRange(ExpireDayOrders());
+            events.AddRange(ExpireOrders());
             return events;
         }
 
-        private IEnumerable<OrderBookEvent> ExpireDayOrders()
+        private IEnumerable<OrderBookEvent> ExpireOrders()
         {
-            var orders = _orders.Values.Where(o => o.Validity == OrderValidity.Day).ToList();
+            var today = DateOnly.FromDateTime(Now());
+            var orders = _orders.Values.Where(o =>
+                o.Validity == OrderValidity.Day ||
+                (o.Validity == OrderValidity.GoodTilDate && o.GoodTilDate <= today)).ToList();
 
             return orders.Select(ExpireOrder).ToList();
         }

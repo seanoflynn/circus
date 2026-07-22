@@ -20,10 +20,11 @@ namespace Circus.OrderBook
         public int FilledQuantity { get; private set; }
         public decimal? Price { get; private set; }
         public decimal? TriggerPrice { get; private set; }
-        
+        public DateOnly? GoodTilDate { get; }
+
         public InternalOrder(long sequenceNumber, Guid clientId, Guid orderId, Security security, DateTime time,
             OrderStatus status, OrderType type, OrderValidity validity, Side side, int quantity, decimal? price,
-            decimal? triggerPrice)
+            decimal? triggerPrice, DateOnly? goodTilDate = null)
         {
             SequenceNumber = sequenceNumber;
             ClientId = clientId;
@@ -40,6 +41,7 @@ namespace Circus.OrderBook
             FilledQuantity = 0;
             Price = price;
             TriggerPrice = triggerPrice;
+            GoodTilDate = goodTilDate;
         }
 
         public override string ToString() => 
@@ -48,7 +50,7 @@ namespace Circus.OrderBook
         public Order ToOrder()
         {
             return new(ClientId, OrderId, Security, CreatedTime, ModifiedTime, CompletedTime, Status, Type, Validity,
-                Side, Quantity, FilledQuantity, RemainingQuantity, Price, TriggerPrice);
+                Side, Quantity, FilledQuantity, RemainingQuantity, Price, TriggerPrice, GoodTilDate);
         }
 
         public void Cancel(DateTime time)

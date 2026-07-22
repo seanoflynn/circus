@@ -4,6 +4,7 @@ namespace Circus
     {
         Day,
         GoodTilCanceled,
+        GoodTilDate,
         FillAndKill,
         FillOrKill
     }

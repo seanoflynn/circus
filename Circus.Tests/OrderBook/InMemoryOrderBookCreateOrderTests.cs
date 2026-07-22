@@ -2088,5 +2088,85 @@ namespace Circus.Tests.OrderBook
             Assert.AreEqual(OrderRejectedReason.OrderIdAlreadyUsed, rejected.Reason);
         }
 
+        [Test]
+        public void GoodTilDateOrder_Success()
+        {
+            // arrange
+            Book.UpdateStatus(OrderBookStatus.Open);
+            var goodTilDate = DateOnly.FromDateTime(Now1).AddDays(7);
+
+            // act
+            var events = Book.CreateOrder(ClientId1, OrderId1, OrderValidity.GoodTilDate, Side.Buy, 3, 100,
+                goodTilDate: goodTilDate);
+
+            // assert
+            Assert.IsNotNull(events);
+            Assert.AreEqual(1, events.Count);
+            var created = events[0] as CreateOrderConfirmed;
+            Assert.IsNotNull(created);
+            Assert.AreEqual(OrderValidity.GoodTilDate, created.Order.OrderValidity);
+            Assert.AreEqual(goodTilDate, created.Order.GoodTilDate);
+        }
+
+        [Test]
+        public void GoodTilDateOrder_SameDayAsToday_Success()
+        {
+            // arrange - a good-til-date order dated today is valid and behaves like a Day order for this session
+            Book.UpdateStatus(OrderBookStatus.Open);
+            var goodTilDate = DateOnly.FromDateTime(Now1);
+
+            // act
+            var events = Book.CreateOrder(ClientId1, OrderId1, OrderValidity.GoodTilDate, Side.Buy, 3, 100,
+                goodTilDate: goodTilDate);
+
+            // assert
+            Assert.IsNotNull(events);
+            Assert.AreEqual(1, events.Count);
+            var created = events[0] as CreateOrderConfirmed;
+            Assert.IsNotNull(created);
+            Assert.AreEqual(OrderValidity.GoodTilDate, created.Order.OrderValidity);
+            Assert.AreEqual(goodTilDate, created.Order.GoodTilDate);
+        }
+
+        [Test]
+        public void GoodTilDateOrder_NoDateSupplied_Rejected()
+        {
+            // arrange
+            Book.UpdateStatus(OrderBookStatus.Open);
+
+            // act
+            var events = Book.CreateOrder(ClientId1, OrderId1, OrderValidity.GoodTilDate, Side.Buy, 3, 100);
+
+            // assert
+            Assert.IsNotNull(events);
+            Assert.AreEqual(1, events.Count);
+            var rejected = events[0] as CreateOrderRejected;
+            Assert.IsNotNull(rejected);
+            Assert.AreEqual(ClientId1, rejected.ClientId);
+            Assert.AreEqual(OrderId1, rejected.OrderId);
+            Assert.AreEqual(OrderRejectedReason.GoodTilDateRequired, rejected.Reason);
+        }
+
+        [Test]
+        public void GoodTilDateOrder_DateInPast_Rejected()
+        {
+            // arrange
+            Book.UpdateStatus(OrderBookStatus.Open);
+            var goodTilDate = DateOnly.FromDateTime(Now1).AddDays(-1);
+
+            // act
+            var events = Book.CreateOrder(ClientId1, OrderId1, OrderValidity.GoodTilDate, Side.Buy, 3, 100,
+                goodTilDate: goodTilDate);
+
+            // assert
+            Assert.IsNotNull(events);
+            Assert.AreEqual(1, events.Count);
+            var rejected = events[0] as CreateOrderRejected;
+            Assert.IsNotNull(rejected);
+            Assert.AreEqual(ClientId1, rejected.ClientId);
+            Assert.AreEqual(OrderId1, rejected.OrderId);
+            Assert.AreEqual(OrderRejectedReason.InvalidExpireDate, rejected.Reason);
+        }
+
     }
 }

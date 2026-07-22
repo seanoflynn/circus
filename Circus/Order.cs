@@ -17,6 +17,7 @@ namespace Circus
         int FilledQuantity,
         int RemainingQuantity,
         decimal? Price,
-        decimal? TriggerPrice
+        decimal? TriggerPrice,
+        DateOnly? GoodTilDate = null
     );
 }
