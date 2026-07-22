@@ -7,18 +7,18 @@ namespace Circus.OrderBook
     public record UpdateStatus(Security Security, OrderBookStatus Status)
         : OrderBookAction(Security);
 
-    public record OrderAction(Security Security, Guid ClientId, Guid OrderId)
+    public record OrderAction(Security Security, string CompanyId, string ClientOrderId)
         : OrderBookAction(Security);
 
-    public record CreateOrder(Security Security, Guid ClientId, Guid OrderId, OrderValidity OrderValidity, Side Side,
-            int Quantity, decimal? Price = null, decimal? TriggerPrice = null, bool MarketLimit = false,
+    public record CreateOrder(Security Security, string CompanyId, string ClientOrderId, OrderValidity OrderValidity,
+            Side Side, int Quantity, decimal? Price = null, decimal? TriggerPrice = null, bool MarketLimit = false,
             DateOnly? GoodTilDate = null)
-        : OrderAction(Security, ClientId, OrderId);
+        : OrderAction(Security, CompanyId, ClientOrderId);
 
-    public record UpdateOrder(Security Security, Guid ClientId, Guid OrderId, int? Quantity = null,
-            decimal? Price = null, decimal? TriggerPrice = null)
-        : OrderAction(Security, ClientId, OrderId);
+    public record UpdateOrder(Security Security, string CompanyId, string ClientOrderId, string PreviousClientOrderId,
+            int? Quantity = null, decimal? Price = null, decimal? TriggerPrice = null)
+        : OrderAction(Security, CompanyId, ClientOrderId);
 
-    public record CancelOrder(Security Security, Guid ClientId, Guid OrderId)
-        : OrderAction(Security, ClientId, OrderId);
+    public record CancelOrder(Security Security, string CompanyId, string ClientOrderId, string PreviousClientOrderId)
+        : OrderAction(Security, CompanyId, ClientOrderId);
 }

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using Circus.OrderBook;
 using Circus.TimeProviders;
 using NUnit.Framework;
@@ -13,13 +14,15 @@ namespace Circus.Tests.OrderBook
         private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
         private static readonly DateTime Now2 = new(2000, 1, 1, 12, 1, 0);
 
-        private static readonly Guid ClientId1 = Guid.NewGuid();
-        private static readonly Guid ClientId2 = Guid.NewGuid();
-        private static readonly Guid ClientId3 = Guid.NewGuid();
+        private static readonly string CompanyId1 = "Company1";
+        private static readonly string CompanyId2 = "Company2";
+        private static readonly string CompanyId3 = "Company3";
 
-        private static readonly Guid OrderId1 = Guid.NewGuid();
-        private static readonly Guid OrderId2 = Guid.NewGuid();
-        private static readonly Guid OrderId3 = Guid.NewGuid();
+        private static readonly string OrderId1 = "Order1";
+        private static readonly string OrderId2 = "Order2";
+        private static readonly string OrderId3 = "Order3";
+        private static readonly string OrderId4 = "Order4";
+        private static readonly string OrderId5 = "Order5";
 
         private static TestTimeProvider TimeProvider;
         private static IOrderBook Book;
@@ -36,11 +39,11 @@ namespace Circus.Tests.OrderBook
         {
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, 3, 100);
+            Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Buy, 3, 100);
             TimeProvider.SetCurrentTime(Now2);
 
             // act
-            var events = Book.CancelOrder(ClientId1, OrderId1);
+            var events = Book.CancelOrder(CompanyId1, OrderId4, OrderId1);
 
             // assert
             Assert.IsNotNull(events);
@@ -49,10 +52,11 @@ namespace Circus.Tests.OrderBook
             Assert.IsNotNull(cancelled);
             Assert.AreEqual(Sec, cancelled.Security);
             Assert.AreEqual(Now2, cancelled.Time);
-            Assert.AreEqual(ClientId1, cancelled.ClientId);
+            Assert.AreEqual(CompanyId1, cancelled.CompanyId);
+            Assert.AreEqual(OrderId1, cancelled.PreviousClientOrderId);
             Assert.AreEqual(OrderCancelledReason.Cancelled, cancelled.Reason);
-            Assert.AreEqual(ClientId1, cancelled.Order.ClientId);
-            Assert.AreEqual(OrderId1, cancelled.Order.OrderId);
+            Assert.AreEqual(CompanyId1, cancelled.Order.CompanyId);
+            Assert.AreEqual(OrderId4, cancelled.Order.ClientOrderId);
             Assert.AreEqual(Sec, cancelled.Order.Security);
             Assert.AreEqual(Now1, cancelled.Order.CreatedTime);
             Assert.AreEqual(Now1, cancelled.Order.ModifiedTime);
@@ -73,13 +77,13 @@ namespace Circus.Tests.OrderBook
         {
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, 5, 100);
-            Book.CreateOrder(ClientId2, OrderId2, OrderValidity.Day, Side.Sell, 5, 100);
-            Book.CreateOrder(ClientId3, OrderId3, OrderValidity.Day, Side.Buy, 3, null, 110);
+            Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Buy, 5, 100);
+            Book.CreateOrder(CompanyId2, OrderId2, OrderValidity.Day, Side.Sell, 5, 100);
+            Book.CreateOrder(CompanyId3, OrderId3, OrderValidity.Day, Side.Buy, 3, null, 110);
             TimeProvider.SetCurrentTime(Now2);
 
             // act
-            var events = Book.CancelOrder(ClientId3, OrderId3);
+            var events = Book.CancelOrder(CompanyId3, OrderId4, OrderId3);
 
             // assert
             Assert.IsNotNull(events);
@@ -88,10 +92,11 @@ namespace Circus.Tests.OrderBook
             Assert.IsNotNull(cancelled);
             Assert.AreEqual(Sec, cancelled.Security);
             Assert.AreEqual(Now2, cancelled.Time);
-            Assert.AreEqual(ClientId3, cancelled.ClientId);
+            Assert.AreEqual(CompanyId3, cancelled.CompanyId);
+            Assert.AreEqual(OrderId3, cancelled.PreviousClientOrderId);
             Assert.AreEqual(OrderCancelledReason.Cancelled, cancelled.Reason);
-            Assert.AreEqual(ClientId3, cancelled.Order.ClientId);
-            Assert.AreEqual(OrderId3, cancelled.Order.OrderId);
+            Assert.AreEqual(CompanyId3, cancelled.Order.CompanyId);
+            Assert.AreEqual(OrderId4, cancelled.Order.ClientOrderId);
             Assert.AreEqual(Sec, cancelled.Order.Security);
             Assert.AreEqual(Now1, cancelled.Order.CreatedTime);
             Assert.AreEqual(Now1, cancelled.Order.ModifiedTime);
@@ -112,11 +117,11 @@ namespace Circus.Tests.OrderBook
         {
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, 3, 100);
+            Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Buy, 3, 100);
             Book.UpdateStatus(OrderBookStatus.Closed);
 
             // act
-            var events = Book.CancelOrder(ClientId1, OrderId1);
+            var events = Book.CancelOrder(CompanyId1, OrderId4, OrderId1);
 
             // assert
             Assert.IsNotNull(events);
@@ -125,21 +130,24 @@ namespace Circus.Tests.OrderBook
             Assert.IsNotNull(rejected);
             Assert.AreEqual(Sec, rejected.Security);
             Assert.AreEqual(Now1, rejected.Time);
-            Assert.AreEqual(ClientId1, rejected.ClientId);
-            Assert.AreEqual(OrderId1, rejected.OrderId);
+            Assert.AreEqual(CompanyId1, rejected.CompanyId);
+            Assert.AreEqual(OrderId4, rejected.ClientOrderId);
+            Assert.AreEqual(OrderId1, rejected.PreviousClientOrderId);
             Assert.AreEqual(OrderRejectedReason.MarketClosed, rejected.Reason);
+            Assert.IsNull(rejected.ExchangeOrderId, "rejected before the order was ever looked up");
         }
-        
+
         [Test]
         public void Completed_Rejected()
         {
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, 3, 100);
-            Book.CancelOrder(ClientId1, OrderId1);
+            var created = Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Buy, 3, 100)
+                .OfType<CreateOrderConfirmed>().Single();
+            Book.CancelOrder(CompanyId1, OrderId4, OrderId1);
 
             // act
-            var events = Book.CancelOrder(ClientId1, OrderId1);
+            var events = Book.CancelOrder(CompanyId1, OrderId5, OrderId4);
 
             // assert
             Assert.IsNotNull(events);
@@ -148,9 +156,12 @@ namespace Circus.Tests.OrderBook
             Assert.IsNotNull(rejected);
             Assert.AreEqual(Sec, rejected.Security);
             Assert.AreEqual(Now1, rejected.Time);
-            Assert.AreEqual(ClientId1, rejected.ClientId);
-            Assert.AreEqual(OrderId1, rejected.OrderId);
+            Assert.AreEqual(CompanyId1, rejected.CompanyId);
+            Assert.AreEqual(OrderId5, rejected.ClientOrderId);
+            Assert.AreEqual(OrderId4, rejected.PreviousClientOrderId);
             Assert.AreEqual(OrderRejectedReason.TooLateToCancel, rejected.Reason);
+            Assert.AreEqual(created.Order.ExchangeOrderId, rejected.ExchangeOrderId,
+                "the order was found (and is now cancelled), so its ExchangeOrderId is known");
         }
 
         [Test]
@@ -160,7 +171,7 @@ namespace Circus.Tests.OrderBook
             Book.UpdateStatus(OrderBookStatus.Open);
 
             // act
-            var events = Book.CancelOrder(ClientId1, OrderId1);
+            var events = Book.CancelOrder(CompanyId1, OrderId4, OrderId1);
 
             // assert
             Assert.IsNotNull(events);
@@ -169,9 +180,34 @@ namespace Circus.Tests.OrderBook
             Assert.IsNotNull(rejected);
             Assert.AreEqual(Sec, rejected.Security);
             Assert.AreEqual(Now1, rejected.Time);
-            Assert.AreEqual(ClientId1, rejected.ClientId);
-            Assert.AreEqual(OrderId1, rejected.OrderId);
+            Assert.AreEqual(CompanyId1, rejected.CompanyId);
+            Assert.AreEqual(OrderId4, rejected.ClientOrderId);
+            Assert.AreEqual(OrderId1, rejected.PreviousClientOrderId);
             Assert.AreEqual(OrderRejectedReason.OrderNotInBook, rejected.Reason);
+        }
+
+        [Test]
+        public void ForeignClientOrderId_Rejected()
+        {
+            // arrange - client 2 cannot cancel client 1's order by quoting client 1's clientOrderId,
+            // since the (companyId, clientOrderId) lookup is scoped per client
+            Book.UpdateStatus(OrderBookStatus.Open);
+            Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Buy, 3, 100);
+
+            // act
+            var events = Book.CancelOrder(CompanyId2, OrderId4, OrderId1);
+
+            // assert
+            Assert.IsNotNull(events);
+            Assert.AreEqual(1, events.Count);
+            var rejected = events[0] as CancelOrderRejected;
+            Assert.IsNotNull(rejected);
+            Assert.AreEqual(CompanyId2, rejected.CompanyId);
+            Assert.AreEqual(OrderRejectedReason.OrderNotInBook, rejected.Reason);
+
+            // the order itself is untouched and still cancellable by its actual owner
+            var ownerEvents = Book.CancelOrder(CompanyId1, OrderId5, OrderId1);
+            Assert.IsInstanceOf<CancelOrderConfirmed>(ownerEvents[0]);
         }
     }
 }

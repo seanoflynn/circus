@@ -3,8 +3,9 @@ using System;
 namespace Circus
 {
     public record Order(
-        Guid ClientId,
-        Guid OrderId,
+        string CompanyId,
+        long ExchangeOrderId,
+        string ClientOrderId,
         Security Security,
         DateTime CreatedTime,
         DateTime ModifiedTime,

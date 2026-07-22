@@ -29,7 +29,7 @@ namespace Circus.Tests.DataProducers
 
             Book.UpdateStatus(OrderBookStatus.Open);
             var bookEvents =
-                Book.CreateOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Sell, 3, 100);
+                Book.CreateOrder("Company1", "Order1", OrderValidity.Day, Side.Sell, 3, 100);
 
             // act
             var events = producer.Process(Book, bookEvents);
@@ -54,9 +54,9 @@ namespace Circus.Tests.DataProducers
             var producer = new LevelDataProducer(2);
 
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Sell, 5, 100);
+            Book.CreateOrder("Company2", "Order2", OrderValidity.Day, Side.Sell, 5, 100);
             var bookEvents =
-                Book.CreateOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Sell,3,  100);
+                Book.CreateOrder("Company3", "Order3", OrderValidity.Day, Side.Sell,3,  100);
 
             // act
             var events = producer.Process(Book, bookEvents);
@@ -81,9 +81,9 @@ namespace Circus.Tests.DataProducers
             var producer = new LevelDataProducer(2);
 
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Sell, 5, 100);
+            Book.CreateOrder("Company4", "Order4", OrderValidity.Day, Side.Sell, 5, 100);
             var bookEvents =
-                Book.CreateOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Sell, 3, 110);
+                Book.CreateOrder("Company5", "Order5", OrderValidity.Day, Side.Sell, 3, 110);
 
             // act
             var events = producer.Process(Book, bookEvents);
@@ -111,8 +111,8 @@ namespace Circus.Tests.DataProducers
             var producer = new LevelDataProducer(2);
 
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 5, 100);
-            var bookEvents = Book.CreateOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 3, 110);
+            Book.CreateOrder("Company6", "Order6", OrderValidity.Day, Side.Buy, 5, 100);
+            var bookEvents = Book.CreateOrder("Company7", "Order7", OrderValidity.Day, Side.Buy, 3, 110);
 
             // act
             var events = producer.Process(Book, bookEvents);
@@ -140,9 +140,9 @@ namespace Circus.Tests.DataProducers
             var producer = new LevelDataProducer(2);
 
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 5, 100);
+            Book.CreateOrder("Company8", "Order8", OrderValidity.Day, Side.Buy, 5, 100);
             var bookEvents =
-                Book.CreateOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Sell, 3, 110);
+                Book.CreateOrder("Company9", "Order9", OrderValidity.Day, Side.Sell, 3, 110);
 
             // act
             var events = producer.Process(Book, bookEvents);
@@ -170,9 +170,9 @@ namespace Circus.Tests.DataProducers
             var producer = new LevelDataProducer(2);
 
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 3, 110);
-            Book.CreateOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 4, 120);
-            var bookEvents = Book.CreateOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 5, 130);
+            Book.CreateOrder("Company10", "Order10", OrderValidity.Day, Side.Buy, 3, 110);
+            Book.CreateOrder("Company11", "Order11", OrderValidity.Day, Side.Buy, 4, 120);
+            var bookEvents = Book.CreateOrder("Company12", "Order12", OrderValidity.Day, Side.Buy, 5, 130);
 
             // act
             var events = producer.Process(Book, bookEvents);
@@ -200,10 +200,10 @@ namespace Circus.Tests.DataProducers
             var producer = new LevelDataProducer(2);
 
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 3, 110);
-            Book.CreateOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 4, 120);
+            Book.CreateOrder("Company13", "Order13", OrderValidity.Day, Side.Buy, 3, 110);
+            Book.CreateOrder("Company14", "Order14", OrderValidity.Day, Side.Buy, 4, 120);
             var bookEvents =
-                Book.CreateOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Sell, 5, 100);
+                Book.CreateOrder("Company15", "Order15", OrderValidity.Day, Side.Sell, 5, 100);
 
             // act
             var events = producer.Process(Book, bookEvents);

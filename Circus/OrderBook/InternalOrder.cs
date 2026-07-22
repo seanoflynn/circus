@@ -5,8 +5,9 @@ namespace Circus.OrderBook
     internal class InternalOrder
     {
         public long SequenceNumber { get; private set; }
-        public Guid ClientId { get; }
-        public Guid OrderId { get; }
+        public string CompanyId { get; }
+        public long ExchangeOrderId { get; }
+        public string ClientOrderId { get; private set; }
         public Security Security { get; }
         public DateTime CreatedTime { get; }
         public DateTime ModifiedTime { get; private set; }
@@ -22,13 +23,14 @@ namespace Circus.OrderBook
         public decimal? TriggerPrice { get; private set; }
         public DateOnly? GoodTilDate { get; }
 
-        public InternalOrder(long sequenceNumber, Guid clientId, Guid orderId, Security security, DateTime time,
+        public InternalOrder(long sequenceNumber, string companyId, string clientOrderId, Security security, DateTime time,
             OrderStatus status, OrderType type, OrderValidity validity, Side side, int quantity, decimal? price,
             decimal? triggerPrice, DateOnly? goodTilDate = null)
         {
             SequenceNumber = sequenceNumber;
-            ClientId = clientId;
-            OrderId = orderId;
+            CompanyId = companyId;
+            ExchangeOrderId = sequenceNumber;
+            ClientOrderId = clientOrderId;
             Security = security;
             CreatedTime = time;
             ModifiedTime = time;
@@ -44,17 +46,23 @@ namespace Circus.OrderBook
             GoodTilDate = goodTilDate;
         }
 
-        public override string ToString() => 
-            $"[Order #{OrderId} {Status} {ModifiedTime:HH:mm:ss} {Side} {Quantity}@{Price}]";
+        public override string ToString() =>
+            $"[Order #{ExchangeOrderId} company={CompanyId} clientOrder={ClientOrderId} {Status} {ModifiedTime:HH:mm:ss} {Side} {Quantity}@{Price}]";
 
         public Order ToOrder()
         {
-            return new(ClientId, OrderId, Security, CreatedTime, ModifiedTime, CompletedTime, Status, Type, Validity,
-                Side, Quantity, FilledQuantity, RemainingQuantity, Price, TriggerPrice, GoodTilDate);
+            return new(CompanyId, ExchangeOrderId, ClientOrderId, Security, CreatedTime, ModifiedTime, CompletedTime,
+                Status, Type, Validity, Side, Quantity, FilledQuantity, RemainingQuantity, Price, TriggerPrice,
+                GoodTilDate);
         }
 
-        public void Cancel(DateTime time)
+        public void Cancel(DateTime time, string? clientOrderId = null)
         {
+            if (clientOrderId != null)
+            {
+                ClientOrderId = clientOrderId;
+            }
+
             RemainingQuantity = 0;
             CompletedTime = time;
             Status = OrderStatus.Cancelled;
@@ -67,10 +75,12 @@ namespace Circus.OrderBook
             Status = OrderStatus.Expired;
         }
 
-        public void Update(long sequenceNumber, DateTime time, int? quantity, decimal? triggerPrice, decimal? price)
+        public void Update(long sequenceNumber, DateTime time, int? quantity, decimal? triggerPrice, decimal? price,
+            string clientOrderId)
         {
             SequenceNumber = sequenceNumber;
             ModifiedTime = time;
+            ClientOrderId = clientOrderId;
             if (quantity.HasValue)
             {
                 // quantity is the new total size, so remaining = new total - already filled

@@ -28,12 +28,12 @@ namespace Circus.Examples
             }
 
             Publish(book1, book1.UpdateStatus(OrderBookStatus.Open));
-            Publish(book1, book1.CreateOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 3, 100));
-            Publish(book1, book1.CreateOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Sell, 5, 100));
+            Publish(book1, book1.CreateOrder("Buyer", "Order1", OrderValidity.Day, Side.Buy, 3, 100));
+            Publish(book1, book1.CreateOrder("Seller", "Order2", OrderValidity.Day, Side.Sell, 5, 100));
 
             Publish(book2, book2.UpdateStatus(OrderBookStatus.Open));
-            Publish(book2, book2.CreateOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 3, 100));
-            Publish(book2, book2.CreateOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Sell, 5, 100));
+            Publish(book2, book2.CreateOrder("Buyer", "Order1", OrderValidity.Day, Side.Buy, 3, 100));
+            Publish(book2, book2.CreateOrder("Seller", "Order2", OrderValidity.Day, Side.Sell, 5, 100));
         }
 
         private static void Print(IEnumerable<TradedDataEvent> events)
