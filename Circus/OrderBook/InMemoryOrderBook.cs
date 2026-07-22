@@ -134,7 +134,6 @@ namespace Circus.OrderBook
             var orders = (triggerTicks.HasValue ? _stops : _working);
             var newPriceTicks = (triggerTicks ?? priceTicks) ?? throw new Exception("error");
             orders[side].Add(newPriceTicks, _nextSequenceNumber, order);
-            Console.WriteLine($"order added: {order}");
 
             List<OrderBookEvent> events = new();
             events.Add(new CreateOrderConfirmed(_security, Now(), clientId, order.ToOrder()));
@@ -255,7 +254,6 @@ namespace Circus.OrderBook
             {
                 order.Cancel(Now());
                 CompleteOrder(order);
-                Console.WriteLine($"order cancelled on update as new quantity <= filled quantity: {order}");
 
                 return new List<OrderBookEvent>
                 {
@@ -284,7 +282,6 @@ namespace Circus.OrderBook
                 orders[order.Side].Add(updatedPriceTicks, sequenceNumber, order);
             }
             order.Update(sequenceNumber, Now(), quantity, triggerTicks, priceTicks);
-            Console.WriteLine($"order updated: {order}");
 
             List<OrderBookEvent> events = new();
             events.Add(new UpdateOrderConfirmed(_security, Now(), order.ClientId, order.ToOrder()));
@@ -304,7 +301,6 @@ namespace Circus.OrderBook
 
             order.Cancel(Now());
             CompleteOrder(order);
-            Console.WriteLine($"order cancelled: {order}");
 
             return new List<OrderBookEvent>
             {
@@ -327,7 +323,6 @@ namespace Circus.OrderBook
             order.Expire(Now());
             CompleteOrder(order);
 
-            Console.WriteLine($"order expired: {order}");
 
             return new ExpireOrderConfirmed(_security, Now(), order.ClientId, order.ToOrder());
         }
@@ -395,9 +390,6 @@ namespace Circus.OrderBook
                 var priceTicks = resting.Price ?? throw new InvalidOperationException("limit order requires price");
                 var price = ToDecimal(priceTicks);
 
-                Console.WriteLine($"matched orders: {quantity}@{price}");
-                Console.WriteLine($"- resting   {resting}");
-                Console.WriteLine($"- aggressor {aggressor}");
 
                 FillOrder(resting, time, quantity);
                 FillOrder(aggressor, time, quantity);
@@ -484,7 +476,6 @@ namespace Circus.OrderBook
                 {
                     order.Cancel(Now());
                     FinishOrder(order);
-                    Console.WriteLine($"order cancelled, book empty when order triggered: {order}");
 
                     events.Add(new CancelOrderConfirmed(_security, Now(), order.ClientId, order.ToOrder(),
                         OrderCancelledReason.NoOrdersToMatchMarketOrder));
@@ -496,7 +487,6 @@ namespace Circus.OrderBook
                 {
                     order.Cancel(Now());
                     FinishOrder(order);
-                    Console.WriteLine($"order cancelled, insufficient liquidity when fill-or-kill order triggered: {order}");
 
                     events.Add(new CancelOrderConfirmed(_security, Now(), order.ClientId, order.ToOrder(),
                         OrderCancelledReason.FillOrKillNotFilled));
