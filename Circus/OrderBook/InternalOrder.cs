@@ -2,6 +2,10 @@ using System;
 
 namespace Circus.OrderBook
 {
+    // Price/TriggerPrice are stored as tick counts (price / Security.TickSize), not decimal.
+    // decimal division/comparison has no hardware path, so keeping the hot comparison and
+    // dictionary-key paths on long avoids that cost; conversion back to decimal only happens
+    // at the public-API boundary (ToOrder/ToString).
     internal class InternalOrder
     {
         public long SequenceNumber { get; private set; }
@@ -19,13 +23,13 @@ namespace Circus.OrderBook
         public int Quantity { get; private set; }
         public int RemainingQuantity { get; private set; }
         public int FilledQuantity { get; private set; }
-        public decimal? Price { get; private set; }
-        public decimal? TriggerPrice { get; private set; }
+        public long? Price { get; private set; }
+        public long? TriggerPrice { get; private set; }
         public DateOnly? GoodTilDate { get; }
 
         public InternalOrder(long sequenceNumber, string companyId, string clientOrderId, Security security, DateTime time,
-            OrderStatus status, OrderType type, OrderValidity validity, Side side, int quantity, decimal? price,
-            decimal? triggerPrice, DateOnly? goodTilDate = null)
+            OrderStatus status, OrderType type, OrderValidity validity, Side side, int quantity, long? price,
+            long? triggerPrice, DateOnly? goodTilDate = null)
         {
             SequenceNumber = sequenceNumber;
             CompanyId = companyId;
@@ -47,14 +51,16 @@ namespace Circus.OrderBook
         }
 
         public override string ToString() =>
-            $"[Order #{ExchangeOrderId} company={CompanyId} clientOrder={ClientOrderId} {Status} {ModifiedTime:HH:mm:ss} {Side} {Quantity}@{Price}]";
+            $"[Order #{ExchangeOrderId} company={CompanyId} clientOrder={ClientOrderId} {Status} {ModifiedTime:HH:mm:ss} {Side} {Quantity}@{ToDecimal(Price)}]";
 
         public Order ToOrder()
         {
             return new(CompanyId, ExchangeOrderId, ClientOrderId, Security, CreatedTime, ModifiedTime, CompletedTime,
-                Status, Type, Validity, Side, Quantity, FilledQuantity, RemainingQuantity, Price, TriggerPrice,
-                GoodTilDate);
+                Status, Type, Validity, Side, Quantity, FilledQuantity, RemainingQuantity, ToDecimal(Price),
+                ToDecimal(TriggerPrice), GoodTilDate);
         }
+
+        private decimal? ToDecimal(long? ticks) => ticks.HasValue ? ticks.Value * Security.TickSize : null;
 
         public void Cancel(DateTime time, string? clientOrderId = null)
         {
@@ -75,7 +81,7 @@ namespace Circus.OrderBook
             Status = OrderStatus.Expired;
         }
 
-        public void Update(long sequenceNumber, DateTime time, int? quantity, decimal? triggerPrice, decimal? price,
+        public void Update(long sequenceNumber, DateTime time, int? quantity, long? triggerPrice, long? price,
             string clientOrderId)
         {
             SequenceNumber = sequenceNumber;
@@ -113,7 +119,7 @@ namespace Circus.OrderBook
             }
         }
 
-        public void ConvertToLimit(DateTime time, long sequenceNumber, decimal? price = null)
+        public void ConvertToLimit(DateTime time, long sequenceNumber, long? price = null)
         {
             if (price.HasValue)
             {
