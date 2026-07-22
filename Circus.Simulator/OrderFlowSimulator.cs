@@ -21,9 +21,13 @@ namespace Circus.Simulator
 
         private readonly InMemoryOrderBook _shadowBook;
 
-        private readonly List<Guid> _liveIds = new();
-        private readonly Dictionary<Guid, int> _liveIndex = new();
-        private readonly Dictionary<Guid, LiveOrderInfo> _liveInfo = new();
+        private readonly List<string> _liveIds = new();
+        private readonly Dictionary<string, int> _liveIndex = new();
+        private readonly Dictionary<string, LiveOrderInfo> _liveInfo = new();
+
+        // deterministic (derived from the seeded action sequence, not Guid.NewGuid()) so traces
+        // stay reproducible for a given seed
+        private long _nextId;
 
         public OrderFlowSimulator(Security security, SimulatorOptions? options = null, int? seed = null)
         {
@@ -70,16 +74,16 @@ namespace Circus.Simulator
                         Track(u.Order);
                         break;
                     case CancelOrderConfirmed cancel:
-                        RemoveLive(cancel.Order.OrderId);
+                        RemoveLive(cancel.Order.ExchangeOrderId);
                         break;
                     case ExpireOrderConfirmed expire:
-                        RemoveLive(expire.Order.OrderId);
+                        RemoveLive(expire.Order.ExchangeOrderId);
                         break;
                     case OrdersMatched matched:
                         foreach (var fill in matched.Fills)
                         {
                             if (fill.Order.RemainingQuantity == 0)
-                                RemoveLive(fill.Order.OrderId);
+                                RemoveLive(fill.Order.ExchangeOrderId);
                         }
                         break;
                 }
@@ -90,22 +94,23 @@ namespace Circus.Simulator
         {
             if (order.RemainingQuantity == 0)
             {
-                RemoveLive(order.OrderId);
+                RemoveLive(order.ExchangeOrderId);
                 return;
             }
 
-            if (!_liveIndex.ContainsKey(order.OrderId))
+            if (!_liveIndex.ContainsKey(order.ExchangeOrderId))
             {
-                _liveIndex[order.OrderId] = _liveIds.Count;
-                _liveIds.Add(order.OrderId);
+                _liveIndex[order.ExchangeOrderId] = _liveIds.Count;
+                _liveIds.Add(order.ExchangeOrderId);
             }
 
-            _liveInfo[order.OrderId] = new LiveOrderInfo(order.ClientId, order.Side, order.Price, order.TriggerPrice);
+            _liveInfo[order.ExchangeOrderId] = new LiveOrderInfo(order.CompanyId, order.ClientOrderId, order.Side,
+                order.Price, order.TriggerPrice);
         }
 
-        private void RemoveLive(Guid orderId)
+        private void RemoveLive(string exchangeOrderId)
         {
-            if (!_liveIndex.TryGetValue(orderId, out var index))
+            if (!_liveIndex.TryGetValue(exchangeOrderId, out var index))
                 return;
 
             var lastIndex = _liveIds.Count - 1;
@@ -114,23 +119,26 @@ namespace Circus.Simulator
             _liveIndex[lastId] = index;
             _liveIds.RemoveAt(lastIndex);
 
-            _liveIndex.Remove(orderId);
-            _liveInfo.Remove(orderId);
+            _liveIndex.Remove(exchangeOrderId);
+            _liveInfo.Remove(exchangeOrderId);
         }
 
-        private bool TryPickLive(out Guid orderId, out LiveOrderInfo info)
+        private bool TryPickLive(out string exchangeOrderId, out LiveOrderInfo info)
         {
             if (_liveIds.Count == 0)
             {
-                orderId = default;
+                exchangeOrderId = default!;
                 info = default!;
                 return false;
             }
 
-            orderId = _liveIds[_random.Next(_liveIds.Count)];
-            info = _liveInfo[orderId];
+            exchangeOrderId = _liveIds[_random.Next(_liveIds.Count)];
+            info = _liveInfo[exchangeOrderId];
             return true;
         }
+
+        private string NextCompanyId() => $"c{_nextId++}";
+        private string NextClientOrderId() => $"o{_nextId++}";
 
         private OrderBookAction NextAction()
         {
@@ -160,8 +168,8 @@ namespace Circus.Simulator
             var price = ComputePrice(side);
             var quantity = _random.Next(_options.MinQuantity, _options.MaxQuantity + 1);
 
-            return new CreateOrder(_security, Guid.NewGuid(), Guid.NewGuid(), OrderValidity.GoodTilCanceled, side,
-                quantity, price);
+            return new CreateOrder(_security, NextCompanyId(), NextClientOrderId(), OrderValidity.GoodTilCanceled,
+                side, quantity, price);
         }
 
         private CreateOrder BuildCreateMarket()
@@ -169,19 +177,20 @@ namespace Circus.Simulator
             var side = _random.Next(2) == 0 ? Side.Buy : Side.Sell;
             var quantity = _random.Next(_options.MinQuantity, _options.MaxQuantity + 1);
 
-            return new CreateOrder(_security, Guid.NewGuid(), Guid.NewGuid(), OrderValidity.GoodTilCanceled, side,
-                quantity);
+            return new CreateOrder(_security, NextCompanyId(), NextClientOrderId(), OrderValidity.GoodTilCanceled,
+                side, quantity);
         }
 
         private CancelOrder BuildCancel()
         {
-            TryPickLive(out var orderId, out var info);
-            return new CancelOrder(_security, info.ClientId, orderId);
+            TryPickLive(out _, out var info);
+            return new CancelOrder(_security, info.CompanyId, NextClientOrderId(), info.ClientOrderId);
         }
 
         private UpdateOrder BuildUpdate()
         {
-            TryPickLive(out var orderId, out var info);
+            TryPickLive(out _, out var info);
+            var newClientOrderId = NextClientOrderId();
 
             // stop orders keep a Price/TriggerPrice relationship that a blind tweak could
             // violate, so only ever adjust their quantity.
@@ -189,7 +198,8 @@ namespace Circus.Simulator
             if (updateQuantityOnly || _random.NextDouble() < 0.5)
             {
                 var quantity = _random.Next(_options.MinQuantity, _options.MaxQuantity + 1);
-                return new UpdateOrder(_security, info.ClientId, orderId, Quantity: quantity);
+                return new UpdateOrder(_security, info.CompanyId, newClientOrderId, info.ClientOrderId,
+                    Quantity: quantity);
             }
 
             var tick = _security.TickSize;
@@ -197,7 +207,7 @@ namespace Circus.Simulator
             var reference = info.Price ?? AlignToTick(_options.StartingPrice);
             var newPrice = reference + direction * _random.Next(1, 4) * tick;
 
-            return new UpdateOrder(_security, info.ClientId, orderId, Price: newPrice);
+            return new UpdateOrder(_security, info.CompanyId, newClientOrderId, info.ClientOrderId, Price: newPrice);
         }
 
         private decimal ComputePrice(Side side)
@@ -232,6 +242,7 @@ namespace Circus.Simulator
             return Math.Round(price / tick) * tick;
         }
 
-        private readonly record struct LiveOrderInfo(Guid ClientId, Side Side, decimal? Price, decimal? TriggerPrice);
+        private readonly record struct LiveOrderInfo(string CompanyId, string ClientOrderId, Side Side,
+            decimal? Price, decimal? TriggerPrice);
     }
 }

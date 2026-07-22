@@ -31,8 +31,14 @@ namespace Circus.OrderBook
                 {Side.Sell, new(new DescendingComparer())}
             };
 
-        private readonly Dictionary<Guid, InternalOrder> _orders = new();
-        private readonly Dictionary<Guid, InternalOrder> _completedOrders = new();
+        private readonly Dictionary<string, InternalOrder> _orders = new();
+        private readonly Dictionary<string, InternalOrder> _completedOrders = new();
+
+        // every (companyId, clientOrderId) pair ever assigned by a client, permanently reserved -
+        // used for per-client uniqueness checks, ownership enforcement, and Update/Cancel lookups
+        private readonly Dictionary<(string CompanyId, string ClientOrderId), InternalOrder> _clientOrderIndex = new();
+
+        private const int MaxClientOrderIdLength = 20;
 
         public InMemoryOrderBook(Security security, ITimeProvider timeProvider)
         {
@@ -59,17 +65,18 @@ namespace Circus.OrderBook
         {
             return action switch
             {
-                CreateOrder create => CreateOrder(create.ClientId, create.OrderId, create.OrderValidity, create.Side,
-                    create.Quantity, create.Price, create.TriggerPrice, create.MarketLimit, create.GoodTilDate),
-                UpdateOrder update => UpdateOrder(update.ClientId, update.OrderId, update.Quantity, update.Price,
-                    update.TriggerPrice),
-                CancelOrder cancel => CancelOrder(cancel.ClientId, cancel.OrderId),
+                CreateOrder create => CreateOrder(create.CompanyId, create.ClientOrderId, create.OrderValidity,
+                    create.Side, create.Quantity, create.Price, create.TriggerPrice, create.MarketLimit,
+                    create.GoodTilDate),
+                UpdateOrder update => UpdateOrder(update.CompanyId, update.ClientOrderId,
+                    update.PreviousClientOrderId, update.Quantity, update.Price, update.TriggerPrice),
+                CancelOrder cancel => CancelOrder(cancel.CompanyId, cancel.ClientOrderId, cancel.PreviousClientOrderId),
                 UpdateStatus update => UpdateStatus(update.Status),
                 _ => throw new ArgumentException("Unknown order book action")
             };
         }
 
-        public IList<OrderBookEvent> CreateOrder(Guid clientId, Guid orderId, OrderValidity validity, Side side,
+        public IList<OrderBookEvent> CreateOrder(string companyId, string clientOrderId, OrderValidity validity, Side side,
             int quantity, decimal? price = null, decimal? triggerPrice = null, bool marketLimit = false,
             DateOnly? goodTilDate = null)
         {
@@ -87,56 +94,67 @@ namespace Circus.OrderBook
             }
 
             if (_status == OrderBookStatus.Closed)
-                return RejectCreate(clientId, orderId, OrderRejectedReason.MarketClosed);
+                return RejectCreate(companyId, clientOrderId, OrderRejectedReason.MarketClosed);
             if (type == OrderType.Market && _status == OrderBookStatus.PreOpen)
-                return RejectCreate(clientId, orderId, OrderRejectedReason.MarketPreOpen);
+                return RejectCreate(companyId, clientOrderId, OrderRejectedReason.MarketPreOpen);
+            if (string.IsNullOrEmpty(clientOrderId))
+                return RejectCreate(companyId, clientOrderId, OrderRejectedReason.ClientOrderIdRequired);
+            if (clientOrderId.Length > MaxClientOrderIdLength)
+                return RejectCreate(companyId, clientOrderId, OrderRejectedReason.ClientOrderIdTooLong);
+            if (string.IsNullOrEmpty(companyId))
+                return RejectCreate(companyId, clientOrderId, OrderRejectedReason.CompanyIdRequired);
+            if (companyId.Length > MaxClientOrderIdLength)
+                return RejectCreate(companyId, clientOrderId, OrderRejectedReason.CompanyIdTooLong);
             if (quantity < 1)
-                return RejectCreate(clientId, orderId, OrderRejectedReason.InvalidQuantity);
+                return RejectCreate(companyId, clientOrderId, OrderRejectedReason.InvalidQuantity);
             if (!TryConvertToTicks(price, out var priceTicks))
-                return RejectCreate(clientId, orderId, OrderRejectedReason.InvalidPriceIncrement);
+                return RejectCreate(companyId, clientOrderId, OrderRejectedReason.InvalidPriceIncrement);
             if (!TryConvertToTicks(triggerPrice, out var triggerTicks))
-                return RejectCreate(clientId, orderId, OrderRejectedReason.InvalidPriceIncrement);
+                return RejectCreate(companyId, clientOrderId, OrderRejectedReason.InvalidPriceIncrement);
             if (triggerTicks != null && priceTicks != null && side == Side.Buy && priceTicks < triggerTicks)
-                return RejectCreate(clientId, orderId, OrderRejectedReason.TriggerPriceMustBeLessThanPrice);
+                return RejectCreate(companyId, clientOrderId, OrderRejectedReason.TriggerPriceMustBeLessThanPrice);
             if (triggerTicks != null && priceTicks != null && side == Side.Sell && priceTicks > triggerTicks)
-                return RejectCreate(clientId, orderId, OrderRejectedReason.TriggerPriceMustBeGreaterThanPrice);
+                return RejectCreate(companyId, clientOrderId, OrderRejectedReason.TriggerPriceMustBeGreaterThanPrice);
             if (triggerTicks != null && !_lastTradedPrice.HasValue)
-                return RejectCreate(clientId, orderId, OrderRejectedReason.NoLastTradedPrice);
+                return RejectCreate(companyId, clientOrderId, OrderRejectedReason.NoLastTradedPrice);
             if (triggerTicks != null && side == Side.Buy && triggerTicks <= _lastTradedPrice)
-                return RejectCreate(clientId, orderId, OrderRejectedReason.TriggerPriceMustBeGreaterThanLastTradedPrice);
+                return RejectCreate(companyId, clientOrderId, OrderRejectedReason.TriggerPriceMustBeGreaterThanLastTradedPrice);
             if (triggerTicks != null && side == Side.Sell && triggerTicks >= _lastTradedPrice)
-                return RejectCreate(clientId, orderId, OrderRejectedReason.TriggerPriceMustBeLessThanLastTradedPrice);
-            if (_orders.ContainsKey(orderId))
-                return RejectCreate(clientId, orderId, OrderRejectedReason.OrderInBook);
-            if (_completedOrders.ContainsKey(orderId))
-                return RejectCreate(clientId, orderId, OrderRejectedReason.OrderIdAlreadyUsed);
+                return RejectCreate(companyId, clientOrderId, OrderRejectedReason.TriggerPriceMustBeLessThanLastTradedPrice);
+            if (_clientOrderIndex.TryGetValue((companyId, clientOrderId), out var existingOrder))
+            {
+                return existingOrder.Status is OrderStatus.Working or OrderStatus.Hidden
+                    ? RejectCreate(companyId, clientOrderId, OrderRejectedReason.OrderInBook)
+                    : RejectCreate(companyId, clientOrderId, OrderRejectedReason.OrderIdAlreadyUsed);
+            }
 
             if (type == OrderType.Market || type == OrderType.MarketLimit)
             {
                 var protectionTicks = type == OrderType.MarketLimit ? 0 : _security.MarketOrderProtectionTicks;
                 if(!TryGetLimitPrice(side, protectionTicks, out priceTicks))
-                    return RejectCreate(clientId, orderId, OrderRejectedReason.NoOrdersToMatchMarketOrder);
+                    return RejectCreate(companyId, clientOrderId, OrderRejectedReason.NoOrdersToMatchMarketOrder);
             }
 
             if (validity == OrderValidity.FillOrKill && !triggerTicks.HasValue &&
                 !HasSufficientLiquidity(side, priceTicks!.Value, quantity))
-                return RejectCreate(clientId, orderId, OrderRejectedReason.InsufficientLiquidityForFillOrKill);
+                return RejectCreate(companyId, clientOrderId, OrderRejectedReason.InsufficientLiquidityForFillOrKill);
             if (validity == OrderValidity.GoodTilDate && !goodTilDate.HasValue)
-                return RejectCreate(clientId, orderId, OrderRejectedReason.GoodTilDateRequired);
+                return RejectCreate(companyId, clientOrderId, OrderRejectedReason.GoodTilDateRequired);
             if (goodTilDate.HasValue && goodTilDate.Value < DateOnly.FromDateTime(Now()))
-                return RejectCreate(clientId, orderId, OrderRejectedReason.InvalidExpireDate);
+                return RejectCreate(companyId, clientOrderId, OrderRejectedReason.InvalidExpireDate);
 
             _nextSequenceNumber++;
-            var order = new InternalOrder(_nextSequenceNumber, clientId, orderId, _security, Now(), status, type,
-                validity, side, quantity, priceTicks, triggerTicks, goodTilDate);
+            var order = new InternalOrder(_nextSequenceNumber, companyId, clientOrderId, _security, Now(), status,
+                type, validity, side, quantity, priceTicks, triggerTicks, goodTilDate);
 
-            _orders.Add(orderId, order);
+            _orders.Add(order.ExchangeOrderId, order);
+            _clientOrderIndex.Add((companyId, clientOrderId), order);
             var orders = (triggerTicks.HasValue ? _stops : _working);
             var newPriceTicks = (triggerTicks ?? priceTicks) ?? throw new Exception("error");
             orders[side].Add(newPriceTicks, _nextSequenceNumber, order);
 
             List<OrderBookEvent> events = new();
-            events.Add(new CreateOrderConfirmed(_security, Now(), clientId, order.ToOrder()));
+            events.Add(new CreateOrderConfirmed(_security, Now(), companyId, order.ToOrder()));
             events.AddRange(Match());
 
             if (order.Validity == OrderValidity.FillAndKill && order.Status == OrderStatus.Working)
@@ -200,30 +218,48 @@ namespace Circus.OrderBook
 
         private OrderBookEvent CancelRemainder(InternalOrder order, OrderCancelledReason reason)
         {
+            var previousClientOrderId = order.ClientOrderId;
             order.Cancel(Now());
             CompleteOrder(order);
-            return new CancelOrderConfirmed(_security, Now(), order.ClientId, order.ToOrder(), reason);
+            return new CancelOrderConfirmed(_security, Now(), order.CompanyId, order.ToOrder(), previousClientOrderId,
+                reason);
         }
 
-        public IList<OrderBookEvent> UpdateOrder(Guid clientId, Guid orderId, int? quantity = null, decimal? price = null,
-            decimal? triggerPrice = null)
+        public IList<OrderBookEvent> UpdateOrder(string companyId, string clientOrderId, string previousClientOrderId,
+            int? quantity = null, decimal? price = null, decimal? triggerPrice = null)
         {
             if (_status == OrderBookStatus.Closed)
-                return RejectUpdate(clientId, orderId, OrderRejectedReason.MarketClosed);
+                return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.MarketClosed);
+            if (string.IsNullOrEmpty(clientOrderId))
+                return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.ClientOrderIdRequired);
+            if (clientOrderId.Length > MaxClientOrderIdLength)
+                return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.ClientOrderIdTooLong);
+            if (string.IsNullOrEmpty(companyId))
+                return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.CompanyIdRequired);
+            if (companyId.Length > MaxClientOrderIdLength)
+                return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.CompanyIdTooLong);
             if (quantity == null && price == null && triggerPrice == null)
-                return RejectUpdate(clientId, orderId, OrderRejectedReason.NoChange);
+                return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.NoChange);
             if (quantity != null && quantity < 1)
-                return RejectUpdate(clientId, orderId, OrderRejectedReason.InvalidQuantity);
+                return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.InvalidQuantity);
             if (!TryConvertToTicks(price, out var priceTicks))
-                return RejectUpdate(clientId, orderId, OrderRejectedReason.InvalidPriceIncrement);
+                return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.InvalidPriceIncrement);
             if (!TryConvertToTicks(triggerPrice, out var triggerTicks))
-                return RejectUpdate(clientId, orderId, OrderRejectedReason.InvalidPriceIncrement);
-            if (_completedOrders.ContainsKey(orderId))
-                return RejectUpdate(clientId, orderId, OrderRejectedReason.TooLateToCancel);
-            if (!_orders.ContainsKey(orderId))
-                return RejectUpdate(clientId, orderId, OrderRejectedReason.OrderNotInBook);
-
-            var order = _orders[orderId];
+                return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.InvalidPriceIncrement);
+            if (!_clientOrderIndex.TryGetValue((companyId, previousClientOrderId), out var order) ||
+                order.ClientOrderId != previousClientOrderId)
+                return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.OrderNotInBook);
+            if (order.Status is not (OrderStatus.Working or OrderStatus.Hidden))
+                return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.TooLateToCancel,
+                    order.ExchangeOrderId);
+            if (_clientOrderIndex.TryGetValue((companyId, clientOrderId), out var conflictingOrder))
+            {
+                return conflictingOrder.Status is OrderStatus.Working or OrderStatus.Hidden
+                    ? RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.OrderInBook,
+                        order.ExchangeOrderId)
+                    : RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.OrderIdAlreadyUsed,
+                        order.ExchangeOrderId);
+            }
 
             if (order.Status == OrderStatus.Hidden)
             {
@@ -231,16 +267,18 @@ namespace Circus.OrderBook
                 var newPriceTicks = priceTicks ?? order.Price;
 
                 if (newTriggerTicks != null && newPriceTicks != null && order.Side == Side.Buy && newPriceTicks < newTriggerTicks)
-                    return RejectUpdate(clientId, orderId, OrderRejectedReason.TriggerPriceMustBeLessThanPrice);
+                    return RejectUpdate(companyId, clientOrderId, previousClientOrderId,
+                        OrderRejectedReason.TriggerPriceMustBeLessThanPrice, order.ExchangeOrderId);
                 if (newTriggerTicks != null && newPriceTicks != null && order.Side == Side.Sell && newPriceTicks > newTriggerTicks)
-                    return RejectUpdate(clientId, orderId, OrderRejectedReason.TriggerPriceMustBeGreaterThanPrice);
+                    return RejectUpdate(companyId, clientOrderId, previousClientOrderId,
+                        OrderRejectedReason.TriggerPriceMustBeGreaterThanPrice, order.ExchangeOrderId);
 
                 if (triggerTicks != null && order.Side == Side.Buy && triggerTicks <= _lastTradedPrice)
-                    return RejectUpdate(clientId, orderId,
-                        OrderRejectedReason.TriggerPriceMustBeGreaterThanLastTradedPrice);
+                    return RejectUpdate(companyId, clientOrderId, previousClientOrderId,
+                        OrderRejectedReason.TriggerPriceMustBeGreaterThanLastTradedPrice, order.ExchangeOrderId);
                 if (triggerTicks != null && order.Side == Side.Sell && triggerTicks >= _lastTradedPrice)
-                    return RejectUpdate(clientId, orderId,
-                        OrderRejectedReason.TriggerPriceMustBeLessThanLastTradedPrice);
+                    return RejectUpdate(companyId, clientOrderId, previousClientOrderId,
+                        OrderRejectedReason.TriggerPriceMustBeLessThanLastTradedPrice, order.ExchangeOrderId);
             }
             else
             {
@@ -252,12 +290,13 @@ namespace Circus.OrderBook
 
             if (quantity <= order.FilledQuantity)
             {
-                order.Cancel(Now());
+                order.Cancel(Now(), clientOrderId);
+                _clientOrderIndex[(companyId, clientOrderId)] = order;
                 CompleteOrder(order);
 
                 return new List<OrderBookEvent>
                 {
-                    new CancelOrderConfirmed(_security, Now(), order.ClientId, order.ToOrder(),
+                    new CancelOrderConfirmed(_security, Now(), order.CompanyId, order.ToOrder(), previousClientOrderId,
                         OrderCancelledReason.UpdatedQuantityLowerThanFilledQuantity)
                 };
             }
@@ -281,50 +320,78 @@ namespace Circus.OrderBook
                 orders[order.Side].Remove(currentPriceTicks, order.SequenceNumber);
                 orders[order.Side].Add(updatedPriceTicks, sequenceNumber, order);
             }
-            order.Update(sequenceNumber, Now(), quantity, triggerTicks, priceTicks);
+            order.Update(sequenceNumber, Now(), quantity, triggerTicks, priceTicks, clientOrderId);
+            _clientOrderIndex[(companyId, clientOrderId)] = order;
 
             List<OrderBookEvent> events = new();
-            events.Add(new UpdateOrderConfirmed(_security, Now(), order.ClientId, order.ToOrder()));
+            events.Add(new UpdateOrderConfirmed(_security, Now(), order.CompanyId, order.ToOrder(), previousClientOrderId));
             events.AddRange(Match());
             return events;
         }
 
-        public IList<OrderBookEvent> CancelOrder(Guid clientId, Guid orderId)
+        public IList<OrderBookEvent> CancelOrder(string companyId, string clientOrderId, string previousClientOrderId)
         {
             if (_status == OrderBookStatus.Closed)
-                return RejectCancel(clientId, orderId, OrderRejectedReason.MarketClosed);
-            if (_completedOrders.ContainsKey(orderId))
-                return RejectCancel(clientId, orderId, OrderRejectedReason.TooLateToCancel);
-            if (!_orders.ContainsKey(orderId))
-                return RejectCancel(clientId, orderId, OrderRejectedReason.OrderNotInBook);
-            var order = _orders[orderId];
+                return RejectCancel(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.MarketClosed);
+            if (string.IsNullOrEmpty(clientOrderId))
+                return RejectCancel(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.ClientOrderIdRequired);
+            if (clientOrderId.Length > MaxClientOrderIdLength)
+                return RejectCancel(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.ClientOrderIdTooLong);
+            if (string.IsNullOrEmpty(companyId))
+                return RejectCancel(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.CompanyIdRequired);
+            if (companyId.Length > MaxClientOrderIdLength)
+                return RejectCancel(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.CompanyIdTooLong);
+            if (!_clientOrderIndex.TryGetValue((companyId, previousClientOrderId), out var order) ||
+                order.ClientOrderId != previousClientOrderId)
+                return RejectCancel(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.OrderNotInBook);
+            if (order.Status is not (OrderStatus.Working or OrderStatus.Hidden))
+                return RejectCancel(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.TooLateToCancel,
+                    order.ExchangeOrderId);
+            if (_clientOrderIndex.TryGetValue((companyId, clientOrderId), out var conflictingOrder))
+            {
+                return conflictingOrder.Status is OrderStatus.Working or OrderStatus.Hidden
+                    ? RejectCancel(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.OrderInBook,
+                        order.ExchangeOrderId)
+                    : RejectCancel(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.OrderIdAlreadyUsed,
+                        order.ExchangeOrderId);
+            }
 
-            order.Cancel(Now());
+            order.Cancel(Now(), clientOrderId);
+            _clientOrderIndex[(companyId, clientOrderId)] = order;
             CompleteOrder(order);
 
             return new List<OrderBookEvent>
             {
-                new CancelOrderConfirmed(_security, Now(), order.ClientId, order.ToOrder(),
+                new CancelOrderConfirmed(_security, Now(), order.CompanyId, order.ToOrder(), previousClientOrderId,
                     OrderCancelledReason.Cancelled)
             };
         }
 
-        private List<OrderBookEvent> RejectCreate(Guid clientId, Guid orderId, OrderRejectedReason reason) =>
-            new() {new CreateOrderRejected(_security, Now(), clientId, orderId, reason)};
+        private List<OrderBookEvent> RejectCreate(string companyId, string clientOrderId, OrderRejectedReason reason) =>
+            new() {new CreateOrderRejected(_security, Now(), companyId, clientOrderId, reason)};
 
-        private List<OrderBookEvent> RejectUpdate(Guid clientId, Guid orderId, OrderRejectedReason reason) =>
-            new() {new UpdateOrderRejected(_security, Now(), clientId, orderId, reason)};
+        private List<OrderBookEvent> RejectUpdate(string companyId, string clientOrderId, string previousClientOrderId,
+                OrderRejectedReason reason, string? exchangeOrderId = null) =>
+            new()
+            {
+                new UpdateOrderRejected(_security, Now(), companyId, clientOrderId, previousClientOrderId,
+                    exchangeOrderId, reason)
+            };
 
-        private List<OrderBookEvent> RejectCancel(Guid clientId, Guid orderId, OrderRejectedReason reason) =>
-            new() {new CancelOrderRejected(_security, Now(), clientId, orderId, reason)};
+        private List<OrderBookEvent> RejectCancel(string companyId, string clientOrderId, string previousClientOrderId,
+                OrderRejectedReason reason, string? exchangeOrderId = null) =>
+            new()
+            {
+                new CancelOrderRejected(_security, Now(), companyId, clientOrderId, previousClientOrderId,
+                    exchangeOrderId, reason)
+            };
 
         private OrderBookEvent ExpireOrder(InternalOrder order)
         {
             order.Expire(Now());
             CompleteOrder(order);
 
-
-            return new ExpireOrderConfirmed(_security, Now(), order.ClientId, order.ToOrder());
+            return new ExpireOrderConfirmed(_security, Now(), order.CompanyId, order.ToOrder());
         }
 
         private void CompleteOrder(InternalOrder order)
@@ -345,8 +412,8 @@ namespace Circus.OrderBook
 
         private void FinishOrder(InternalOrder order)
         {
-            _orders.Remove(order.OrderId);
-            _completedOrders.Add(order.OrderId, order);
+            _orders.Remove(order.ExchangeOrderId);
+            _completedOrders.Add(order.ExchangeOrderId, order);
         }
 
         private void FillOrder(InternalOrder order, DateTime time, int quantity)
@@ -390,16 +457,15 @@ namespace Circus.OrderBook
                 var priceTicks = resting.Price ?? throw new InvalidOperationException("limit order requires price");
                 var price = ToDecimal(priceTicks);
 
-
                 FillOrder(resting, time, quantity);
                 FillOrder(aggressor, time, quantity);
 
                 events.Add(new OrdersMatched(_security, time, price, quantity,
                     new[]
                     {
-                        new FillOrderConfirmed(_security, time, resting.ClientId, resting.ToOrder(), price, quantity,
+                        new FillOrderConfirmed(_security, time, resting.CompanyId, resting.ToOrder(), price, quantity,
                             true),
-                        new FillOrderConfirmed(_security, time, aggressor.ClientId, aggressor.ToOrder(), price,
+                        new FillOrderConfirmed(_security, time, aggressor.CompanyId, aggressor.ToOrder(), price,
                             quantity, false)
                     }
                 ));
@@ -474,22 +540,24 @@ namespace Circus.OrderBook
                 if (order.Type == OrderType.StopMarket &&
                     !TryGetLimitPrice(order.Side, _security.MarketOrderProtectionTicks, out newPriceTicks))
                 {
+                    var previousClientOrderId = order.ClientOrderId;
                     order.Cancel(Now());
                     FinishOrder(order);
 
-                    events.Add(new CancelOrderConfirmed(_security, Now(), order.ClientId, order.ToOrder(),
-                        OrderCancelledReason.NoOrdersToMatchMarketOrder));
+                    events.Add(new CancelOrderConfirmed(_security, Now(), order.CompanyId, order.ToOrder(),
+                        previousClientOrderId, OrderCancelledReason.NoOrdersToMatchMarketOrder));
                     continue;
                 }
 
                 if (order.Validity == OrderValidity.FillOrKill &&
                     !HasSufficientLiquidity(order.Side, newPriceTicks!.Value, order.RemainingQuantity))
                 {
+                    var previousClientOrderId = order.ClientOrderId;
                     order.Cancel(Now());
                     FinishOrder(order);
 
-                    events.Add(new CancelOrderConfirmed(_security, Now(), order.ClientId, order.ToOrder(),
-                        OrderCancelledReason.FillOrKillNotFilled));
+                    events.Add(new CancelOrderConfirmed(_security, Now(), order.CompanyId, order.ToOrder(),
+                        previousClientOrderId, OrderCancelledReason.FillOrKillNotFilled));
                     continue;
                 }
 
@@ -499,7 +567,8 @@ namespace Circus.OrderBook
                 var limitPriceTicks = order.Price ?? throw new Exception("missing price");
                 _working[order.Side].Add(limitPriceTicks, order.SequenceNumber, order);
 
-                events.Add(new UpdateOrderConfirmed(_security, time, order.ClientId, order.ToOrder()));
+                events.Add(new UpdateOrderConfirmed(_security, time, order.CompanyId, order.ToOrder(),
+                    order.ClientOrderId));
             }
 
             return events;

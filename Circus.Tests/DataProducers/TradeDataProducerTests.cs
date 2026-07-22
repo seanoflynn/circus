@@ -19,9 +19,9 @@ namespace Circus.Tests.DataProducers
 
             var book = new InMemoryOrderBook(sec, timeProvider);
             book.UpdateStatus(OrderBookStatus.Open);
-            book.CreateOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Buy, 3, 100);
+            book.CreateOrder("Company1", "Order1", OrderValidity.Day, Side.Buy, 3, 100);
             var bookEvents =
-                book.CreateOrder(Guid.NewGuid(), Guid.NewGuid(), OrderValidity.Day, Side.Sell, 3, 100);
+                book.CreateOrder("Company2", "Order2", OrderValidity.Day, Side.Sell, 3, 100);
 
             // act
             var events = producer.Process(book, bookEvents);

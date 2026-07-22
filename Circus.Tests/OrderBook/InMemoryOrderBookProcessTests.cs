@@ -10,8 +10,10 @@ namespace Circus.Tests.OrderBook
     {
         private static readonly Security Sec = new("GCZ6", SecurityType.Future, 10, 10);
         private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
-        private static readonly Guid ClientId1 = Guid.NewGuid();
-        private static readonly Guid OrderId1 = Guid.NewGuid();
+        private static readonly string CompanyId1 = "Company1";
+        private static readonly string OrderId1 = "Order1";
+        private static readonly string OrderId2 = "Order2";
+        private static readonly string OrderId3 = "Order3";
 
         private static TestTimeProvider TimeProvider;
         private static IOrderBook Book;
@@ -31,7 +33,7 @@ namespace Circus.Tests.OrderBook
 
             // act - only Price set, no TriggerPrice: this must rest as a plain working limit
             // order, not get misrouted into the TriggerPrice slot as a hidden stop order
-            var events = Book.Process(new CreateOrder(Sec, ClientId1, OrderId1, OrderValidity.Day, Side.Buy, 3, 100));
+            var events = Book.Process(new CreateOrder(Sec, CompanyId1, OrderId1, OrderValidity.Day, Side.Buy, 3, 100));
 
             // assert
             Assert.IsNotNull(events);
@@ -49,10 +51,10 @@ namespace Circus.Tests.OrderBook
         {
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(ClientId1, OrderId1, OrderValidity.Day, Side.Buy, 3, 100);
+            Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Buy, 3, 100);
 
             // act - only Price set, no TriggerPrice: this must actually reprice the order
-            var events = Book.Process(new UpdateOrder(Sec, ClientId1, OrderId1, Price: 110));
+            var events = Book.Process(new UpdateOrder(Sec, CompanyId1, OrderId2, OrderId1, Price: 110));
 
             // assert
             Assert.IsNotNull(events);
@@ -66,7 +68,7 @@ namespace Circus.Tests.OrderBook
         public void Process_CancelOrder_Success()
         {
             // act
-            Book.Process(new CancelOrder(Sec, ClientId1, OrderId1));
+            Book.Process(new CancelOrder(Sec, CompanyId1, OrderId3, OrderId1));
         }
 
         [Test]

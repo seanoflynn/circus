@@ -9,8 +9,9 @@ namespace Circus.OrderBook
     internal class InternalOrder
     {
         public long SequenceNumber { get; private set; }
-        public Guid ClientId { get; }
-        public Guid OrderId { get; }
+        public string CompanyId { get; }
+        public string ExchangeOrderId { get; }
+        public string ClientOrderId { get; private set; }
         public Security Security { get; }
         public DateTime CreatedTime { get; }
         public DateTime ModifiedTime { get; private set; }
@@ -26,13 +27,14 @@ namespace Circus.OrderBook
         public long? TriggerPrice { get; private set; }
         public DateOnly? GoodTilDate { get; }
 
-        public InternalOrder(long sequenceNumber, Guid clientId, Guid orderId, Security security, DateTime time,
+        public InternalOrder(long sequenceNumber, string companyId, string clientOrderId, Security security, DateTime time,
             OrderStatus status, OrderType type, OrderValidity validity, Side side, int quantity, long? price,
             long? triggerPrice, DateOnly? goodTilDate = null)
         {
             SequenceNumber = sequenceNumber;
-            ClientId = clientId;
-            OrderId = orderId;
+            CompanyId = companyId;
+            ExchangeOrderId = sequenceNumber.ToString();
+            ClientOrderId = clientOrderId;
             Security = security;
             CreatedTime = time;
             ModifiedTime = time;
@@ -49,19 +51,24 @@ namespace Circus.OrderBook
         }
 
         public override string ToString() =>
-            $"[Order #{OrderId} {Status} {ModifiedTime:HH:mm:ss} {Side} {Quantity}@{ToDecimal(Price)}]";
+            $"[Order #{ExchangeOrderId} company={CompanyId} clientOrder={ClientOrderId} {Status} {ModifiedTime:HH:mm:ss} {Side} {Quantity}@{ToDecimal(Price)}]";
 
         public Order ToOrder()
         {
-            return new(ClientId, OrderId, Security, CreatedTime, ModifiedTime, CompletedTime, Status, Type, Validity,
-                Side, Quantity, FilledQuantity, RemainingQuantity, ToDecimal(Price), ToDecimal(TriggerPrice),
-                GoodTilDate);
+            return new(CompanyId, ExchangeOrderId, ClientOrderId, Security, CreatedTime, ModifiedTime, CompletedTime,
+                Status, Type, Validity, Side, Quantity, FilledQuantity, RemainingQuantity, ToDecimal(Price),
+                ToDecimal(TriggerPrice), GoodTilDate);
         }
 
         private decimal? ToDecimal(long? ticks) => ticks.HasValue ? ticks.Value * Security.TickSize : null;
 
-        public void Cancel(DateTime time)
+        public void Cancel(DateTime time, string? clientOrderId = null)
         {
+            if (clientOrderId != null)
+            {
+                ClientOrderId = clientOrderId;
+            }
+
             RemainingQuantity = 0;
             CompletedTime = time;
             Status = OrderStatus.Cancelled;
@@ -74,10 +81,12 @@ namespace Circus.OrderBook
             Status = OrderStatus.Expired;
         }
 
-        public void Update(long sequenceNumber, DateTime time, int? quantity, long? triggerPrice, long? price)
+        public void Update(long sequenceNumber, DateTime time, int? quantity, long? triggerPrice, long? price,
+            string clientOrderId)
         {
             SequenceNumber = sequenceNumber;
             ModifiedTime = time;
+            ClientOrderId = clientOrderId;
             if (quantity.HasValue)
             {
                 // quantity is the new total size, so remaining = new total - already filled
