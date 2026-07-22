@@ -10,23 +10,25 @@ namespace Circus.OrderBook
     {
         private readonly Security _security;
         private readonly ITimeProvider _timeProvider;
-        
+
         private OrderBookStatus _status = OrderBookStatus.Closed;
         private long _nextSequenceNumber;
-        private decimal? _lastTradedPrice;
+        private long? _lastTradedPrice;
 
-        private readonly Dictionary<Side, SortedDictionary<decimal, SortedDictionary<long, InternalOrder>>> _working =
+        // Keyed and compared as tick counts (price / Security.TickSize) rather than decimal —
+        // see InternalOrder for why.
+        private readonly Dictionary<Side, SortedDictionary<long, SortedDictionary<long, InternalOrder>>> _working =
             new()
             {
-                {Side.Buy, new(new DescendingComparer())},
+                {Side.Buy, new(new DescendingComparer<long>())},
                 {Side.Sell, new()}
             };
 
-        private readonly Dictionary<Side, SortedDictionary<decimal, SortedDictionary<long, InternalOrder>>> _stops =
+        private readonly Dictionary<Side, SortedDictionary<long, SortedDictionary<long, InternalOrder>>> _stops =
             new()
             {
                 {Side.Buy, new()},
-                {Side.Sell, new(new DescendingComparer())}
+                {Side.Sell, new(new DescendingComparer<long>())}
             };
 
         private readonly Dictionary<Guid, InternalOrder> _orders = new();
@@ -47,7 +49,7 @@ namespace Circus.OrderBook
         {
             return _working[side].Take(maxPrices)
                 .Select(x => new Level(
-                    x.Key,
+                    ToDecimal(x.Key),
                     x.Value.Sum(y => y.Value.RemainingQuantity),
                     x.Value.Count))
                 .ToList();
@@ -90,19 +92,19 @@ namespace Circus.OrderBook
                 return RejectCreate(clientId, orderId, OrderRejectedReason.MarketPreOpen);
             if (quantity < 1)
                 return RejectCreate(clientId, orderId, OrderRejectedReason.InvalidQuantity);
-            if (price != null && price % _security.TickSize != 0)
+            if (!TryConvertToTicks(price, out var priceTicks))
                 return RejectCreate(clientId, orderId, OrderRejectedReason.InvalidPriceIncrement);
-            if (triggerPrice != null && triggerPrice % _security.TickSize != 0)
+            if (!TryConvertToTicks(triggerPrice, out var triggerTicks))
                 return RejectCreate(clientId, orderId, OrderRejectedReason.InvalidPriceIncrement);
-            if (triggerPrice != null && price != null && side == Side.Buy && price < triggerPrice)
+            if (triggerTicks != null && priceTicks != null && side == Side.Buy && priceTicks < triggerTicks)
                 return RejectCreate(clientId, orderId, OrderRejectedReason.TriggerPriceMustBeLessThanPrice);
-            if (triggerPrice != null && price != null && side == Side.Sell && price > triggerPrice)
+            if (triggerTicks != null && priceTicks != null && side == Side.Sell && priceTicks > triggerTicks)
                 return RejectCreate(clientId, orderId, OrderRejectedReason.TriggerPriceMustBeGreaterThanPrice);
-            if (triggerPrice != null && !_lastTradedPrice.HasValue)
+            if (triggerTicks != null && !_lastTradedPrice.HasValue)
                 return RejectCreate(clientId, orderId, OrderRejectedReason.NoLastTradedPrice);
-            if (triggerPrice != null && side == Side.Buy && triggerPrice <= _lastTradedPrice)
+            if (triggerTicks != null && side == Side.Buy && triggerTicks <= _lastTradedPrice)
                 return RejectCreate(clientId, orderId, OrderRejectedReason.TriggerPriceMustBeGreaterThanLastTradedPrice);
-            if (triggerPrice != null && side == Side.Sell && triggerPrice >= _lastTradedPrice)
+            if (triggerTicks != null && side == Side.Sell && triggerTicks >= _lastTradedPrice)
                 return RejectCreate(clientId, orderId, OrderRejectedReason.TriggerPriceMustBeLessThanLastTradedPrice);
             if (_orders.ContainsKey(orderId))
                 return RejectCreate(clientId, orderId, OrderRejectedReason.OrderInBook);
@@ -112,12 +114,12 @@ namespace Circus.OrderBook
             if (type == OrderType.Market || type == OrderType.MarketLimit)
             {
                 var protectionTicks = type == OrderType.MarketLimit ? 0 : _security.MarketOrderProtectionTicks;
-                if(!TryGetLimitPrice(side, protectionTicks, out price))
+                if(!TryGetLimitPrice(side, protectionTicks, out priceTicks))
                     return RejectCreate(clientId, orderId, OrderRejectedReason.NoOrdersToMatchMarketOrder);
             }
 
-            if (validity == OrderValidity.FillOrKill && !triggerPrice.HasValue &&
-                !HasSufficientLiquidity(side, price!.Value, quantity))
+            if (validity == OrderValidity.FillOrKill && !triggerTicks.HasValue &&
+                !HasSufficientLiquidity(side, priceTicks!.Value, quantity))
                 return RejectCreate(clientId, orderId, OrderRejectedReason.InsufficientLiquidityForFillOrKill);
             if (validity == OrderValidity.GoodTilDate && !goodTilDate.HasValue)
                 return RejectCreate(clientId, orderId, OrderRejectedReason.GoodTilDateRequired);
@@ -126,14 +128,14 @@ namespace Circus.OrderBook
 
             _nextSequenceNumber++;
             var order = new InternalOrder(_nextSequenceNumber, clientId, orderId, _security, Now(), status, type,
-                validity, side, quantity, price, triggerPrice, goodTilDate);
+                validity, side, quantity, priceTicks, triggerTicks, goodTilDate);
 
             _orders.Add(orderId, order);
-            var orders = (triggerPrice.HasValue ? _stops : _working);
-            var newPrice = (triggerPrice ?? price) ?? throw new Exception("error");
-            orders[side].Add(newPrice, _nextSequenceNumber, order);
+            var orders = (triggerTicks.HasValue ? _stops : _working);
+            var newPriceTicks = (triggerTicks ?? priceTicks) ?? throw new Exception("error");
+            orders[side].Add(newPriceTicks, _nextSequenceNumber, order);
             Console.WriteLine($"order added: {order}");
-            
+
             List<OrderBookEvent> events = new();
             events.Add(new CreateOrderConfirmed(_security, Now(), clientId, order.ToOrder()));
             events.AddRange(Match());
@@ -144,27 +146,48 @@ namespace Circus.OrderBook
             return events;
         }
 
-        private bool TryGetLimitPrice(Side side, int protectionTicks, out decimal? price)
+        private bool TryConvertToTicks(decimal? price, out long? ticks)
         {
-            price = null;
+            if (!price.HasValue)
+            {
+                ticks = null;
+                return true;
+            }
+
+            var rawTicks = price.Value / _security.TickSize;
+            var truncatedTicks = Math.Truncate(rawTicks);
+            if (rawTicks != truncatedTicks)
+            {
+                ticks = null;
+                return false;
+            }
+
+            ticks = (long) truncatedTicks;
+            return true;
+        }
+
+        private decimal ToDecimal(long ticks) => ticks * _security.TickSize;
+
+        private bool TryGetLimitPrice(Side side, int protectionTicks, out long? priceTicks)
+        {
+            priceTicks = null;
             var opposing = _working[side == Side.Buy ? Side.Sell : Side.Buy];
             if (!opposing.Any())
                 return false;
 
             // set price as best offer + protection ticks for buy orders, best bid - protection ticks for sell orders
             // TODO: option to use best bid + protection tickets for buy orders, etc (eurex)
-            price = opposing.First().Key +
-                    ((side == Side.Buy ? 1 : -1) * (protectionTicks * _security.TickSize));
+            priceTicks = opposing.First().Key + ((side == Side.Buy ? 1 : -1) * protectionTicks);
             return true;
         }
 
-        private bool HasSufficientLiquidity(Side side, decimal price, int quantity)
+        private bool HasSufficientLiquidity(Side side, long priceTicks, int quantity)
         {
             var opposing = _working[side == Side.Buy ? Side.Sell : Side.Buy];
             var total = 0;
             foreach (var level in opposing)
             {
-                var crosses = side == Side.Buy ? level.Key <= price : level.Key >= price;
+                var crosses = side == Side.Buy ? level.Key <= priceTicks : level.Key >= priceTicks;
                 if (!crosses)
                     break;
 
@@ -192,40 +215,40 @@ namespace Circus.OrderBook
                 return RejectUpdate(clientId, orderId, OrderRejectedReason.NoChange);
             if (quantity != null && quantity < 1)
                 return RejectUpdate(clientId, orderId, OrderRejectedReason.InvalidQuantity);
-            if (price != null && price % _security.TickSize != 0)
+            if (!TryConvertToTicks(price, out var priceTicks))
                 return RejectUpdate(clientId, orderId, OrderRejectedReason.InvalidPriceIncrement);
-            if (triggerPrice != null && triggerPrice % _security.TickSize != 0)
+            if (!TryConvertToTicks(triggerPrice, out var triggerTicks))
                 return RejectUpdate(clientId, orderId, OrderRejectedReason.InvalidPriceIncrement);
             if (_completedOrders.ContainsKey(orderId))
                 return RejectUpdate(clientId, orderId, OrderRejectedReason.TooLateToCancel);
             if (!_orders.ContainsKey(orderId))
                 return RejectUpdate(clientId, orderId, OrderRejectedReason.OrderNotInBook);
-            
+
             var order = _orders[orderId];
 
             if (order.Status == OrderStatus.Hidden)
             {
-                var newTriggerPrice = triggerPrice ?? order.TriggerPrice;
-                var newPrice = price ?? order.Price;
-                
-                if (newTriggerPrice != null && newPrice != null && order.Side == Side.Buy && newPrice < newTriggerPrice)
+                var newTriggerTicks = triggerTicks ?? order.TriggerPrice;
+                var newPriceTicks = priceTicks ?? order.Price;
+
+                if (newTriggerTicks != null && newPriceTicks != null && order.Side == Side.Buy && newPriceTicks < newTriggerTicks)
                     return RejectUpdate(clientId, orderId, OrderRejectedReason.TriggerPriceMustBeLessThanPrice);
-                if (newTriggerPrice != null && newPrice != null && order.Side == Side.Sell && newPrice > newTriggerPrice)
+                if (newTriggerTicks != null && newPriceTicks != null && order.Side == Side.Sell && newPriceTicks > newTriggerTicks)
                     return RejectUpdate(clientId, orderId, OrderRejectedReason.TriggerPriceMustBeGreaterThanPrice);
-                
-                if (triggerPrice != null && order.Side == Side.Buy && triggerPrice <= _lastTradedPrice)
+
+                if (triggerTicks != null && order.Side == Side.Buy && triggerTicks <= _lastTradedPrice)
                     return RejectUpdate(clientId, orderId,
                         OrderRejectedReason.TriggerPriceMustBeGreaterThanLastTradedPrice);
-                if (triggerPrice != null && order.Side == Side.Sell && triggerPrice >= _lastTradedPrice)
+                if (triggerTicks != null && order.Side == Side.Sell && triggerTicks >= _lastTradedPrice)
                     return RejectUpdate(clientId, orderId,
                         OrderRejectedReason.TriggerPriceMustBeLessThanLastTradedPrice);
             }
             else
             {
                 // ignore trigger price if already triggered
-                triggerPrice = null;
+                triggerTicks = null;
             }
-            
+
             // TODO: can't update price on stop market order?
 
             if (quantity <= order.FilledQuantity)
@@ -242,25 +265,25 @@ namespace Circus.OrderBook
             }
 
             var sequenceNumber = order.SequenceNumber;
-            var isPriceChange = (triggerPrice != null && order.Status == OrderStatus.Hidden && triggerPrice != order.TriggerPrice) ||
-                                (price != null && order.Status != OrderStatus.Hidden && price != order.Price);
+            var isPriceChange = (triggerTicks != null && order.Status == OrderStatus.Hidden && triggerTicks != order.TriggerPrice) ||
+                                (priceTicks != null && order.Status != OrderStatus.Hidden && priceTicks != order.Price);
             var isQuantityIncrease = (quantity != null && quantity > order.Quantity);
 
             var orders = (order.Status == OrderStatus.Hidden ? _stops : _working);
-            
+
             if (isPriceChange || isQuantityIncrease)
             {
                 _nextSequenceNumber++;
                 sequenceNumber = _nextSequenceNumber;
-                var currentPrice = (order.Status == OrderStatus.Hidden ? order.TriggerPrice : order.Price) ??
+                var currentPriceTicks = (order.Status == OrderStatus.Hidden ? order.TriggerPrice : order.Price) ??
                                    throw new InvalidOperationException("missing price");
-                var newPrice =
-                    (order.Status == OrderStatus.Hidden ? triggerPrice ?? order.TriggerPrice : price ?? order.Price) ??
+                var updatedPriceTicks =
+                    (order.Status == OrderStatus.Hidden ? triggerTicks ?? order.TriggerPrice : priceTicks ?? order.Price) ??
                     throw new InvalidOperationException("missing price");
-                orders[order.Side].Remove(currentPrice, order.SequenceNumber);
-                orders[order.Side].Add(newPrice, sequenceNumber, order);
+                orders[order.Side].Remove(currentPriceTicks, order.SequenceNumber);
+                orders[order.Side].Add(updatedPriceTicks, sequenceNumber, order);
             }
-            order.Update(sequenceNumber, Now(), quantity, triggerPrice, price);
+            order.Update(sequenceNumber, Now(), quantity, triggerTicks, priceTicks);
             Console.WriteLine($"order updated: {order}");
 
             List<OrderBookEvent> events = new();
@@ -369,7 +392,8 @@ namespace Circus.OrderBook
                 var aggressor = buy == resting ? sell : buy;
 
                 var quantity = Math.Min(resting.RemainingQuantity, aggressor.RemainingQuantity);
-                var price = resting.Price ?? throw new InvalidOperationException("limit order requires price");
+                var priceTicks = resting.Price ?? throw new InvalidOperationException("limit order requires price");
+                var price = ToDecimal(priceTicks);
 
                 Console.WriteLine($"matched orders: {quantity}@{price}");
                 Console.WriteLine($"- resting   {resting}");
@@ -388,9 +412,9 @@ namespace Circus.OrderBook
                     }
                 ));
 
-                if (_lastTradedPrice != price)
+                if (_lastTradedPrice != priceTicks)
                 {
-                    _lastTradedPrice = price;
+                    _lastTradedPrice = priceTicks;
                     events.AddRange(CheckStops());
                 }
 
@@ -407,7 +431,7 @@ namespace Circus.OrderBook
             var triggered = new SortedDictionary<long, InternalOrder>();
 
             var buys = _stops[Side.Buy].FirstOrDefault();
-            while (!buys.Equals(default(KeyValuePair<decimal, SortedDictionary<long, InternalOrder>>)) &&
+            while (!buys.Equals(default(KeyValuePair<long, SortedDictionary<long, InternalOrder>>)) &&
                    buys.Key <= _lastTradedPrice)
             {
                 foreach (var (seqNum, order) in buys.Value)
@@ -419,7 +443,7 @@ namespace Circus.OrderBook
             }
 
             var sells = _stops[Side.Sell].FirstOrDefault();
-            while (!sells.Equals(default(KeyValuePair<decimal, SortedDictionary<long, InternalOrder>>)) &&
+            while (!sells.Equals(default(KeyValuePair<long, SortedDictionary<long, InternalOrder>>)) &&
                    sells.Key >= _lastTradedPrice)
             {
                 foreach (var (seqNum, order) in sells.Value)
@@ -454,9 +478,9 @@ namespace Circus.OrderBook
             foreach (var (_, order) in orders)
             {
                 // calculate price for stop market orders
-                decimal? newPrice = order.Price;
+                long? newPriceTicks = order.Price;
                 if (order.Type == OrderType.StopMarket &&
-                    !TryGetLimitPrice(order.Side, _security.MarketOrderProtectionTicks, out newPrice))
+                    !TryGetLimitPrice(order.Side, _security.MarketOrderProtectionTicks, out newPriceTicks))
                 {
                     order.Cancel(Now());
                     FinishOrder(order);
@@ -468,7 +492,7 @@ namespace Circus.OrderBook
                 }
 
                 if (order.Validity == OrderValidity.FillOrKill &&
-                    !HasSufficientLiquidity(order.Side, newPrice!.Value, order.RemainingQuantity))
+                    !HasSufficientLiquidity(order.Side, newPriceTicks!.Value, order.RemainingQuantity))
                 {
                     order.Cancel(Now());
                     FinishOrder(order);
@@ -480,10 +504,10 @@ namespace Circus.OrderBook
                 }
 
                 _nextSequenceNumber++;
-                order.ConvertToLimit(time, _nextSequenceNumber, newPrice);
+                order.ConvertToLimit(time, _nextSequenceNumber, newPriceTicks);
 
-                var limitPrice = order.Price ?? throw new Exception("missing price");
-                _working[order.Side].Add(limitPrice, order.SequenceNumber, order);
+                var limitPriceTicks = order.Price ?? throw new Exception("missing price");
+                _working[order.Side].Add(limitPriceTicks, order.SequenceNumber, order);
 
                 events.Add(new UpdateOrderConfirmed(_security, time, order.ClientId, order.ToOrder()));
             }
@@ -542,8 +566,8 @@ namespace Circus.OrderBook
 
     internal static class SortedDictionaryExtensions
     {
-        internal static void Add(this SortedDictionary<decimal, SortedDictionary<long, InternalOrder>> orders,
-            decimal price, long sequenceNumber, InternalOrder order)
+        internal static void Add(this SortedDictionary<long, SortedDictionary<long, InternalOrder>> orders,
+            long price, long sequenceNumber, InternalOrder order)
         {
             if (orders.ContainsKey(price))
             {
@@ -555,8 +579,8 @@ namespace Circus.OrderBook
             }
         }
 
-        internal static void Remove(this SortedDictionary<decimal, SortedDictionary<long, InternalOrder>> orders,
-            decimal price, long sequenceNumber)
+        internal static void Remove(this SortedDictionary<long, SortedDictionary<long, InternalOrder>> orders,
+            long price, long sequenceNumber)
         {
             orders[price].Remove(sequenceNumber);
 
