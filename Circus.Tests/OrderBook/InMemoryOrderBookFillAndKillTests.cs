@@ -161,7 +161,7 @@ namespace Circus.Tests.OrderBook
             Assert.IsNotNull(cancelled);
             Assert.AreEqual(OrderCancelledReason.FillAndKillNotFilled, cancelled.Reason);
             Assert.AreEqual(OrderId2, cancelled.Order.OrderId);
-            Assert.AreEqual(OrderType.Limit, cancelled.Order.Type);
+            Assert.AreEqual(OrderType.Market, cancelled.Order.Type);
             Assert.AreEqual(700, cancelled.Order.Price);
             Assert.AreEqual(OrderStatus.Cancelled, cancelled.Order.Status);
             Assert.AreEqual(2, cancelled.Order.FilledQuantity);

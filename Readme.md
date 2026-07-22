@@ -13,6 +13,7 @@ Order types
 - [x] Market orders
 - [x] Stop market orders
 - [x] Stop limit orders
+- [x] Market limit orders
 
 Order properties
 - [ ] Min quantity

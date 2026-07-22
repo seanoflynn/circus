@@ -58,7 +58,7 @@ namespace Circus.OrderBook
             return action switch
             {
                 CreateOrder create => CreateOrder(create.ClientId, create.OrderId, create.OrderValidity, create.Side,
-                    create.Quantity, create.Price, create.TriggerPrice),
+                    create.Quantity, create.Price, create.TriggerPrice, create.MarketLimit),
                 UpdateOrder update => UpdateOrder(update.ClientId, update.OrderId, update.Quantity, update.Price,
                     update.TriggerPrice),
                 CancelOrder cancel => CancelOrder(cancel.ClientId, cancel.OrderId),
@@ -68,7 +68,7 @@ namespace Circus.OrderBook
         }
 
         public IList<OrderBookEvent> CreateOrder(Guid clientId, Guid orderId, OrderValidity validity, Side side,
-            int quantity, decimal? price = null, decimal? triggerPrice = null)
+            int quantity, decimal? price = null, decimal? triggerPrice = null, bool marketLimit = false)
         {
             var type = price.HasValue ? OrderType.Limit : OrderType.Market;
             var status = OrderStatus.Working;
@@ -78,7 +78,11 @@ namespace Circus.OrderBook
                 type = (type == OrderType.Market ? OrderType.StopMarket : OrderType.StopLimit);
                 status = OrderStatus.Hidden;
             }
-            
+            else if (marketLimit && type == OrderType.Market)
+            {
+                type = OrderType.MarketLimit;
+            }
+
             if (_status == OrderBookStatus.Closed)
                 return RejectCreate(clientId, orderId, OrderRejectedReason.MarketClosed);
             if (type == OrderType.Market && _status == OrderBookStatus.PreOpen)
@@ -104,10 +108,10 @@ namespace Circus.OrderBook
             if (_completedOrders.ContainsKey(orderId))
                 return RejectCreate(clientId, orderId, OrderRejectedReason.OrderIdAlreadyUsed);
 
-            if (type == OrderType.Market)
+            if (type == OrderType.Market || type == OrderType.MarketLimit)
             {
-                type = OrderType.Limit;
-                if(!TryGetLimitPrice(side, out price))
+                var protectionTicks = type == OrderType.MarketLimit ? 0 : _security.MarketOrderProtectionTicks;
+                if(!TryGetLimitPrice(side, protectionTicks, out price))
                     return RejectCreate(clientId, orderId, OrderRejectedReason.NoOrdersToMatchMarketOrder);
             }
 
@@ -135,7 +139,7 @@ namespace Circus.OrderBook
             return events;
         }
 
-        private bool TryGetLimitPrice(Side side, out decimal? price)
+        private bool TryGetLimitPrice(Side side, int protectionTicks, out decimal? price)
         {
             price = null;
             var opposing = _working[side == Side.Buy ? Side.Sell : Side.Buy];
@@ -145,7 +149,7 @@ namespace Circus.OrderBook
             // set price as best offer + protection ticks for buy orders, best bid - protection ticks for sell orders
             // TODO: option to use best bid + protection tickets for buy orders, etc (eurex)
             price = opposing.First().Key +
-                    ((side == Side.Buy ? 1 : -1) * (_security.MarketOrderProtectionTicks * _security.TickSize));
+                    ((side == Side.Buy ? 1 : -1) * (protectionTicks * _security.TickSize));
             return true;
         }
 
@@ -446,7 +450,8 @@ namespace Circus.OrderBook
             {
                 // calculate price for stop market orders
                 decimal? newPrice = order.Price;
-                if (order.Type == OrderType.StopMarket && !TryGetLimitPrice(order.Side, out newPrice))
+                if (order.Type == OrderType.StopMarket &&
+                    !TryGetLimitPrice(order.Side, _security.MarketOrderProtectionTicks, out newPrice))
                 {
                     order.Cancel(Now());
                     FinishOrder(order);

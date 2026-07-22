@@ -14,7 +14,7 @@ namespace Circus.OrderBook
         IList<OrderBookEvent> Process(OrderBookAction action);
 
         IList<OrderBookEvent> CreateOrder(Guid clientId, Guid orderId, OrderValidity validity, Side side, int quantity,
-            decimal? price = null, decimal? triggerPrice = null);
+            decimal? price = null, decimal? triggerPrice = null, bool marketLimit = false);
 
         // quantity is the order's new total size (filled + remaining), not the new remaining/resting amount
         IList<OrderBookEvent> UpdateOrder(Guid clientId, Guid orderId, int? quantity = null, decimal? price = null,

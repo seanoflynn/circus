@@ -99,7 +99,7 @@ namespace Circus.Tests.OrderBook
             Assert.AreEqual(Now2, created.Order.ModifiedTime);
             Assert.IsNull(created.Order.CompletedTime);
             Assert.AreEqual(OrderStatus.Working, created.Order.Status);
-            Assert.AreEqual(OrderType.Limit, created.Order.Type);
+            Assert.AreEqual(OrderType.Market, created.Order.Type);
             Assert.AreEqual(OrderValidity.Day, created.Order.OrderValidity);
             Assert.AreEqual(side, created.Order.Side);
             Assert.AreEqual(limitPrice, created.Order.Price);
@@ -154,7 +154,7 @@ namespace Circus.Tests.OrderBook
             Assert.AreEqual(Now2, matched.Fills[1].Order.ModifiedTime);
             Assert.IsNull(matched.Fills[1].Order.CompletedTime);
             Assert.AreEqual(OrderStatus.Working, matched.Fills[1].Order.Status);
-            Assert.AreEqual(OrderType.Limit, matched.Fills[1].Order.Type);
+            Assert.AreEqual(OrderType.Market, matched.Fills[1].Order.Type);
             Assert.AreEqual(OrderValidity.Day, matched.Fills[1].Order.OrderValidity);
             Assert.AreEqual(side, matched.Fills[1].Order.Side);
             Assert.AreEqual(limitPrice, matched.Fills[1].Order.Price);
