@@ -219,5 +219,98 @@ namespace Circus.Tests.OrderBook
             Assert.AreEqual(OrderBookStatus.Closed, statusChanged.Status);
             Assert.AreEqual(Now2, statusChanged.Time);
         }
+
+        [Test]
+        public void Closed_DontExpireGoodTilDateOrdersBeforeDate()
+        {
+            // arrange
+            Book.UpdateStatus(OrderBookStatus.Open);
+            var goodTilDate = DateOnly.FromDateTime(Now1).AddDays(1);
+            Book.CreateOrder(ClientId1, OrderId1, OrderValidity.GoodTilDate, Side.Buy, 5, 100,
+                goodTilDate: goodTilDate);
+            TimeProvider.SetCurrentTime(Now2);
+
+            // act
+            var events = Book.UpdateStatus(OrderBookStatus.Closed);
+
+            // assert
+            Assert.IsNotNull(events);
+            Assert.AreEqual(1, events.Count);
+
+            var statusChanged = events[0] as StatusChanged;
+            Assert.IsNotNull(statusChanged);
+            Assert.AreEqual(Sec, statusChanged.Security);
+            Assert.AreEqual(OrderBookStatus.Closed, statusChanged.Status);
+            Assert.AreEqual(Now2, statusChanged.Time);
+        }
+
+        [Test]
+        public void Closed_ExpireGoodTilDateOrdersOnDate()
+        {
+            // arrange
+            Book.UpdateStatus(OrderBookStatus.Open);
+            var goodTilDate = DateOnly.FromDateTime(Now1);
+            Book.CreateOrder(ClientId1, OrderId1, OrderValidity.GoodTilDate, Side.Buy, 5, 100,
+                goodTilDate: goodTilDate);
+            TimeProvider.SetCurrentTime(Now2);
+
+            // act
+            var events = Book.UpdateStatus(OrderBookStatus.Closed);
+
+            // assert
+            Assert.IsNotNull(events);
+            Assert.AreEqual(2, events.Count);
+
+            var expired = events[1] as ExpireOrderConfirmed;
+            Assert.IsNotNull(expired);
+            Assert.AreEqual(Sec, expired.Security);
+            Assert.AreEqual(Now2, expired.Time);
+            Assert.AreEqual(ClientId1, expired.ClientId);
+            Assert.AreEqual(ClientId1, expired.Order.ClientId);
+            Assert.AreEqual(OrderId1, expired.Order.OrderId);
+            Assert.AreEqual(OrderStatus.Expired, expired.Order.Status);
+            Assert.AreEqual(OrderValidity.GoodTilDate, expired.Order.OrderValidity);
+            Assert.AreEqual(goodTilDate, expired.Order.GoodTilDate);
+        }
+
+        [Test]
+        public void Closed_ExpireGoodTilDateOrdersOnceDateReachedAcrossSessions()
+        {
+            // arrange - order survives close on days before its good-til-date, then expires
+            // on the close of the session where the date is reached
+            Book.UpdateStatus(OrderBookStatus.Open);
+            var goodTilDate = DateOnly.FromDateTime(Now1).AddDays(2);
+            Book.CreateOrder(ClientId1, OrderId1, OrderValidity.GoodTilDate, Side.Buy, 5, 100,
+                goodTilDate: goodTilDate);
+            Book.UpdateStatus(OrderBookStatus.Closed); // day 1 close, not due
+
+            var day2 = Now1.AddDays(1);
+            TimeProvider.SetCurrentTime(day2);
+            Book.UpdateStatus(OrderBookStatus.PreOpen);
+            Book.UpdateStatus(OrderBookStatus.Open);
+            Book.UpdateStatus(OrderBookStatus.Closed); // day 2 close, still not due
+
+            var day3 = Now1.AddDays(2);
+            TimeProvider.SetCurrentTime(day3);
+            Book.UpdateStatus(OrderBookStatus.PreOpen);
+            Book.UpdateStatus(OrderBookStatus.Open);
+
+            // act
+            var events = Book.UpdateStatus(OrderBookStatus.Closed); // day 3 close, due
+
+            // assert
+            Assert.IsNotNull(events);
+            Assert.AreEqual(2, events.Count);
+
+            var expired = events[1] as ExpireOrderConfirmed;
+            Assert.IsNotNull(expired);
+            Assert.AreEqual(Sec, expired.Security);
+            Assert.AreEqual(day3, expired.Time);
+            Assert.AreEqual(ClientId1, expired.ClientId);
+            Assert.AreEqual(OrderId1, expired.Order.OrderId);
+            Assert.AreEqual(OrderStatus.Expired, expired.Order.Status);
+            Assert.AreEqual(OrderValidity.GoodTilDate, expired.Order.OrderValidity);
+            Assert.AreEqual(goodTilDate, expired.Order.GoodTilDate);
+        }
     }
 }

@@ -11,7 +11,8 @@ namespace Circus.OrderBook
         : OrderBookAction(Security);
 
     public record CreateOrder(Security Security, Guid ClientId, Guid OrderId, OrderValidity OrderValidity, Side Side,
-            int Quantity, decimal? Price = null, decimal? TriggerPrice = null, bool MarketLimit = false)
+            int Quantity, decimal? Price = null, decimal? TriggerPrice = null, bool MarketLimit = false,
+            DateOnly? GoodTilDate = null)
         : OrderAction(Security, ClientId, OrderId);
 
     public record UpdateOrder(Security Security, Guid ClientId, Guid OrderId, int? Quantity = null,
