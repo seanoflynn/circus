@@ -20,7 +20,7 @@ namespace Circus.OrderBook
         private readonly Dictionary<Side, SortedDictionary<long, SortedDictionary<long, InternalOrder>>> _working =
             new()
             {
-                {Side.Buy, new(new DescendingComparer<long>())},
+                {Side.Buy, new(new DescendingComparer())},
                 {Side.Sell, new()}
             };
 
@@ -28,7 +28,7 @@ namespace Circus.OrderBook
             new()
             {
                 {Side.Buy, new()},
-                {Side.Sell, new(new DescendingComparer<long>())}
+                {Side.Sell, new(new DescendingComparer())}
             };
 
         private readonly Dictionary<Guid, InternalOrder> _orders = new();
