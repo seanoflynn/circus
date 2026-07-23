@@ -16,7 +16,7 @@ namespace Circus.DataProducers
             _maxLevels = maxLevels;
         }
 
-        public IList<LevelsDataEvent> Process(IOrderBook book, IList<OrderBookEvent> events)
+        public IList<LevelsDataEvent> Process(IOrderBook book, IReadOnlyList<OrderBookEvent> events)
         {
             var bids = book.GetLevels(Side.Buy, _maxLevels);
             var offers = book.GetLevels(Side.Sell, _maxLevels);
@@ -25,5 +25,5 @@ namespace Circus.DataProducers
         }
     }
 
-    public record LevelsDataEvent(DateTime Time, IList<Level> Bids, IList<Level> Offers);
+    public record LevelsDataEvent(DateTime Time, IReadOnlyList<Level> Bids, IReadOnlyList<Level> Offers);
 }

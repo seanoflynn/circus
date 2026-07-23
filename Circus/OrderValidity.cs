@@ -1,11 +1,18 @@
+using System;
+
 namespace Circus
 {
-    public enum OrderValidity
+    public abstract record OrderValidity
     {
-        Day,
-        GoodTilCanceled,
-        GoodTilDate,
-        FillAndKill,
-        FillOrKill
+        public sealed record Day : OrderValidity;
+        public sealed record GoodTilCanceled : OrderValidity;
+
+        public sealed record GoodTilDate : OrderValidity
+        {
+            public required DateOnly Date { get; init; }
+        }
+
+        public sealed record FillAndKill : OrderValidity;
+        public sealed record FillOrKill : OrderValidity;
     }
 }

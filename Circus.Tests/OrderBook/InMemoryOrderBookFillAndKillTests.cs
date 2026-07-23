@@ -45,11 +45,11 @@ namespace Circus.Tests.OrderBook
         {
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Sell, 3, 100);
+            Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 3, 100);
             TimeProvider.SetCurrentTime(Now2);
 
             // act
-            var events = Book.CreateOrder(CompanyId2, OrderId2, OrderValidity.FillAndKill, Side.Buy, 3, 100);
+            var events = Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.FillAndKill(), Side.Buy, 3, 100);
 
             // assert
             Assert.IsNotNull(events);
@@ -63,7 +63,7 @@ namespace Circus.Tests.OrderBook
             Assert.AreEqual(OrderId2, matched.Fills[1].ClientOrderId);
             Assert.AreEqual(OrderStatus.Filled, matched.Fills[1].Order.Status);
             Assert.AreEqual(OrderType.Limit, matched.Fills[1].Order.Type);
-            Assert.AreEqual(OrderValidity.FillAndKill, matched.Fills[1].Order.OrderValidity);
+            Assert.AreEqual(new OrderValidity.FillAndKill(), matched.Fills[1].Order.OrderValidity);
             Assert.AreEqual(3, matched.Fills[1].Order.FilledQuantity);
             Assert.AreEqual(0, matched.Fills[1].Order.RemainingQuantity);
         }
@@ -73,11 +73,11 @@ namespace Circus.Tests.OrderBook
         {
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Sell, 2, 100);
+            Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 2, 100);
             TimeProvider.SetCurrentTime(Now2);
 
             // act
-            var events = Book.CreateOrder(CompanyId2, OrderId2, OrderValidity.FillAndKill, Side.Buy, 5, 100);
+            var events = Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.FillAndKill(), Side.Buy, 5, 100);
 
             // assert
             Assert.IsNotNull(events);
@@ -97,7 +97,7 @@ namespace Circus.Tests.OrderBook
             Assert.AreEqual(OrderId2, cancelled.Order.ClientOrderId);
             Assert.AreEqual(OrderStatus.Cancelled, cancelled.Order.Status);
             Assert.AreEqual(OrderType.Limit, cancelled.Order.Type);
-            Assert.AreEqual(OrderValidity.FillAndKill, cancelled.Order.OrderValidity);
+            Assert.AreEqual(new OrderValidity.FillAndKill(), cancelled.Order.OrderValidity);
             Assert.AreEqual(5, cancelled.Order.Quantity);
             Assert.AreEqual(2, cancelled.Order.FilledQuantity);
             Assert.AreEqual(0, cancelled.Order.RemainingQuantity);
@@ -114,7 +114,7 @@ namespace Circus.Tests.OrderBook
             Book.UpdateStatus(OrderBookStatus.Open);
 
             // act
-            var events = Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.FillAndKill, Side.Buy, 5, 100);
+            var events = Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.FillAndKill(), Side.Buy, 5, 100);
 
             // assert
             Assert.IsNotNull(events);
@@ -140,13 +140,13 @@ namespace Circus.Tests.OrderBook
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10, 20);
             var book = new InMemoryOrderBook(sec, TimeProvider);
             book.UpdateStatus(OrderBookStatus.Open);
-            book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Sell, 2, 500);
+            book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 2, 500);
             TimeProvider.SetCurrentTime(Now2);
 
             // act
             // NB: a Market + GTC/Day order in the same situation would instead rest the
             // remainder as a limit order at the protected price (see MarketOrder_Success).
-            var events = book.CreateOrder(CompanyId2, OrderId2, OrderValidity.FillAndKill, Side.Buy, 5);
+            var events = book.CreateMarketOrder(CompanyId2, OrderId2, new OrderValidity.FillAndKill(), Side.Buy, 5);
 
             // assert
             Assert.IsNotNull(events);
@@ -175,22 +175,22 @@ namespace Circus.Tests.OrderBook
         {
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Sell, 5, 500);
-            Book.CreateOrder(CompanyId2, OrderId2, OrderValidity.Day, Side.Buy, 5, 500); // last traded price = 500
+            Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 500);
+            Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 500); // last traded price = 500
             TimeProvider.SetCurrentTime(Now2);
 
             // FAK stop-limit buy: triggers when price rises to/above 520, then willing to pay up to 530
-            Book.CreateOrder(CompanyId3, OrderId3, OrderValidity.FillAndKill, Side.Buy, 5, 530, 520);
+            Book.CreateStopLimitOrder(CompanyId3, OrderId3, new OrderValidity.FillAndKill(), Side.Buy, 5, 530, 520);
             TimeProvider.SetCurrentTime(Now3);
 
             // only 2 available to fill the stop once triggered
-            Book.CreateOrder(CompanyId4, OrderId4, OrderValidity.Day, Side.Sell, 2, 530);
+            Book.CreateLimitOrder(CompanyId4, OrderId4, new OrderValidity.Day(), Side.Sell, 2, 530);
             TimeProvider.SetCurrentTime(Now4);
-            Book.CreateOrder(CompanyId5, OrderId5, OrderValidity.Day, Side.Buy, 1, 520);
+            Book.CreateLimitOrder(CompanyId5, OrderId5, new OrderValidity.Day(), Side.Buy, 1, 520);
             TimeProvider.SetCurrentTime(Now5);
 
             // act - trade at 520 triggers the stop
-            var events = Book.CreateOrder(CompanyId6, OrderId6, OrderValidity.Day, Side.Sell, 1, 520);
+            var events = Book.CreateLimitOrder(CompanyId6, OrderId6, new OrderValidity.Day(), Side.Sell, 1, 520);
 
             // assert
             Assert.IsNotNull(events);
@@ -216,7 +216,7 @@ namespace Circus.Tests.OrderBook
             Assert.AreEqual(OrderCancelledReason.FillAndKillNotFilled, cancelled.Reason);
             Assert.AreEqual(OrderStatus.Cancelled, cancelled.Order.Status);
             Assert.AreEqual(OrderType.Limit, cancelled.Order.Type);
-            Assert.AreEqual(OrderValidity.FillAndKill, cancelled.Order.OrderValidity);
+            Assert.AreEqual(new OrderValidity.FillAndKill(), cancelled.Order.OrderValidity);
             Assert.AreEqual(2, cancelled.Order.FilledQuantity);
             Assert.AreEqual(0, cancelled.Order.RemainingQuantity);
 

@@ -33,7 +33,11 @@ namespace Circus.Tests.OrderBook
 
             // act - only Price set, no TriggerPrice: this must rest as a plain working limit
             // order, not get misrouted into the TriggerPrice slot as a hidden stop order
-            var events = Book.Process(new CreateOrder(Sec, CompanyId1, OrderId1, OrderValidity.Day, Side.Buy, 3, 100));
+            var events = Book.Process(new CreateLimitOrder
+            {
+                Security = Sec, CompanyId = CompanyId1, ClientOrderId = OrderId1, OrderValidity = new OrderValidity.Day(),
+                Side = Side.Buy, Quantity = 3, Price = 100
+            });
 
             // assert
             Assert.IsNotNull(events);
@@ -51,10 +55,14 @@ namespace Circus.Tests.OrderBook
         {
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Buy, 3, 100);
+            Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 100);
 
             // act - only Price set, no TriggerPrice: this must actually reprice the order
-            var events = Book.Process(new UpdateOrder(Sec, CompanyId1, OrderId2, OrderId1, Price: 110));
+            var events = Book.Process(new UpdateOrder
+            {
+                Security = Sec, CompanyId = CompanyId1, ClientOrderId = OrderId2, PreviousClientOrderId = OrderId1,
+                Price = 110
+            });
 
             // assert
             Assert.IsNotNull(events);
@@ -68,14 +76,17 @@ namespace Circus.Tests.OrderBook
         public void Process_CancelOrder_Success()
         {
             // act
-            Book.Process(new CancelOrder(Sec, CompanyId1, OrderId3, OrderId1));
+            Book.Process(new CancelOrder
+            {
+                Security = Sec, CompanyId = CompanyId1, ClientOrderId = OrderId3, PreviousClientOrderId = OrderId1
+            });
         }
 
         [Test]
         public void Process_UpdateStatus_Success()
         {
             // act
-            Book.Process(new UpdateStatus(Sec, OrderBookStatus.Open));
+            Book.Process(new OpenTrading { Security = Sec });
         }
     }
 }

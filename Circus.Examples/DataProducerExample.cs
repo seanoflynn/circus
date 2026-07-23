@@ -21,19 +21,19 @@ namespace Circus.Examples
             var tradeDataProducer = new TradeDataProducer();
             var levelDataProducer = new LevelDataProducer(5);
 
-            void Publish(IOrderBook book, IList<OrderBookEvent> events)
+            void Publish(IOrderBook book, IReadOnlyList<OrderBookEvent> events)
             {
                 Print(tradeDataProducer.Process(book, events));
                 Print(levelDataProducer.Process(book, events));
             }
 
             Publish(book1, book1.UpdateStatus(OrderBookStatus.Open));
-            Publish(book1, book1.CreateOrder("Buyer", "Order1", OrderValidity.Day, Side.Buy, 3, 100));
-            Publish(book1, book1.CreateOrder("Seller", "Order2", OrderValidity.Day, Side.Sell, 5, 100));
+            Publish(book1, book1.CreateLimitOrder("Buyer", "Order1", new OrderValidity.Day(), Side.Buy, 3, 100));
+            Publish(book1, book1.CreateLimitOrder("Seller", "Order2", new OrderValidity.Day(), Side.Sell, 5, 100));
 
             Publish(book2, book2.UpdateStatus(OrderBookStatus.Open));
-            Publish(book2, book2.CreateOrder("Buyer", "Order1", OrderValidity.Day, Side.Buy, 3, 100));
-            Publish(book2, book2.CreateOrder("Seller", "Order2", OrderValidity.Day, Side.Sell, 5, 100));
+            Publish(book2, book2.CreateLimitOrder("Buyer", "Order1", new OrderValidity.Day(), Side.Buy, 3, 100));
+            Publish(book2, book2.CreateLimitOrder("Seller", "Order2", new OrderValidity.Day(), Side.Sell, 5, 100));
         }
 
         private static void Print(IEnumerable<TradedDataEvent> events)

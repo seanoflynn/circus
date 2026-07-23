@@ -6,7 +6,7 @@ namespace Circus.DataProducers
 {
     public class TradeDataProducer : IDataProducer<TradedDataEvent>
     {
-        public IList<TradedDataEvent> Process(IOrderBook book, IList<OrderBookEvent> events)
+        public IList<TradedDataEvent> Process(IOrderBook book, IReadOnlyList<OrderBookEvent> events)
         {
             var output = new List<TradedDataEvent>();
 

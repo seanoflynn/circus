@@ -39,17 +39,14 @@ namespace Circus.Tests.OrderBook
         {
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Sell, 5, 100,
-                selfMatchPreventionId: Smp1);
+            Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 100, selfMatchPreventionId: Smp1);
             TimeProvider.SetCurrentTime(Now2);
-            Book.CreateOrder(CompanyId2, OrderId2, OrderValidity.Day, Side.Sell, 5, 100);
+            Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 5, 100);
             TimeProvider.SetCurrentTime(Now3);
 
             // act - same SMP id as the first (older) resting sell, so that one is prevented and
             // the aggressor should fall through to the second (different company) resting sell
-            var events = Book.CreateOrder(CompanyId1, OrderId3, OrderValidity.Day, Side.Buy, 5, 100,
-                selfMatchPreventionId: Smp1,
-                selfMatchPreventionInstruction: SelfMatchPreventionInstruction.CancelResting);
+            var events = Book.CreateLimitOrder(CompanyId1, OrderId3, new OrderValidity.Day(), Side.Buy, 5, 100, selfMatchPreventionId: Smp1, selfMatchPreventionInstruction: SelfMatchPreventionInstruction.CancelResting);
 
             // assert
             Assert.IsNotNull(events);
@@ -85,14 +82,11 @@ namespace Circus.Tests.OrderBook
         {
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Sell, 5, 100,
-                selfMatchPreventionId: Smp1);
+            Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 100, selfMatchPreventionId: Smp1);
             TimeProvider.SetCurrentTime(Now2);
 
             // act
-            var events = Book.CreateOrder(CompanyId1, OrderId2, OrderValidity.Day, Side.Buy, 5, 100,
-                selfMatchPreventionId: Smp1,
-                selfMatchPreventionInstruction: SelfMatchPreventionInstruction.CancelAggressor);
+            var events = Book.CreateLimitOrder(CompanyId1, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 100, selfMatchPreventionId: Smp1, selfMatchPreventionInstruction: SelfMatchPreventionInstruction.CancelAggressor);
 
             // assert
             Assert.IsNotNull(events);
@@ -119,14 +113,11 @@ namespace Circus.Tests.OrderBook
         {
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Sell, 5, 100,
-                selfMatchPreventionId: Smp1);
+            Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 100, selfMatchPreventionId: Smp1);
             TimeProvider.SetCurrentTime(Now2);
 
             // act
-            var events = Book.CreateOrder(CompanyId1, OrderId2, OrderValidity.Day, Side.Buy, 5, 100,
-                selfMatchPreventionId: Smp1,
-                selfMatchPreventionInstruction: SelfMatchPreventionInstruction.CancelBoth);
+            var events = Book.CreateLimitOrder(CompanyId1, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 100, selfMatchPreventionId: Smp1, selfMatchPreventionInstruction: SelfMatchPreventionInstruction.CancelBoth);
 
             // assert
             Assert.IsNotNull(events);
@@ -154,13 +145,11 @@ namespace Circus.Tests.OrderBook
             // arrange - proves the check is id-based, not company-based: same CompanyId on both
             // sides, but different SMP ids, so it should NOT be prevented
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Sell, 5, 100,
-                selfMatchPreventionId: Smp1);
+            Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 100, selfMatchPreventionId: Smp1);
             TimeProvider.SetCurrentTime(Now2);
 
             // act
-            var events = Book.CreateOrder(CompanyId1, OrderId2, OrderValidity.Day, Side.Buy, 5, 100,
-                selfMatchPreventionId: Smp2);
+            var events = Book.CreateLimitOrder(CompanyId1, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 100, selfMatchPreventionId: Smp2);
 
             // assert
             Assert.IsNotNull(events);
@@ -180,11 +169,11 @@ namespace Circus.Tests.OrderBook
             // arrange - same company, neither order opts into STP at all - confirms it's opt-in,
             // not automatic for same-company orders
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Sell, 5, 100);
+            Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 100);
             TimeProvider.SetCurrentTime(Now2);
 
             // act
-            var events = Book.CreateOrder(CompanyId1, OrderId2, OrderValidity.Day, Side.Buy, 5, 100);
+            var events = Book.CreateLimitOrder(CompanyId1, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 100);
 
             // assert
             Assert.IsNotNull(events);
@@ -201,13 +190,11 @@ namespace Circus.Tests.OrderBook
         {
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Sell, 5, 100,
-                selfMatchPreventionId: Smp1);
+            Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 100, selfMatchPreventionId: Smp1);
             TimeProvider.SetCurrentTime(Now2);
 
             // act - neither side specifies an instruction
-            var events = Book.CreateOrder(CompanyId1, OrderId2, OrderValidity.Day, Side.Buy, 5, 100,
-                selfMatchPreventionId: Smp1);
+            var events = Book.CreateLimitOrder(CompanyId1, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 100, selfMatchPreventionId: Smp1);
 
             // assert
             Assert.IsNotNull(events);
@@ -231,14 +218,11 @@ namespace Circus.Tests.OrderBook
             // arrange - the aggressor shares the SMP id but doesn't specify an instruction, so
             // the resting order's instruction should govern
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Sell, 5, 100,
-                selfMatchPreventionId: Smp1,
-                selfMatchPreventionInstruction: SelfMatchPreventionInstruction.CancelBoth);
+            Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 100, selfMatchPreventionId: Smp1, selfMatchPreventionInstruction: SelfMatchPreventionInstruction.CancelBoth);
             TimeProvider.SetCurrentTime(Now2);
 
             // act
-            var events = Book.CreateOrder(CompanyId1, OrderId2, OrderValidity.Day, Side.Buy, 5, 100,
-                selfMatchPreventionId: Smp1);
+            var events = Book.CreateLimitOrder(CompanyId1, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 100, selfMatchPreventionId: Smp1);
 
             // assert
             Assert.IsNotNull(events);
@@ -255,13 +239,11 @@ namespace Circus.Tests.OrderBook
             // arrange - the only resting liquidity shares the incoming order's SMP id, so it
             // must be excluded from the upfront liquidity check rather than partially filled
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Sell, 5, 100,
-                selfMatchPreventionId: Smp1);
+            Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 100, selfMatchPreventionId: Smp1);
             TimeProvider.SetCurrentTime(Now2);
 
             // act
-            var events = Book.CreateOrder(CompanyId1, OrderId2, OrderValidity.FillOrKill, Side.Buy, 5, 100,
-                selfMatchPreventionId: Smp1);
+            var events = Book.CreateLimitOrder(CompanyId1, OrderId2, new OrderValidity.FillOrKill(), Side.Buy, 5, 100, selfMatchPreventionId: Smp1);
 
             // assert
             Assert.IsNotNull(events);
@@ -285,16 +267,13 @@ namespace Circus.Tests.OrderBook
             // from a different company right behind it. CancelResting only kills the resting
             // order, so the incoming order should keep going and see the liquidity behind it.
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Sell, 2, 100,
-                selfMatchPreventionId: Smp1);
+            Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 2, 100, selfMatchPreventionId: Smp1);
             TimeProvider.SetCurrentTime(Now2);
-            Book.CreateOrder(CompanyId2, OrderId2, OrderValidity.Day, Side.Sell, 5, 100);
+            Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 5, 100);
             TimeProvider.SetCurrentTime(Now3);
 
             // act
-            var events = Book.CreateOrder(CompanyId1, OrderId3, OrderValidity.FillOrKill, Side.Buy, 5, 100,
-                selfMatchPreventionId: Smp1,
-                selfMatchPreventionInstruction: SelfMatchPreventionInstruction.CancelResting);
+            var events = Book.CreateLimitOrder(CompanyId1, OrderId3, new OrderValidity.FillOrKill(), Side.Buy, 5, 100, selfMatchPreventionId: Smp1, selfMatchPreventionInstruction: SelfMatchPreventionInstruction.CancelResting);
 
             // assert - accepted: the 2@100 self-match is skipped, the 5@100 behind it is enough
             Assert.IsNotNull(events);
@@ -324,16 +303,13 @@ namespace Circus.Tests.OrderBook
             // check must reflect that and reject upfront, not just skip the self-matched
             // quantity and keep counting past it.
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Sell, 2, 100,
-                selfMatchPreventionId: Smp1);
+            Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 2, 100, selfMatchPreventionId: Smp1);
             TimeProvider.SetCurrentTime(Now2);
-            Book.CreateOrder(CompanyId2, OrderId2, OrderValidity.Day, Side.Sell, 10, 100);
+            Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 10, 100);
             TimeProvider.SetCurrentTime(Now3);
 
             // act
-            var events = Book.CreateOrder(CompanyId1, OrderId3, OrderValidity.FillOrKill, Side.Buy, 5, 100,
-                selfMatchPreventionId: Smp1,
-                selfMatchPreventionInstruction: SelfMatchPreventionInstruction.CancelAggressor);
+            var events = Book.CreateLimitOrder(CompanyId1, OrderId3, new OrderValidity.FillOrKill(), Side.Buy, 5, 100, selfMatchPreventionId: Smp1, selfMatchPreventionInstruction: SelfMatchPreventionInstruction.CancelAggressor);
 
             // assert - rejected: reachable liquidity before the self-match is 0, well short of 5,
             // even though 10 more sits just behind it in the queue
@@ -361,16 +337,13 @@ namespace Circus.Tests.OrderBook
             // incoming order the instant it reaches the self-match, so it never gets to the
             // second price level at all, no matter how much liquidity is sitting there.
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Sell, 2, 100,
-                selfMatchPreventionId: Smp1);
+            Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 2, 100, selfMatchPreventionId: Smp1);
             TimeProvider.SetCurrentTime(Now2);
-            Book.CreateOrder(CompanyId2, OrderId2, OrderValidity.Day, Side.Sell, 20, 110);
+            Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 20, 110);
             TimeProvider.SetCurrentTime(Now3);
 
             // act
-            var events = Book.CreateOrder(CompanyId1, OrderId3, OrderValidity.FillOrKill, Side.Buy, 5, 110,
-                selfMatchPreventionId: Smp1,
-                selfMatchPreventionInstruction: SelfMatchPreventionInstruction.CancelAggressor);
+            var events = Book.CreateLimitOrder(CompanyId1, OrderId3, new OrderValidity.FillOrKill(), Side.Buy, 5, 110, selfMatchPreventionId: Smp1, selfMatchPreventionInstruction: SelfMatchPreventionInstruction.CancelAggressor);
 
             // assert - rejected: the self-match at 100 stops the search cold, so the 20 sitting
             // at 110 is never even considered

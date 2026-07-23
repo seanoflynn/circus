@@ -55,7 +55,7 @@ namespace Circus.OrderBook
         public Security Security => _security;
         public OrderBookStatus Status => _status;
 
-        public IList<Level> GetLevels(Side side, int maxPrices)
+        public IReadOnlyList<Level> GetLevels(Side side, int maxPrices)
         {
             return _working[side].EnumerateFromBest().Take(maxPrices)
                 .Select(x => new Level(ToDecimal(x.Tick), SumRemaining(x.First), x.Count))
@@ -70,38 +70,37 @@ namespace Circus.OrderBook
             return total;
         }
 
-        public IList<OrderBookEvent> Process(OrderBookAction action)
+        public IReadOnlyList<OrderBookEvent> Process(OrderBookAction action)
         {
             return action switch
             {
-                CreateOrder create => CreateOrder(create.CompanyId, create.ClientOrderId, create.OrderValidity,
-                    create.Side, create.Quantity, create.Price, create.TriggerPrice, create.MarketLimit,
-                    create.GoodTilDate, create.SelfMatchPreventionId, create.SelfMatchPreventionInstruction),
+                CreateLimitOrder o => CreateOrder(o.CompanyId, o.ClientOrderId, o.OrderValidity, o.Side, o.Quantity,
+                    OrderType.Limit, o.Price, null, o.SelfMatchPrevention),
+                CreateMarketOrder o => CreateOrder(o.CompanyId, o.ClientOrderId, o.OrderValidity, o.Side, o.Quantity,
+                    OrderType.Market, null, null, o.SelfMatchPrevention),
+                CreateMarketLimitOrder o => CreateOrder(o.CompanyId, o.ClientOrderId, o.OrderValidity, o.Side,
+                    o.Quantity, OrderType.MarketLimit, null, null, o.SelfMatchPrevention),
+                CreateStopLimitOrder o => CreateOrder(o.CompanyId, o.ClientOrderId, o.OrderValidity, o.Side,
+                    o.Quantity, OrderType.StopLimit, o.Price, o.TriggerPrice, o.SelfMatchPrevention),
+                CreateStopMarketOrder o => CreateOrder(o.CompanyId, o.ClientOrderId, o.OrderValidity, o.Side,
+                    o.Quantity, OrderType.StopMarket, null, o.TriggerPrice, o.SelfMatchPrevention),
                 UpdateOrder update => UpdateOrder(update.CompanyId, update.ClientOrderId,
-                    update.PreviousClientOrderId, update.Quantity, update.Price, update.TriggerPrice),
+                    update.PreviousClientOrderId, update.NewTotalQuantity, update.Price, update.TriggerPrice),
                 CancelOrder cancel => CancelOrder(cancel.CompanyId, cancel.ClientOrderId, cancel.PreviousClientOrderId),
-                UpdateStatus update => UpdateStatus(update.Status, update.ReferencePrice),
+                PreOpenTrading s => UpdateStatus(OrderBookStatus.PreOpen, s.ReferencePrice),
+                OpenTrading s => UpdateStatus(OrderBookStatus.Open, s.ReferencePrice),
+                CloseTrading => UpdateStatus(OrderBookStatus.Closed, null),
                 _ => throw new ArgumentException("Unknown order book action")
             };
         }
 
-        public IList<OrderBookEvent> CreateOrder(string companyId, string clientOrderId, OrderValidity validity, Side side,
-            int quantity, decimal? price = null, decimal? triggerPrice = null, bool marketLimit = false,
-            DateOnly? goodTilDate = null, string? selfMatchPreventionId = null,
-            SelfMatchPreventionInstruction? selfMatchPreventionInstruction = null)
+        private List<OrderBookEvent> CreateOrder(string companyId, string clientOrderId, OrderValidity validity,
+            Side side, int quantity, OrderType type, decimal? price = null, decimal? triggerPrice = null,
+            SelfMatchPrevention? selfMatchPrevention = null)
         {
-            var type = price.HasValue ? OrderType.Limit : OrderType.Market;
-            var status = OrderStatus.Working;
-
-            if (triggerPrice.HasValue)
-            {
-                type = (type == OrderType.Market ? OrderType.StopMarket : OrderType.StopLimit);
-                status = OrderStatus.Hidden;
-            }
-            else if (marketLimit && type == OrderType.Market)
-            {
-                type = OrderType.MarketLimit;
-            }
+            var selfMatchPreventionId = selfMatchPrevention?.Id;
+            var selfMatchPreventionInstruction = selfMatchPrevention?.Instruction;
+            var status = triggerPrice.HasValue ? OrderStatus.Hidden : OrderStatus.Working;
 
             if (_status == OrderBookStatus.Closed)
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.MarketClosed);
@@ -149,18 +148,16 @@ namespace Circus.OrderBook
                     return RejectCreate(companyId, clientOrderId, OrderRejectedReason.NoOrdersToMatchMarketOrder);
             }
 
-            if (validity == OrderValidity.FillOrKill && !triggerTicks.HasValue &&
+            if (validity is OrderValidity.FillOrKill && !triggerTicks.HasValue &&
                 !HasSufficientLiquidity(side, priceTicks!.Value, quantity, selfMatchPreventionId,
                     selfMatchPreventionInstruction))
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.InsufficientLiquidityForFillOrKill);
-            if (validity == OrderValidity.GoodTilDate && !goodTilDate.HasValue)
-                return RejectCreate(companyId, clientOrderId, OrderRejectedReason.GoodTilDateRequired);
-            if (goodTilDate.HasValue && goodTilDate.Value < DateOnly.FromDateTime(Now()))
+            if (validity is OrderValidity.GoodTilDate { Date: var goodTilDate } && goodTilDate < DateOnly.FromDateTime(Now()))
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.InvalidExpireDate);
 
             _nextSequenceNumber++;
             var order = new InternalOrder(_nextSequenceNumber, companyId, clientOrderId, _security, Now(), status,
-                type, validity, side, quantity, priceTicks, triggerTicks, goodTilDate, selfMatchPreventionId,
+                type, validity, side, quantity, priceTicks, triggerTicks, selfMatchPreventionId,
                 selfMatchPreventionInstruction);
 
             _orders.Add(order.ExchangeOrderId, order);
@@ -173,7 +170,7 @@ namespace Circus.OrderBook
             events.Add(new CreateOrderConfirmed(_security, Now(), companyId, order.ToOrder()));
             Match(events);
 
-            if (order.Validity == OrderValidity.FillAndKill && order.Status == OrderStatus.Working)
+            if (order.Validity is OrderValidity.FillAndKill && order.Status == OrderStatus.Working)
                 events.Add(CancelRemainder(order, OrderCancelledReason.FillAndKillNotFilled));
 
             return events;
@@ -272,8 +269,8 @@ namespace Circus.OrderBook
                 reason);
         }
 
-        public IList<OrderBookEvent> UpdateOrder(string companyId, string clientOrderId, string previousClientOrderId,
-            int? quantity = null, decimal? price = null, decimal? triggerPrice = null)
+        private List<OrderBookEvent> UpdateOrder(string companyId, string clientOrderId, string previousClientOrderId,
+            int? newTotalQuantity = null, decimal? price = null, decimal? triggerPrice = null)
         {
             if (_status == OrderBookStatus.Closed)
                 return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.MarketClosed);
@@ -285,9 +282,9 @@ namespace Circus.OrderBook
                 return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.CompanyIdRequired);
             if (companyId.Length > MaxClientOrderIdLength)
                 return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.CompanyIdTooLong);
-            if (quantity == null && price == null && triggerPrice == null)
+            if (newTotalQuantity == null && price == null && triggerPrice == null)
                 return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.NoChange);
-            if (quantity != null && quantity < 1)
+            if (newTotalQuantity != null && newTotalQuantity < 1)
                 return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.InvalidQuantity);
             if (!TryConvertToTicks(price, out var priceTicks))
                 return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.InvalidPriceIncrement);
@@ -337,7 +334,7 @@ namespace Circus.OrderBook
 
             // TODO: can't update price on stop market order?
 
-            if (quantity <= order.FilledQuantity)
+            if (newTotalQuantity <= order.FilledQuantity)
             {
                 order.Cancel(Now(), clientOrderId);
                 _clientOrderIndex[(companyId, clientOrderId)] = order;
@@ -353,7 +350,7 @@ namespace Circus.OrderBook
             var sequenceNumber = order.SequenceNumber;
             var isPriceChange = (triggerTicks != null && order.Status == OrderStatus.Hidden && triggerTicks != order.TriggerPrice) ||
                                 (priceTicks != null && order.Status != OrderStatus.Hidden && priceTicks != order.Price);
-            var isQuantityIncrease = (quantity != null && quantity > order.Quantity);
+            var isQuantityIncrease = (newTotalQuantity != null && newTotalQuantity > order.Quantity);
 
             var orders = (order.Status == OrderStatus.Hidden ? _stops : _working);
 
@@ -369,7 +366,7 @@ namespace Circus.OrderBook
                 orders[order.Side].Remove(currentPriceTicks, order);
                 orders[order.Side].Add(updatedPriceTicks, order);
             }
-            order.Update(sequenceNumber, Now(), quantity, triggerTicks, priceTicks, clientOrderId);
+            order.Update(sequenceNumber, Now(), newTotalQuantity, triggerTicks, priceTicks, clientOrderId);
             _clientOrderIndex[(companyId, clientOrderId)] = order;
 
             List<OrderBookEvent> events = new();
@@ -378,7 +375,7 @@ namespace Circus.OrderBook
             return events;
         }
 
-        public IList<OrderBookEvent> CancelOrder(string companyId, string clientOrderId, string previousClientOrderId)
+        private List<OrderBookEvent> CancelOrder(string companyId, string clientOrderId, string previousClientOrderId)
         {
             if (_status == OrderBookStatus.Closed)
                 return RejectCancel(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.MarketClosed);
@@ -595,7 +592,7 @@ namespace Circus.OrderBook
 
                 foreach (var order in triggered.Values)
                 {
-                    if (order.Validity == OrderValidity.FillAndKill && order.RemainingQuantity > 0)
+                    if (order.Validity is OrderValidity.FillAndKill && order.RemainingQuantity > 0)
                         events.Add(CancelRemainder(order, OrderCancelledReason.FillAndKillNotFilled));
                 }
             }
@@ -620,7 +617,7 @@ namespace Circus.OrderBook
                     continue;
                 }
 
-                if (order.Validity == OrderValidity.FillOrKill &&
+                if (order.Validity is OrderValidity.FillOrKill &&
                     !HasSufficientLiquidity(order.Side, newPriceTicks!.Value, order.RemainingQuantity,
                         order.SelfMatchPreventionId, order.SelfMatchPreventionInstruction))
                 {
@@ -644,7 +641,7 @@ namespace Circus.OrderBook
             }
         }
 
-        public IList<OrderBookEvent> UpdateStatus(OrderBookStatus status, decimal? referencePrice = null)
+        private List<OrderBookEvent> UpdateStatus(OrderBookStatus status, decimal? referencePrice = null)
         {
             if (referencePrice.HasValue && TryConvertToTicks(referencePrice, out var referenceTicks))
                 _bandReferencePriceTicks = referenceTicks;
@@ -658,7 +655,7 @@ namespace Circus.OrderBook
             };
         }
 
-        private IList<OrderBookEvent> PreOpenMarket()
+        private List<OrderBookEvent> PreOpenMarket()
         {
             // TODO: need better system for multiple sessions per day
             var date = Now();
@@ -667,7 +664,7 @@ namespace Circus.OrderBook
             return new List<OrderBookEvent> {new StatusChanged(_security, Now(), _status)};
         }
 
-        private IList<OrderBookEvent> OpenMarket()
+        private List<OrderBookEvent> OpenMarket()
         {
             _status = OrderBookStatus.Open;
             var events = new List<OrderBookEvent> {new StatusChanged(_security, Now(), _status)};
@@ -675,7 +672,7 @@ namespace Circus.OrderBook
             return events;
         }
 
-        private IList<OrderBookEvent> CloseMarket()
+        private List<OrderBookEvent> CloseMarket()
         {
             _status = OrderBookStatus.Closed;
             var events = new List<OrderBookEvent> {new StatusChanged(_security, Now(), _status)};
@@ -687,8 +684,8 @@ namespace Circus.OrderBook
         {
             var today = DateOnly.FromDateTime(Now());
             var orders = _orders.Values.Where(o =>
-                o.Validity == OrderValidity.Day ||
-                (o.Validity == OrderValidity.GoodTilDate && o.GoodTilDate <= today)).ToList();
+                o.Validity is OrderValidity.Day ||
+                (o.Validity is OrderValidity.GoodTilDate { Date: var date } && date <= today)).ToList();
 
             return orders.Select(ExpireOrder).ToList();
         }

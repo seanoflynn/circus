@@ -55,9 +55,9 @@ namespace Circus.Tests.OrderBook
         {
             // arrange
             Book.UpdateStatus(OrderBookStatus.PreOpen);
-            Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Buy, 5, 100);
+            Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100);
             TimeProvider.SetCurrentTime(Now2);
-            Book.CreateOrder(CompanyId2, OrderId2, OrderValidity.Day, Side.Sell, 5, 100);
+            Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 5, 100);
             TimeProvider.SetCurrentTime(Now3);
 
             // act
@@ -90,7 +90,7 @@ namespace Circus.Tests.OrderBook
             Assert.AreEqual(Now3, matched.Fills[0].Order.CompletedTime);
             Assert.AreEqual(OrderStatus.Filled, matched.Fills[0].Order.Status);
             Assert.AreEqual(OrderType.Limit, matched.Fills[0].Order.Type);
-            Assert.AreEqual(OrderValidity.Day, matched.Fills[0].Order.OrderValidity);
+            Assert.AreEqual(new OrderValidity.Day(), matched.Fills[0].Order.OrderValidity);
             Assert.AreEqual(Side.Buy, matched.Fills[0].Order.Side);
             Assert.AreEqual(100, matched.Fills[0].Order.Price);
             Assert.IsNull(matched.Fills[0].Order.TriggerPrice);
@@ -113,7 +113,7 @@ namespace Circus.Tests.OrderBook
             Assert.AreEqual(Now3, matched.Fills[1].Order.CompletedTime);
             Assert.AreEqual(OrderStatus.Filled, matched.Fills[1].Order.Status);
             Assert.AreEqual(OrderType.Limit, matched.Fills[1].Order.Type);
-            Assert.AreEqual(OrderValidity.Day, matched.Fills[1].Order.OrderValidity);
+            Assert.AreEqual(new OrderValidity.Day(), matched.Fills[1].Order.OrderValidity);
             Assert.AreEqual(Side.Sell, matched.Fills[1].Order.Side);
             Assert.AreEqual(100, matched.Fills[1].Order.Price);
             Assert.IsNull(matched.Fills[1].Order.TriggerPrice);
@@ -127,7 +127,7 @@ namespace Circus.Tests.OrderBook
         {
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Buy, 5, 100);
+            Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100);
             TimeProvider.SetCurrentTime(Now2);
 
             // act
@@ -150,7 +150,7 @@ namespace Circus.Tests.OrderBook
             Assert.AreEqual(Now2, expired.Order.CompletedTime);
             Assert.AreEqual(OrderStatus.Expired, expired.Order.Status);
             Assert.AreEqual(OrderType.Limit, expired.Order.Type);
-            Assert.AreEqual(OrderValidity.Day, expired.Order.OrderValidity);
+            Assert.AreEqual(new OrderValidity.Day(), expired.Order.OrderValidity);
             Assert.AreEqual(Side.Buy, expired.Order.Side);
             Assert.AreEqual(100, expired.Order.Price);
             Assert.IsNull(expired.Order.TriggerPrice);
@@ -164,9 +164,9 @@ namespace Circus.Tests.OrderBook
         {
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Buy, 5, 100);
-            Book.CreateOrder(CompanyId2, OrderId2, OrderValidity.Day, Side.Sell, 5, 100);
-            Book.CreateOrder(CompanyId3, OrderId3, OrderValidity.Day, Side.Sell, 5, null, 90);
+            Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100);
+            Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 5, 100);
+            Book.CreateStopMarketOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Sell, 5, 90);
             TimeProvider.SetCurrentTime(Now2);
 
             // act
@@ -189,7 +189,7 @@ namespace Circus.Tests.OrderBook
             Assert.AreEqual(Now2, expired.Order.CompletedTime);
             Assert.AreEqual(OrderStatus.Expired, expired.Order.Status);
             Assert.AreEqual(OrderType.StopMarket, expired.Order.Type);
-            Assert.AreEqual(OrderValidity.Day, expired.Order.OrderValidity);
+            Assert.AreEqual(new OrderValidity.Day(), expired.Order.OrderValidity);
             Assert.AreEqual(Side.Sell, expired.Order.Side);
             Assert.IsNull(expired.Order.Price);
             Assert.AreEqual(90, expired.Order.TriggerPrice);
@@ -203,7 +203,7 @@ namespace Circus.Tests.OrderBook
         {
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.GoodTilCanceled, Side.Buy, 5, 100);
+            Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.GoodTilCanceled(), Side.Buy, 5, 100);
             TimeProvider.SetCurrentTime(Now2);
 
             // act
@@ -226,8 +226,7 @@ namespace Circus.Tests.OrderBook
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
             var goodTilDate = DateOnly.FromDateTime(Now1).AddDays(1);
-            Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.GoodTilDate, Side.Buy, 5, 100,
-                goodTilDate: goodTilDate);
+            Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.GoodTilDate { Date = goodTilDate }, Side.Buy, 5, 100);
             TimeProvider.SetCurrentTime(Now2);
 
             // act
@@ -250,8 +249,7 @@ namespace Circus.Tests.OrderBook
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
             var goodTilDate = DateOnly.FromDateTime(Now1);
-            Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.GoodTilDate, Side.Buy, 5, 100,
-                goodTilDate: goodTilDate);
+            Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.GoodTilDate { Date = goodTilDate }, Side.Buy, 5, 100);
             TimeProvider.SetCurrentTime(Now2);
 
             // act
@@ -269,8 +267,7 @@ namespace Circus.Tests.OrderBook
             Assert.AreEqual(CompanyId1, expired.Order.CompanyId);
             Assert.AreEqual(OrderId1, expired.Order.ClientOrderId);
             Assert.AreEqual(OrderStatus.Expired, expired.Order.Status);
-            Assert.AreEqual(OrderValidity.GoodTilDate, expired.Order.OrderValidity);
-            Assert.AreEqual(goodTilDate, expired.Order.GoodTilDate);
+            Assert.AreEqual(new OrderValidity.GoodTilDate { Date = goodTilDate }, expired.Order.OrderValidity);
         }
 
         [Test]
@@ -280,8 +277,7 @@ namespace Circus.Tests.OrderBook
             // on the close of the session where the date is reached
             Book.UpdateStatus(OrderBookStatus.Open);
             var goodTilDate = DateOnly.FromDateTime(Now1).AddDays(2);
-            Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.GoodTilDate, Side.Buy, 5, 100,
-                goodTilDate: goodTilDate);
+            Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.GoodTilDate { Date = goodTilDate }, Side.Buy, 5, 100);
             Book.UpdateStatus(OrderBookStatus.Closed); // day 1 close, not due
 
             var day2 = Now1.AddDays(1);
@@ -309,8 +305,7 @@ namespace Circus.Tests.OrderBook
             Assert.AreEqual(CompanyId1, expired.CompanyId);
             Assert.AreEqual(OrderId1, expired.Order.ClientOrderId);
             Assert.AreEqual(OrderStatus.Expired, expired.Order.Status);
-            Assert.AreEqual(OrderValidity.GoodTilDate, expired.Order.OrderValidity);
-            Assert.AreEqual(goodTilDate, expired.Order.GoodTilDate);
+            Assert.AreEqual(new OrderValidity.GoodTilDate { Date = goodTilDate }, expired.Order.OrderValidity);
         }
     }
 }

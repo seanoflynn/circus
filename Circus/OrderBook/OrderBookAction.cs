@@ -1,25 +1,76 @@
-using System;
-
 namespace Circus.OrderBook
 {
-    public record OrderBookAction(Security Security);
+    public abstract record OrderBookAction
+    {
+        public required Security Security { get; init; }
+    }
 
-    public record UpdateStatus(Security Security, OrderBookStatus Status, decimal? ReferencePrice = null)
-        : OrderBookAction(Security);
+    public sealed record PreOpenTrading : OrderBookAction
+    {
+        public decimal? ReferencePrice { get; init; }
+    }
 
-    public record OrderAction(Security Security, string CompanyId, string ClientOrderId)
-        : OrderBookAction(Security);
+    public sealed record OpenTrading : OrderBookAction
+    {
+        public decimal? ReferencePrice { get; init; }
+    }
 
-    public record CreateOrder(Security Security, string CompanyId, string ClientOrderId, OrderValidity OrderValidity,
-            Side Side, int Quantity, decimal? Price = null, decimal? TriggerPrice = null, bool MarketLimit = false,
-            DateOnly? GoodTilDate = null, string? SelfMatchPreventionId = null,
-            SelfMatchPreventionInstruction? SelfMatchPreventionInstruction = null)
-        : OrderAction(Security, CompanyId, ClientOrderId);
+    public sealed record CloseTrading : OrderBookAction;
 
-    public record UpdateOrder(Security Security, string CompanyId, string ClientOrderId, string PreviousClientOrderId,
-            int? Quantity = null, decimal? Price = null, decimal? TriggerPrice = null)
-        : OrderAction(Security, CompanyId, ClientOrderId);
+    public abstract record OrderAction : OrderBookAction
+    {
+        public required string CompanyId { get; init; }
+        public required string ClientOrderId { get; init; }
+    }
 
-    public record CancelOrder(Security Security, string CompanyId, string ClientOrderId, string PreviousClientOrderId)
-        : OrderAction(Security, CompanyId, ClientOrderId);
+    // Id is required: an instruction with no id is meaningless (nothing to match against), so
+    // rather than let that combination be constructed and silently ignored, opting into self-match
+    // prevention at all means supplying an id - Instruction is the only genuinely optional part,
+    // falling back to CancelResting when omitted.
+    public sealed record SelfMatchPrevention
+    {
+        public required string Id { get; init; }
+        public SelfMatchPreventionInstruction? Instruction { get; init; }
+    }
+
+    public abstract record CreateOrder : OrderAction
+    {
+        public required OrderValidity OrderValidity { get; init; }
+        public required Side Side { get; init; }
+        public required int Quantity { get; init; }
+        public SelfMatchPrevention? SelfMatchPrevention { get; init; }
+    }
+
+    public sealed record CreateLimitOrder : CreateOrder
+    {
+        public required decimal Price { get; init; }
+    }
+
+    public sealed record CreateMarketOrder : CreateOrder;
+
+    public sealed record CreateMarketLimitOrder : CreateOrder;
+
+    public sealed record CreateStopLimitOrder : CreateOrder
+    {
+        public required decimal Price { get; init; }
+        public required decimal TriggerPrice { get; init; }
+    }
+
+    public sealed record CreateStopMarketOrder : CreateOrder
+    {
+        public required decimal TriggerPrice { get; init; }
+    }
+
+    public sealed record UpdateOrder : OrderAction
+    {
+        public required string PreviousClientOrderId { get; init; }
+        public int? NewTotalQuantity { get; init; }
+        public decimal? Price { get; init; }
+        public decimal? TriggerPrice { get; init; }
+    }
+
+    public sealed record CancelOrder : OrderAction
+    {
+        public required string PreviousClientOrderId { get; init; }
+    }
 }

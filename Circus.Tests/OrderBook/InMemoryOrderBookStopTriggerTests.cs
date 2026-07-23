@@ -48,26 +48,26 @@ namespace Circus.Tests.OrderBook
         {
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Buy, 3, 500);
-            Book.CreateOrder(CompanyId2, OrderId2, OrderValidity.Day, Side.Sell, 3, 500); // last traded price -> 500
+            Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 500);
+            Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 3, 500); // last traded price -> 500
 
             TimeProvider.SetCurrentTime(Now3);
-            var restingOffer = Book.CreateOrder(CompanyId3, OrderId3, OrderValidity.Day, Side.Sell, 5, 520);
+            var restingOffer = Book.CreateLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Sell, 5, 520);
             Assert.IsInstanceOf<CreateOrderConfirmed>(restingOffer[0]);
 
             TimeProvider.SetCurrentTime(Now4);
-            var stopEvents = Book.CreateOrder(CompanyId4, OrderId4, OrderValidity.Day, Side.Buy, 5, 530, 510);
+            var stopEvents = Book.CreateStopLimitOrder(CompanyId4, OrderId4, new OrderValidity.Day(), Side.Buy, 5, 530, 510);
             Assert.AreEqual(1, stopEvents.Count);
             Assert.IsInstanceOf<CreateOrderConfirmed>(stopEvents[0]);
             Assert.AreEqual(OrderStatus.Hidden, ((CreateOrderConfirmed) stopEvents[0]).Order.Status);
 
             TimeProvider.SetCurrentTime(Now5);
-            var restingBid = Book.CreateOrder(CompanyId5, OrderId5, OrderValidity.Day, Side.Sell, 2, 510); // to be hit
+            var restingBid = Book.CreateLimitOrder(CompanyId5, OrderId5, new OrderValidity.Day(), Side.Sell, 2, 510); // to be hit
             Assert.IsInstanceOf<CreateOrderConfirmed>(restingBid[0]);
 
             // act - trade at the trigger price
             TimeProvider.SetCurrentTime(Now6);
-            var events = Book.CreateOrder(CompanyId6, OrderId6, OrderValidity.Day, Side.Buy, 2, 510);
+            var events = Book.CreateLimitOrder(CompanyId6, OrderId6, new OrderValidity.Day(), Side.Buy, 2, 510);
 
             // assert
             var tradedAtTrigger = events.OfType<OrdersMatched>().FirstOrDefault(m => m.Price == 510);
@@ -91,26 +91,26 @@ namespace Circus.Tests.OrderBook
         {
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Buy, 3, 500);
-            Book.CreateOrder(CompanyId2, OrderId2, OrderValidity.Day, Side.Sell, 3, 500); // last traded price -> 500
+            Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 500);
+            Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 3, 500); // last traded price -> 500
 
             TimeProvider.SetCurrentTime(Now3);
-            var restingBid = Book.CreateOrder(CompanyId3, OrderId3, OrderValidity.Day, Side.Buy, 5, 480);
+            var restingBid = Book.CreateLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Buy, 5, 480);
             Assert.IsInstanceOf<CreateOrderConfirmed>(restingBid[0]);
 
             TimeProvider.SetCurrentTime(Now4);
-            var stopEvents = Book.CreateOrder(CompanyId4, OrderId4, OrderValidity.Day, Side.Sell, 5, 470, 490);
+            var stopEvents = Book.CreateStopLimitOrder(CompanyId4, OrderId4, new OrderValidity.Day(), Side.Sell, 5, 470, 490);
             Assert.AreEqual(1, stopEvents.Count);
             Assert.IsInstanceOf<CreateOrderConfirmed>(stopEvents[0]);
             Assert.AreEqual(OrderStatus.Hidden, ((CreateOrderConfirmed) stopEvents[0]).Order.Status);
 
             TimeProvider.SetCurrentTime(Now5);
-            var restingOffer = Book.CreateOrder(CompanyId5, OrderId5, OrderValidity.Day, Side.Buy, 2, 490); // to be hit
+            var restingOffer = Book.CreateLimitOrder(CompanyId5, OrderId5, new OrderValidity.Day(), Side.Buy, 2, 490); // to be hit
             Assert.IsInstanceOf<CreateOrderConfirmed>(restingOffer[0]);
 
             // act - trade at the trigger price
             TimeProvider.SetCurrentTime(Now6);
-            var events = Book.CreateOrder(CompanyId6, OrderId6, OrderValidity.Day, Side.Sell, 2, 490);
+            var events = Book.CreateLimitOrder(CompanyId6, OrderId6, new OrderValidity.Day(), Side.Sell, 2, 490);
 
             // assert
             var tradedAtTrigger = events.OfType<OrdersMatched>().FirstOrDefault(m => m.Price == 490);
@@ -134,18 +134,18 @@ namespace Circus.Tests.OrderBook
         {
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Buy, 3, 500);
-            Book.CreateOrder(CompanyId2, OrderId2, OrderValidity.Day, Side.Sell, 3, 500); // last traded price -> 500
+            Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 500);
+            Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 3, 500); // last traded price -> 500
 
             // buy stop above market: only triggers once price rises to/through 510
             TimeProvider.SetCurrentTime(Now3);
-            Book.CreateOrder(CompanyId3, OrderId3, OrderValidity.Day, Side.Buy, 5, 520, 510);
+            Book.CreateStopLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Buy, 5, 520, 510);
 
             // act - trade at a lower price, moving further away from the trigger
             TimeProvider.SetCurrentTime(Now4);
-            Book.CreateOrder(CompanyId4, OrderId4, OrderValidity.Day, Side.Buy, 1, 490);
+            Book.CreateLimitOrder(CompanyId4, OrderId4, new OrderValidity.Day(), Side.Buy, 1, 490);
             TimeProvider.SetCurrentTime(Now5);
-            var events = Book.CreateOrder(CompanyId5, OrderId5, OrderValidity.Day, Side.Sell, 1, 490);
+            var events = Book.CreateLimitOrder(CompanyId5, OrderId5, new OrderValidity.Day(), Side.Sell, 1, 490);
 
             // assert
             Assert.IsTrue(events.OfType<OrdersMatched>().Any(m => m.Price == 490));
@@ -164,18 +164,18 @@ namespace Circus.Tests.OrderBook
         {
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Buy, 3, 500);
-            Book.CreateOrder(CompanyId2, OrderId2, OrderValidity.Day, Side.Sell, 3, 500); // last traded price -> 500
+            Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 500);
+            Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 3, 500); // last traded price -> 500
 
             // sell stop below market: only triggers once price falls to/through 490
             TimeProvider.SetCurrentTime(Now3);
-            Book.CreateOrder(CompanyId3, OrderId3, OrderValidity.Day, Side.Sell, 5, 480, 490);
+            Book.CreateStopLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Sell, 5, 480, 490);
 
             // act - trade at a higher price, moving further away from the trigger
             TimeProvider.SetCurrentTime(Now4);
-            Book.CreateOrder(CompanyId4, OrderId4, OrderValidity.Day, Side.Buy, 1, 510);
+            Book.CreateLimitOrder(CompanyId4, OrderId4, new OrderValidity.Day(), Side.Buy, 1, 510);
             TimeProvider.SetCurrentTime(Now5);
-            var events = Book.CreateOrder(CompanyId5, OrderId5, OrderValidity.Day, Side.Sell, 1, 510);
+            var events = Book.CreateLimitOrder(CompanyId5, OrderId5, new OrderValidity.Day(), Side.Sell, 1, 510);
 
             // assert
             Assert.IsTrue(events.OfType<OrdersMatched>().Any(m => m.Price == 510));
@@ -194,19 +194,19 @@ namespace Circus.Tests.OrderBook
         {
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Buy, 3, 500);
-            Book.CreateOrder(CompanyId2, OrderId2, OrderValidity.Day, Side.Sell, 3, 500); // last traded price -> 500
+            Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 500);
+            Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 3, 500); // last traded price -> 500
 
             // buy stop market above market; when it triggers there must be resting sell orders for it to
             // convert into a priced limit order - here there are none, so it should be cancelled, not throw
             TimeProvider.SetCurrentTime(Now3);
-            Book.CreateOrder(CompanyId3, OrderId3, OrderValidity.Day, Side.Buy, 5, null, 510);
+            Book.CreateStopMarketOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Buy, 5, 510);
 
             // act - trade at the trigger price with no resting sell orders left in the book afterwards
             TimeProvider.SetCurrentTime(Now4);
-            Book.CreateOrder(CompanyId4, OrderId4, OrderValidity.Day, Side.Sell, 2, 510);
+            Book.CreateLimitOrder(CompanyId4, OrderId4, new OrderValidity.Day(), Side.Sell, 2, 510);
             TimeProvider.SetCurrentTime(Now5);
-            var events = Book.CreateOrder(CompanyId5, OrderId5, OrderValidity.Day, Side.Buy, 2, 510);
+            var events = Book.CreateLimitOrder(CompanyId5, OrderId5, new OrderValidity.Day(), Side.Buy, 2, 510);
 
             // assert
             Assert.IsTrue(events.OfType<OrdersMatched>().Any(m => m.Price == 510));
@@ -219,7 +219,7 @@ namespace Circus.Tests.OrderBook
             // an order id is a permanent identity once it completes - reuse is rejected, not silently
             // accepted (see issue #1), and book state remains consistent either way
             TimeProvider.SetCurrentTime(Now6);
-            var recreate = Book.CreateOrder(CompanyId3, OrderId3, OrderValidity.Day, Side.Buy, 1, 510);
+            var recreate = Book.CreateLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Buy, 1, 510);
             var rejected = recreate[0] as CreateOrderRejected;
             Assert.IsNotNull(rejected);
             Assert.AreEqual(OrderRejectedReason.OrderIdAlreadyUsed, rejected.Reason);
@@ -230,21 +230,21 @@ namespace Circus.Tests.OrderBook
         {
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Buy, 3, 500);
-            Book.CreateOrder(CompanyId2, OrderId2, OrderValidity.Day, Side.Sell, 3, 500); // last traded price -> 500
+            Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 500);
+            Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 3, 500); // last traded price -> 500
 
             TimeProvider.SetCurrentTime(Now3);
-            Book.CreateOrder(CompanyId3, OrderId3, OrderValidity.Day, Side.Buy, 1, 530, 510);
+            Book.CreateStopLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Buy, 1, 530, 510);
 
             TimeProvider.SetCurrentTime(Now4);
-            Book.CreateOrder(CompanyId4, OrderId4, OrderValidity.Day, Side.Buy, 1, 540, 520);
+            Book.CreateStopLimitOrder(CompanyId4, OrderId4, new OrderValidity.Day(), Side.Buy, 1, 540, 520);
 
             TimeProvider.SetCurrentTime(Now5);
-            Book.CreateOrder(CompanyId5, OrderId5, OrderValidity.Day, Side.Sell, 2, 520); // resting offer for the gap trade
+            Book.CreateLimitOrder(CompanyId5, OrderId5, new OrderValidity.Day(), Side.Sell, 2, 520); // resting offer for the gap trade
 
             // act - price gaps straight from 500 to 520, passing through both trigger levels
             TimeProvider.SetCurrentTime(Now6);
-            var events = Book.CreateOrder(CompanyId6, OrderId6, OrderValidity.Day, Side.Buy, 2, 520);
+            var events = Book.CreateLimitOrder(CompanyId6, OrderId6, new OrderValidity.Day(), Side.Buy, 2, 520);
 
             // assert
             Assert.IsTrue(events.OfType<UpdateOrderConfirmed>().Any(u => u.Order.ClientOrderId == OrderId3),
