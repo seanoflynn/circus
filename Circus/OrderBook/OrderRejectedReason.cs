@@ -24,6 +24,7 @@ namespace Circus.OrderBook
         ClientOrderIdTooLong,
         CompanyIdRequired,
         CompanyIdTooLong,
+        SelfMatchPreventionIdTooLong,
         // PendingCancelOrReplace,
         // PriceExceedsCurrentPrice,
         // PriceExceedsCurrentPriceBand,

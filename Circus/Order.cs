@@ -19,6 +19,8 @@ namespace Circus
         int RemainingQuantity,
         decimal? Price,
         decimal? TriggerPrice,
-        DateOnly? GoodTilDate = null
+        DateOnly? GoodTilDate = null,
+        string? SelfMatchPreventionId = null,
+        SelfMatchPreventionInstruction? SelfMatchPreventionInstruction = null
     );
 }

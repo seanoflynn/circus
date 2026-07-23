@@ -26,10 +26,13 @@ namespace Circus.OrderBook
         public long? Price { get; private set; }
         public long? TriggerPrice { get; private set; }
         public DateOnly? GoodTilDate { get; }
+        public string? SelfMatchPreventionId { get; }
+        public SelfMatchPreventionInstruction? SelfMatchPreventionInstruction { get; }
 
         public InternalOrder(long sequenceNumber, string companyId, string clientOrderId, Security security, DateTime time,
             OrderStatus status, OrderType type, OrderValidity validity, Side side, int quantity, long? price,
-            long? triggerPrice, DateOnly? goodTilDate = null)
+            long? triggerPrice, DateOnly? goodTilDate = null, string? selfMatchPreventionId = null,
+            SelfMatchPreventionInstruction? selfMatchPreventionInstruction = null)
         {
             SequenceNumber = sequenceNumber;
             CompanyId = companyId;
@@ -48,6 +51,8 @@ namespace Circus.OrderBook
             Price = price;
             TriggerPrice = triggerPrice;
             GoodTilDate = goodTilDate;
+            SelfMatchPreventionId = selfMatchPreventionId;
+            SelfMatchPreventionInstruction = selfMatchPreventionInstruction;
         }
 
         public override string ToString() =>
@@ -57,7 +62,7 @@ namespace Circus.OrderBook
         {
             return new(CompanyId, ExchangeOrderId, ClientOrderId, Security, CreatedTime, ModifiedTime, CompletedTime,
                 Status, Type, Validity, Side, Quantity, FilledQuantity, RemainingQuantity, ToDecimal(Price),
-                ToDecimal(TriggerPrice), GoodTilDate);
+                ToDecimal(TriggerPrice), GoodTilDate, SelfMatchPreventionId, SelfMatchPreventionInstruction);
         }
 
         private decimal? ToDecimal(long? ticks) => ticks.HasValue ? ticks.Value * Security.TickSize : null;
