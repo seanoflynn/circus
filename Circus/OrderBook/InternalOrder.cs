@@ -29,6 +29,12 @@ namespace Circus.OrderBook
         public string? SelfMatchPreventionId { get; }
         public SelfMatchPreventionInstruction? SelfMatchPreventionInstruction { get; }
 
+        // intrusive doubly-linked-list pointers used by PriceLadder for the price level currently
+        // holding this order (an order only ever rests in one level at a time, so a single pair of
+        // pointers is unambiguous). Avoids allocating a separate node object per order.
+        internal InternalOrder? LevelNext { get; set; }
+        internal InternalOrder? LevelPrev { get; set; }
+
         public InternalOrder(long sequenceNumber, string companyId, string clientOrderId, Security security, DateTime time,
             OrderStatus status, OrderType type, OrderValidity validity, Side side, int quantity, long? price,
             long? triggerPrice, DateOnly? goodTilDate = null, string? selfMatchPreventionId = null,
