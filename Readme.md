@@ -23,7 +23,7 @@ Time in force/order validity
 - [x] Day orders
 - [x] GTC orders
 - [x] FAK/FOK orders
-- [ ] GTD orders
+- [x] GTD orders
 
 Sessions
 - [x] Time provider
@@ -34,17 +34,17 @@ Market data
 - [x] Trades
 - [x] Price/qty/count for x levels
 - [ ] All order updates
-- [ ] Indicative open
+- [x] Indicative open
 
 Safety features
-- [ ] Banding
-- [ ] Limits
+- [x] Banding
+- [ ] Daily price limits (static, session-long limit up/down)
 - [ ] Circuit breakers
 - [ ] Stop & velocity logic
-- [ ] Self-match prevention
+- [x] Self-match prevention
 
 Matching algorithms
 - [x] FIFO
-- [ ] Open auction
+- [x] Open auction
 - [ ] Allocation
 - [ ] Pro-rata
