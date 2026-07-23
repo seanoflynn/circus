@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Circus.TimeProviders;
-using Circus.Util;
 
 namespace Circus.OrderBook
 {
@@ -15,21 +14,19 @@ namespace Circus.OrderBook
         private long _nextSequenceNumber;
         private long? _lastTradedPrice;
 
-        // Keyed and compared as tick counts (price / Security.TickSize) rather than decimal —
-        // see InternalOrder for why.
-        private readonly Dictionary<Side, SortedDictionary<long, SortedDictionary<long, InternalOrder>>> _working =
-            new()
-            {
-                {Side.Buy, new(new DescendingComparer())},
-                {Side.Sell, new()}
-            };
+        // Array-backed, indexed by tick count (price / Security.TickSize) rather than decimal —
+        // see InternalOrder and PriceLadder for why.
+        private readonly Dictionary<Side, PriceLadder> _working = new()
+        {
+            {Side.Buy, new PriceLadder(descending: true)},
+            {Side.Sell, new PriceLadder(descending: false)}
+        };
 
-        private readonly Dictionary<Side, SortedDictionary<long, SortedDictionary<long, InternalOrder>>> _stops =
-            new()
-            {
-                {Side.Buy, new()},
-                {Side.Sell, new(new DescendingComparer())}
-            };
+        private readonly Dictionary<Side, PriceLadder> _stops = new()
+        {
+            {Side.Buy, new PriceLadder(descending: false)},
+            {Side.Sell, new PriceLadder(descending: true)}
+        };
 
         private readonly Dictionary<string, InternalOrder> _orders = new();
         private readonly Dictionary<string, InternalOrder> _completedOrders = new();
@@ -53,11 +50,11 @@ namespace Circus.OrderBook
 
         public IList<Level> GetLevels(Side side, int maxPrices)
         {
-            return _working[side].Take(maxPrices)
+            return _working[side].EnumerateFromBest().Take(maxPrices)
                 .Select(x => new Level(
-                    ToDecimal(x.Key),
-                    x.Value.Sum(y => y.Value.RemainingQuantity),
-                    x.Value.Count))
+                    ToDecimal(x.Tick),
+                    x.Level.Sum(y => y.Value.RemainingQuantity),
+                    x.Level.Count))
                 .ToList();
         }
 
@@ -189,12 +186,12 @@ namespace Circus.OrderBook
         {
             priceTicks = null;
             var opposing = _working[side == Side.Buy ? Side.Sell : Side.Buy];
-            if (!opposing.Any())
+            if (!opposing.TryGetBest(out var bestTick, out _))
                 return false;
 
             // set price as best offer + protection ticks for buy orders, best bid - protection ticks for sell orders
             // TODO: option to use best bid + protection tickets for buy orders, etc (eurex)
-            priceTicks = opposing.First().Key + ((side == Side.Buy ? 1 : -1) * protectionTicks);
+            priceTicks = bestTick + ((side == Side.Buy ? 1 : -1) * protectionTicks);
             return true;
         }
 
@@ -202,13 +199,13 @@ namespace Circus.OrderBook
         {
             var opposing = _working[side == Side.Buy ? Side.Sell : Side.Buy];
             var total = 0;
-            foreach (var level in opposing)
+            foreach (var (tick, level) in opposing.EnumerateFromBest())
             {
-                var crosses = side == Side.Buy ? level.Key <= priceTicks : level.Key >= priceTicks;
+                var crosses = side == Side.Buy ? tick <= priceTicks : tick >= priceTicks;
                 if (!crosses)
                     break;
 
-                total += level.Value.Sum(o => o.Value.RemainingQuantity);
+                total += level.Sum(o => o.Value.RemainingQuantity);
                 if (total >= quantity)
                     return true;
             }
@@ -425,6 +422,9 @@ namespace Circus.OrderBook
             }
         }
 
+        private InternalOrder? BestOrder(Side side) =>
+            _working[side].TryGetBest(out _, out var level) ? level.FirstOrDefault().Value : null;
+
         private IEnumerable<OrderBookEvent> Match()
         {
             if (_status != OrderBookStatus.Open)
@@ -435,8 +435,8 @@ namespace Circus.OrderBook
             var events = new List<OrderBookEvent>();
             var time = Now();
 
-            var buy = _working[Side.Buy].FirstOrDefault().Value?.FirstOrDefault().Value;
-            var sell = _working[Side.Sell].FirstOrDefault().Value?.FirstOrDefault().Value;
+            var buy = BestOrder(Side.Buy);
+            var sell = BestOrder(Side.Sell);
 
             if (buy != null && !buy.Price.HasValue)
             {
@@ -476,8 +476,8 @@ namespace Circus.OrderBook
                     events.AddRange(CheckStops());
                 }
 
-                buy = _working[Side.Buy].FirstOrDefault().Value?.FirstOrDefault().Value;
-                sell = _working[Side.Sell].FirstOrDefault().Value?.FirstOrDefault().Value;
+                buy = BestOrder(Side.Buy);
+                sell = BestOrder(Side.Sell);
             }
 
             return events;
@@ -488,28 +488,22 @@ namespace Circus.OrderBook
             var time = Now();
             var triggered = new SortedDictionary<long, InternalOrder>();
 
-            var buys = _stops[Side.Buy].FirstOrDefault();
-            while (!buys.Equals(default(KeyValuePair<long, SortedDictionary<long, InternalOrder>>)) &&
-                   buys.Key <= _lastTradedPrice)
+            while (_stops[Side.Buy].TryGetBest(out var buyTick, out var buyLevel) && buyTick <= _lastTradedPrice)
             {
-                foreach (var (seqNum, order) in buys.Value)
+                foreach (var (seqNum, order) in buyLevel)
                 {
                     triggered.Add(seqNum, order);
                 }
-                _stops[Side.Buy].Remove(buys.Key);
-                buys = _stops[Side.Buy].FirstOrDefault();
+                _stops[Side.Buy].RemoveLevel(buyTick);
             }
 
-            var sells = _stops[Side.Sell].FirstOrDefault();
-            while (!sells.Equals(default(KeyValuePair<long, SortedDictionary<long, InternalOrder>>)) &&
-                   sells.Key >= _lastTradedPrice)
+            while (_stops[Side.Sell].TryGetBest(out var sellTick, out var sellLevel) && sellTick >= _lastTradedPrice)
             {
-                foreach (var (seqNum, order) in sells.Value)
+                foreach (var (seqNum, order) in sellLevel)
                 {
                     triggered.Add(seqNum, order);
                 }
-                _stops[Side.Sell].Remove(sells.Key);
-                sells = _stops[Side.Sell].FirstOrDefault();
+                _stops[Side.Sell].RemoveLevel(sellTick);
             }
 
             var events = new List<OrderBookEvent>();
@@ -622,31 +616,4 @@ namespace Circus.OrderBook
     }
 
     public record Level(decimal Price, int Quantity, int Count);
-
-    internal static class SortedDictionaryExtensions
-    {
-        internal static void Add(this SortedDictionary<long, SortedDictionary<long, InternalOrder>> orders,
-            long price, long sequenceNumber, InternalOrder order)
-        {
-            if (orders.ContainsKey(price))
-            {
-                orders[price].Add(sequenceNumber, order);
-            }
-            else
-            {
-                orders[price] = new SortedDictionary<long, InternalOrder> {{sequenceNumber, order}};
-            }
-        }
-
-        internal static void Remove(this SortedDictionary<long, SortedDictionary<long, InternalOrder>> orders,
-            long price, long sequenceNumber)
-        {
-            orders[price].Remove(sequenceNumber);
-
-            if (orders[price].Count == 0)
-            {
-                orders.Remove(price);
-            }
-        }
-    }
 }
