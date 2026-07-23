@@ -24,6 +24,6 @@ namespace Circus.OrderBook
 
         IList<OrderBookEvent> CancelOrder(string companyId, string clientOrderId, string previousClientOrderId);
 
-        IList<OrderBookEvent> UpdateStatus(OrderBookStatus status);
+        IList<OrderBookEvent> UpdateStatus(OrderBookStatus status, decimal? referencePrice = null);
     }
 }

@@ -14,6 +14,13 @@ namespace Circus.OrderBook
         private long _nextSequenceNumber;
         private long? _lastTradedPrice;
 
+        // Anchor for price banding, kept separate from _lastTradedPrice: it's seeded from an
+        // explicit reference price (mirroring CME's settlement price pre-open) before any trade
+        // has happened, whereas _lastTradedPrice being null specifically means "no trade yet" for
+        // the stop-trigger reasonability checks elsewhere. Tracks _lastTradedPrice once trading
+        // starts, so the band dynamically slides with the market like CME's does.
+        private long? _bandReferencePriceTicks;
+
         // Array-backed, indexed by tick count (price / Security.TickSize) rather than decimal —
         // see InternalOrder and PriceLadder for why.
         private readonly Dictionary<Side, PriceLadder> _working = new()
@@ -73,7 +80,7 @@ namespace Circus.OrderBook
                 UpdateOrder update => UpdateOrder(update.CompanyId, update.ClientOrderId,
                     update.PreviousClientOrderId, update.Quantity, update.Price, update.TriggerPrice),
                 CancelOrder cancel => CancelOrder(cancel.CompanyId, cancel.ClientOrderId, cancel.PreviousClientOrderId),
-                UpdateStatus update => UpdateStatus(update.Status),
+                UpdateStatus update => UpdateStatus(update.Status, update.ReferencePrice),
                 _ => throw new ArgumentException("Unknown order book action")
             };
         }
@@ -126,6 +133,8 @@ namespace Circus.OrderBook
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.TriggerPriceMustBeGreaterThanLastTradedPrice);
             if (triggerTicks != null && side == Side.Sell && triggerTicks >= _lastTradedPrice)
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.TriggerPriceMustBeLessThanLastTradedPrice);
+            if (priceTicks.HasValue && !IsWithinPriceBand(priceTicks.Value))
+                return RejectCreate(companyId, clientOrderId, OrderRejectedReason.PriceOutsideBands);
             if (_clientOrderIndex.TryGetValue((companyId, clientOrderId), out var existingOrder))
             {
                 return existingOrder.Status is OrderStatus.Working or OrderStatus.Hidden
@@ -205,6 +214,15 @@ namespace Circus.OrderBook
             return true;
         }
 
+        // Only client-supplied resting limit prices go through this - not trigger prices (already
+        // governed by the TriggerPriceMustBe.../LastTradedPrice checks above) and not the computed
+        // effective price for Market/MarketLimit orders (already governed by the separate
+        // MarketOrderProtectionTicks mechanism). Band is inactive (returns true) until both a band
+        // width is configured and a reference price has been established.
+        private bool IsWithinPriceBand(long priceTicks) =>
+            !_security.PriceBandTicks.HasValue || !_bandReferencePriceTicks.HasValue ||
+            Math.Abs(priceTicks - _bandReferencePriceTicks.Value) <= _security.PriceBandTicks.Value;
+
         // selfMatchPreventionId/selfMatchPreventionInstruction are the incoming order's own
         // fields. Walks resting orders in the same price/time priority order Match() would
         // actually consume them in: a self-matched order with CancelResting is simply skipped
@@ -275,6 +293,8 @@ namespace Circus.OrderBook
                 return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.InvalidPriceIncrement);
             if (!TryConvertToTicks(triggerPrice, out var triggerTicks))
                 return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.InvalidPriceIncrement);
+            if (priceTicks.HasValue && !IsWithinPriceBand(priceTicks.Value))
+                return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.PriceOutsideBands);
             if (!_clientOrderIndex.TryGetValue((companyId, previousClientOrderId), out var order) ||
                 order.ClientOrderId != previousClientOrderId)
                 return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.OrderNotInBook);
@@ -517,6 +537,7 @@ namespace Circus.OrderBook
                 if (_lastTradedPrice != priceTicks)
                 {
                     _lastTradedPrice = priceTicks;
+                    _bandReferencePriceTicks = priceTicks;
                     events.AddRange(CheckStops());
                 }
 
@@ -633,8 +654,11 @@ namespace Circus.OrderBook
             return events;
         }
 
-        public IList<OrderBookEvent> UpdateStatus(OrderBookStatus status)
+        public IList<OrderBookEvent> UpdateStatus(OrderBookStatus status, decimal? referencePrice = null)
         {
+            if (referencePrice.HasValue && TryConvertToTicks(referencePrice, out var referenceTicks))
+                _bandReferencePriceTicks = referenceTicks;
+
             return status switch
             {
                 OrderBookStatus.PreOpen => PreOpenMarket(),
