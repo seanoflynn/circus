@@ -64,7 +64,7 @@ namespace Circus.OrderBook
             {
                 CreateOrder create => CreateOrder(create.CompanyId, create.ClientOrderId, create.OrderValidity,
                     create.Side, create.Quantity, create.Price, create.TriggerPrice, create.MarketLimit,
-                    create.GoodTilDate),
+                    create.GoodTilDate, create.SelfMatchPreventionId, create.SelfMatchPreventionInstruction),
                 UpdateOrder update => UpdateOrder(update.CompanyId, update.ClientOrderId,
                     update.PreviousClientOrderId, update.Quantity, update.Price, update.TriggerPrice),
                 CancelOrder cancel => CancelOrder(cancel.CompanyId, cancel.ClientOrderId, cancel.PreviousClientOrderId),
@@ -75,7 +75,8 @@ namespace Circus.OrderBook
 
         public IList<OrderBookEvent> CreateOrder(string companyId, string clientOrderId, OrderValidity validity, Side side,
             int quantity, decimal? price = null, decimal? triggerPrice = null, bool marketLimit = false,
-            DateOnly? goodTilDate = null)
+            DateOnly? goodTilDate = null, string? selfMatchPreventionId = null,
+            SelfMatchPreventionInstruction? selfMatchPreventionInstruction = null)
         {
             var type = price.HasValue ? OrderType.Limit : OrderType.Market;
             var status = OrderStatus.Working;
@@ -102,6 +103,8 @@ namespace Circus.OrderBook
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.CompanyIdRequired);
             if (companyId.Length > MaxClientOrderIdLength)
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.CompanyIdTooLong);
+            if (selfMatchPreventionId != null && selfMatchPreventionId.Length > MaxClientOrderIdLength)
+                return RejectCreate(companyId, clientOrderId, OrderRejectedReason.SelfMatchPreventionIdTooLong);
             if (quantity < 1)
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.InvalidQuantity);
             if (!TryConvertToTicks(price, out var priceTicks))
@@ -133,7 +136,8 @@ namespace Circus.OrderBook
             }
 
             if (validity == OrderValidity.FillOrKill && !triggerTicks.HasValue &&
-                !HasSufficientLiquidity(side, priceTicks!.Value, quantity))
+                !HasSufficientLiquidity(side, priceTicks!.Value, quantity, selfMatchPreventionId,
+                    selfMatchPreventionInstruction))
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.InsufficientLiquidityForFillOrKill);
             if (validity == OrderValidity.GoodTilDate && !goodTilDate.HasValue)
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.GoodTilDateRequired);
@@ -142,7 +146,8 @@ namespace Circus.OrderBook
 
             _nextSequenceNumber++;
             var order = new InternalOrder(_nextSequenceNumber, companyId, clientOrderId, _security, Now(), status,
-                type, validity, side, quantity, priceTicks, triggerTicks, goodTilDate);
+                type, validity, side, quantity, priceTicks, triggerTicks, goodTilDate, selfMatchPreventionId,
+                selfMatchPreventionInstruction);
 
             _orders.Add(order.ExchangeOrderId, order);
             _clientOrderIndex.Add((companyId, clientOrderId), order);
@@ -195,7 +200,15 @@ namespace Circus.OrderBook
             return true;
         }
 
-        private bool HasSufficientLiquidity(Side side, long priceTicks, int quantity)
+        // selfMatchPreventionId/selfMatchPreventionInstruction are the incoming order's own
+        // fields. Walks resting orders in the same price/time priority order Match() would
+        // actually consume them in: a self-matched order with CancelResting is simply skipped
+        // (the incoming order keeps going, only the resting order would die), but with
+        // CancelAggressor/CancelBoth the incoming order itself would be cancelled right there,
+        // so nothing beyond that point can ever count - liquidity checking must stop dead,
+        // not just exclude that one order's quantity and keep summing past it.
+        private bool HasSufficientLiquidity(Side side, long priceTicks, int quantity, string? selfMatchPreventionId,
+            SelfMatchPreventionInstruction? selfMatchPreventionInstruction)
         {
             var opposing = _working[side == Side.Buy ? Side.Sell : Side.Buy];
             var total = 0;
@@ -205,9 +218,23 @@ namespace Circus.OrderBook
                 if (!crosses)
                     break;
 
-                total += level.Sum(o => o.Value.RemainingQuantity);
-                if (total >= quantity)
-                    return true;
+                foreach (var (_, restingOrder) in level)
+                {
+                    if (TryGetSelfMatchInstruction(restingOrder, selfMatchPreventionId,
+                            selfMatchPreventionInstruction, out var instruction))
+                    {
+                        // total < quantity is guaranteed here - otherwise we'd have already
+                        // returned true below before reaching this order
+                        if (instruction != SelfMatchPreventionInstruction.CancelResting)
+                            return false;
+
+                        continue;
+                    }
+
+                    total += restingOrder.RemainingQuantity;
+                    if (total >= quantity)
+                        return true;
+                }
             }
 
             return total >= quantity;
@@ -453,6 +480,18 @@ namespace Circus.OrderBook
                 var resting = buy.ModifiedTime < sell.ModifiedTime ? buy : sell;
                 var aggressor = buy == resting ? sell : buy;
 
+                if (IsSelfMatch(resting, aggressor, out var instruction))
+                {
+                    if (instruction != SelfMatchPreventionInstruction.CancelAggressor)
+                        events.Add(CancelRemainder(resting, OrderCancelledReason.SelfMatchPrevention));
+                    if (instruction != SelfMatchPreventionInstruction.CancelResting)
+                        events.Add(CancelRemainder(aggressor, OrderCancelledReason.SelfMatchPrevention));
+
+                    buy = BestOrder(Side.Buy);
+                    sell = BestOrder(Side.Sell);
+                    continue;
+                }
+
                 var quantity = Math.Min(resting.RemainingQuantity, aggressor.RemainingQuantity);
                 var priceTicks = resting.Price ?? throw new InvalidOperationException("limit order requires price");
                 var price = ToDecimal(priceTicks);
@@ -481,6 +520,30 @@ namespace Circus.OrderBook
             }
 
             return events;
+        }
+
+        // Two orders are a prevented self-match only if both carry the same non-null
+        // SelfMatchPreventionId - matches CME/Eurex, where this is a dedicated opt-in id
+        // distinct from the firm/company identifier (so unrelated desks under one company
+        // aren't blocked from trading each other).
+        private static bool IsSelfMatch(InternalOrder resting, InternalOrder aggressor,
+            out SelfMatchPreventionInstruction instruction) =>
+            TryGetSelfMatchInstruction(resting, aggressor.SelfMatchPreventionId,
+                aggressor.SelfMatchPreventionInstruction, out instruction);
+
+        private static bool TryGetSelfMatchInstruction(InternalOrder resting, string? incomingSelfMatchPreventionId,
+            SelfMatchPreventionInstruction? incomingInstruction, out SelfMatchPreventionInstruction instruction)
+        {
+            if (incomingSelfMatchPreventionId == null ||
+                resting.SelfMatchPreventionId != incomingSelfMatchPreventionId)
+            {
+                instruction = default;
+                return false;
+            }
+
+            instruction = incomingInstruction ?? resting.SelfMatchPreventionInstruction ??
+                SelfMatchPreventionInstruction.CancelResting;
+            return true;
         }
 
         private IEnumerable<OrderBookEvent> CheckStops()
@@ -544,7 +607,8 @@ namespace Circus.OrderBook
                 }
 
                 if (order.Validity == OrderValidity.FillOrKill &&
-                    !HasSufficientLiquidity(order.Side, newPriceTicks!.Value, order.RemainingQuantity))
+                    !HasSufficientLiquidity(order.Side, newPriceTicks!.Value, order.RemainingQuantity,
+                        order.SelfMatchPreventionId, order.SelfMatchPreventionInstruction))
                 {
                     var previousClientOrderId = order.ClientOrderId;
                     order.Cancel(Now());

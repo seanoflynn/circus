@@ -15,7 +15,8 @@ namespace Circus.OrderBook
 
         IList<OrderBookEvent> CreateOrder(string companyId, string clientOrderId, OrderValidity validity, Side side,
             int quantity, decimal? price = null, decimal? triggerPrice = null, bool marketLimit = false,
-            DateOnly? goodTilDate = null);
+            DateOnly? goodTilDate = null, string? selfMatchPreventionId = null,
+            SelfMatchPreventionInstruction? selfMatchPreventionInstruction = null);
 
         // quantity is the order's new total size (filled + remaining), not the new remaining/resting amount
         IList<OrderBookEvent> UpdateOrder(string companyId, string clientOrderId, string previousClientOrderId,
