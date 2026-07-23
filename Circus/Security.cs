@@ -6,6 +6,7 @@ namespace Circus
         decimal TickSize,
         decimal TickValue,
         int MarketOrderProtectionTicks = 10,
-        int? PriceBandTicks = null
+        int? PriceBandTicks = null,
+        int? VolatilityAuctionBandTicks = null
     );
 }

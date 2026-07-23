@@ -70,6 +70,82 @@ namespace Circus.OrderBook
             return total;
         }
 
+        public bool TryGetIndicativeAuctionPrice(out decimal price, out int quantity)
+        {
+            if (!TryComputeAuctionPrice(out var priceTicks, out quantity))
+            {
+                price = 0;
+                return false;
+            }
+
+            price = ToDecimal(priceTicks);
+            return true;
+        }
+
+        // The call-auction uncrossing price: the price that maximizes executable volume across
+        // the resting book, i.e. min(cumulative bid quantity at/above p, cumulative ask quantity
+        // at/below p). Ties break by (1) minimum surplus - CME's rule, (2) closest to
+        // _bandReferencePriceTicks, since neither venue's public docs cover a case this granular,
+        // (3) CME's final rule: highest price if the surplus is on the buy side, lowest if on the
+        // sell side. Stops are deliberately not folded into this search (unlike CME's iterative
+        // stop-election loop) - they're picked up afterward by the existing CheckStops() pass,
+        // same as any other trade.
+        private bool TryComputeAuctionPrice(out long priceTicks, out int quantity)
+        {
+            priceTicks = 0;
+            quantity = 0;
+
+            var buyLevels = _working[Side.Buy].EnumerateFromBest()
+                .Select(x => (Tick: x.Tick, Qty: SumRemaining(x.First))).ToList();
+            var sellLevels = _working[Side.Sell].EnumerateFromBest()
+                .Select(x => (Tick: x.Tick, Qty: SumRemaining(x.First))).ToList();
+
+            if (buyLevels.Count == 0 || sellLevels.Count == 0 || buyLevels[0].Tick < sellLevels[0].Tick)
+                return false;
+
+            var candidates = buyLevels.Select(l => l.Tick).Concat(sellLevels.Select(l => l.Tick)).Distinct();
+
+            (long Price, int Executable, long Surplus)? best = null;
+            foreach (var p in candidates)
+            {
+                var cumBid = buyLevels.Where(l => l.Tick >= p).Sum(l => l.Qty);
+                var cumAsk = sellLevels.Where(l => l.Tick <= p).Sum(l => l.Qty);
+                var executable = Math.Min(cumBid, cumAsk);
+                var surplus = cumBid - cumAsk;
+
+                if (best == null || executable > best.Value.Executable ||
+                    (executable == best.Value.Executable &&
+                     IsBetterAuctionPriceTieBreak(p, surplus, best.Value.Price, best.Value.Surplus)))
+                {
+                    best = (p, executable, surplus);
+                }
+            }
+
+            priceTicks = best!.Value.Price;
+            quantity = best.Value.Executable;
+            return quantity > 0;
+        }
+
+        private bool IsBetterAuctionPriceTieBreak(long candidatePrice, long candidateSurplus, long currentPrice,
+            long currentSurplus)
+        {
+            var candidateAbsSurplus = Math.Abs(candidateSurplus);
+            var currentAbsSurplus = Math.Abs(currentSurplus);
+            if (candidateAbsSurplus != currentAbsSurplus)
+                return candidateAbsSurplus < currentAbsSurplus;
+
+            if (_bandReferencePriceTicks.HasValue)
+            {
+                var candidateDistance = Math.Abs(candidatePrice - _bandReferencePriceTicks.Value);
+                var currentDistance = Math.Abs(currentPrice - _bandReferencePriceTicks.Value);
+                if (candidateDistance != currentDistance)
+                    return candidateDistance < currentDistance;
+            }
+
+            // surplus on the buy side (positive) -> prefer the higher price; sell side -> lower
+            return candidateSurplus > 0 ? candidatePrice > currentPrice : candidatePrice < currentPrice;
+        }
+
         public IList<OrderBookEvent> Process(OrderBookAction action)
         {
             return action switch
@@ -135,6 +211,8 @@ namespace Circus.OrderBook
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.TriggerPriceMustBeLessThanLastTradedPrice);
             if (priceTicks.HasValue && !IsWithinPriceBand(priceTicks.Value))
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.PriceOutsideBands);
+            var triggersVolatilityPause = _status == OrderBookStatus.Open && priceTicks.HasValue &&
+                !IsWithinVolatilityAuctionBand(priceTicks.Value);
             if (_clientOrderIndex.TryGetValue((companyId, clientOrderId), out var existingOrder))
             {
                 return existingOrder.Status is OrderStatus.Working or OrderStatus.Hidden
@@ -171,7 +249,16 @@ namespace Circus.OrderBook
 
             List<OrderBookEvent> events = new();
             events.Add(new CreateOrderConfirmed(_security, Now(), companyId, order.ToOrder()));
-            Match(events);
+
+            if (triggersVolatilityPause)
+            {
+                _status = OrderBookStatus.PreOpen;
+                events.Add(new StatusChanged(_security, Now(), _status));
+            }
+            else
+            {
+                Match(events);
+            }
 
             if (order.Validity == OrderValidity.FillAndKill && order.Status == OrderStatus.Working)
                 events.Add(CancelRemainder(order, OrderCancelledReason.FillAndKillNotFilled));
@@ -222,6 +309,14 @@ namespace Circus.OrderBook
         private bool IsWithinPriceBand(long priceTicks) =>
             !_security.PriceBandTicks.HasValue || !_bandReferencePriceTicks.HasValue ||
             Math.Abs(priceTicks - _bandReferencePriceTicks.Value) <= _security.PriceBandTicks.Value;
+
+        // Same shape as IsWithinPriceBand, but a separate, independently-configurable (typically
+        // narrower) band: a breach here doesn't reject the order - it pauses continuous trading
+        // into an auction instead (Eurex-style volatility interruption), handled by the callers
+        // below. Only relevant for orders that already passed the hard PriceBandTicks check above.
+        private bool IsWithinVolatilityAuctionBand(long priceTicks) =>
+            !_security.VolatilityAuctionBandTicks.HasValue || !_bandReferencePriceTicks.HasValue ||
+            Math.Abs(priceTicks - _bandReferencePriceTicks.Value) <= _security.VolatilityAuctionBandTicks.Value;
 
         // selfMatchPreventionId/selfMatchPreventionInstruction are the incoming order's own
         // fields. Walks resting orders in the same price/time priority order Match() would
@@ -295,6 +390,8 @@ namespace Circus.OrderBook
                 return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.InvalidPriceIncrement);
             if (priceTicks.HasValue && !IsWithinPriceBand(priceTicks.Value))
                 return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.PriceOutsideBands);
+            var triggersVolatilityPause = _status == OrderBookStatus.Open && priceTicks.HasValue &&
+                !IsWithinVolatilityAuctionBand(priceTicks.Value);
             if (!_clientOrderIndex.TryGetValue((companyId, previousClientOrderId), out var order) ||
                 order.ClientOrderId != previousClientOrderId)
                 return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.OrderNotInBook);
@@ -374,7 +471,17 @@ namespace Circus.OrderBook
 
             List<OrderBookEvent> events = new();
             events.Add(new UpdateOrderConfirmed(_security, Now(), order.CompanyId, order.ToOrder(), previousClientOrderId));
-            Match(events);
+
+            if (triggersVolatilityPause)
+            {
+                _status = OrderBookStatus.PreOpen;
+                events.Add(new StatusChanged(_security, Now(), _status));
+            }
+            else
+            {
+                Match(events);
+            }
+
             return events;
         }
 
@@ -477,7 +584,7 @@ namespace Circus.OrderBook
         private InternalOrder? BestOrder(Side side) =>
             _working[side].TryGetBest(out _, out var order) ? order : null;
 
-        private void Match(List<OrderBookEvent> events)
+        private void Match(List<OrderBookEvent> events, long? auctionPriceTicks = null)
         {
             if (_status != OrderBookStatus.Open)
             {
@@ -517,7 +624,8 @@ namespace Circus.OrderBook
                 }
 
                 var quantity = Math.Min(resting.RemainingQuantity, aggressor.RemainingQuantity);
-                var priceTicks = resting.Price ?? throw new InvalidOperationException("limit order requires price");
+                var priceTicks = auctionPriceTicks ?? resting.Price ??
+                    throw new InvalidOperationException("limit order requires price");
                 var price = ToDecimal(priceTicks);
 
                 FillOrder(resting, time, quantity);
@@ -671,6 +779,12 @@ namespace Circus.OrderBook
         {
             _status = OrderBookStatus.Open;
             var events = new List<OrderBookEvent> {new StatusChanged(_security, Now(), _status)};
+
+            // Runs whether the prior status was the real start-of-day PreOpen or PreOpen
+            // re-entered mid-session for a volatility pause - same uncrossing either way.
+            if (TryComputeAuctionPrice(out var auctionPriceTicks, out _))
+                Match(events, auctionPriceTicks);
+
             Match(events);
             return events;
         }

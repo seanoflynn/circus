@@ -11,6 +11,11 @@ namespace Circus.OrderBook
 
         IList<Level> GetLevels(Side side, int maxPrices);
 
+        // Live indicative auction price during PreOpen (or a mid-session volatility pause) - the
+        // price/quantity that would result if the auction ended right now. Recalculated from the
+        // current book on every call, so it naturally tracks order entry/cancellation.
+        bool TryGetIndicativeAuctionPrice(out decimal price, out int quantity);
+
         IList<OrderBookEvent> Process(OrderBookAction action);
 
         IList<OrderBookEvent> CreateOrder(string companyId, string clientOrderId, OrderValidity validity, Side side,
