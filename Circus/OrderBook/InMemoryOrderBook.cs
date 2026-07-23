@@ -210,6 +210,8 @@ namespace Circus.OrderBook
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.TriggerPriceMustBeLessThanLastTradedPrice);
             if (priceTicks.HasValue && !IsWithinPriceBand(priceTicks.Value))
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.PriceOutsideBands);
+            if (validity is OrderValidity.FillAndKill { MinQuantity: int minQty } && (minQty < 1 || minQty > quantity))
+                return RejectCreate(companyId, clientOrderId, OrderRejectedReason.QuantityOutOfRange);
             if (_clientOrderIndex.TryGetValue((companyId, clientOrderId), out var existingOrder))
             {
                 return existingOrder.Status is OrderStatus.Working or OrderStatus.Hidden
@@ -228,6 +230,10 @@ namespace Circus.OrderBook
                 !HasSufficientLiquidity(side, priceTicks!.Value, quantity, selfMatchPreventionId,
                     selfMatchPreventionInstruction))
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.InsufficientLiquidityForFillOrKill);
+            if (validity is OrderValidity.FillAndKill { MinQuantity: int fakMinQty } && !triggerTicks.HasValue &&
+                !HasSufficientLiquidity(side, priceTicks!.Value, fakMinQty, selfMatchPreventionId,
+                    selfMatchPreventionInstruction))
+                return RejectCreate(companyId, clientOrderId, OrderRejectedReason.InsufficientLiquidityForMinQuantity);
             if (validity is OrderValidity.GoodTilDate { Date: var goodTilDate } && goodTilDate < DateOnly.FromDateTime(Now()))
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.InvalidExpireDate);
 
@@ -727,6 +733,19 @@ namespace Circus.OrderBook
 
                     events.Add(new CancelOrderConfirmed(_security, Now(), order.CompanyId, order.ToOrder(),
                         previousClientOrderId, OrderCancelledReason.FillOrKillNotFilled));
+                    continue;
+                }
+
+                if (order.Validity is OrderValidity.FillAndKill { MinQuantity: int stopMinQty } &&
+                    !HasSufficientLiquidity(order.Side, newPriceTicks!.Value, stopMinQty,
+                        order.SelfMatchPreventionId, order.SelfMatchPreventionInstruction))
+                {
+                    var previousClientOrderId = order.ClientOrderId;
+                    order.Cancel(Now());
+                    FinishOrder(order);
+
+                    events.Add(new CancelOrderConfirmed(_security, Now(), order.CompanyId, order.ToOrder(),
+                        previousClientOrderId, OrderCancelledReason.FillAndKillNotFilled));
                     continue;
                 }
 
