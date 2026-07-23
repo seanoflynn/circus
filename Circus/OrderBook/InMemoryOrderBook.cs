@@ -211,8 +211,6 @@ namespace Circus.OrderBook
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.TriggerPriceMustBeLessThanLastTradedPrice);
             if (priceTicks.HasValue && !IsWithinPriceBand(priceTicks.Value))
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.PriceOutsideBands);
-            var triggersVolatilityPause = _status == OrderBookStatus.Open && priceTicks.HasValue &&
-                !IsWithinVolatilityAuctionBand(priceTicks.Value);
             if (_clientOrderIndex.TryGetValue((companyId, clientOrderId), out var existingOrder))
             {
                 return existingOrder.Status is OrderStatus.Working or OrderStatus.Hidden
@@ -249,16 +247,7 @@ namespace Circus.OrderBook
 
             List<OrderBookEvent> events = new();
             events.Add(new CreateOrderConfirmed(_security, Now(), companyId, order.ToOrder()));
-
-            if (triggersVolatilityPause)
-            {
-                _status = OrderBookStatus.PreOpen;
-                events.Add(new StatusChanged(_security, Now(), _status));
-            }
-            else
-            {
-                Match(events);
-            }
+            Match(events);
 
             if (order.Validity == OrderValidity.FillAndKill && order.Status == OrderStatus.Working)
                 events.Add(CancelRemainder(order, OrderCancelledReason.FillAndKillNotFilled));
@@ -311,9 +300,11 @@ namespace Circus.OrderBook
             Math.Abs(priceTicks - _bandReferencePriceTicks.Value) <= _security.PriceBandTicks.Value;
 
         // Same shape as IsWithinPriceBand, but a separate, independently-configurable (typically
-        // narrower) band: a breach here doesn't reject the order - it pauses continuous trading
-        // into an auction instead (Eurex-style volatility interruption), handled by the callers
-        // below. Only relevant for orders that already passed the hard PriceBandTicks check above.
+        // narrower) band checked in Match() against the prospective trade price, not the
+        // submitted order price checked by IsWithinPriceBand above - a breach here doesn't reject
+        // the order, it pauses continuous trading into an auction instead (Eurex-style volatility
+        // interruption). PriceBandTicks still applies as the hard outer limit checked at order
+        // entry, so this only ever matters for prices that already passed that check.
         private bool IsWithinVolatilityAuctionBand(long priceTicks) =>
             !_security.VolatilityAuctionBandTicks.HasValue || !_bandReferencePriceTicks.HasValue ||
             Math.Abs(priceTicks - _bandReferencePriceTicks.Value) <= _security.VolatilityAuctionBandTicks.Value;
@@ -390,8 +381,6 @@ namespace Circus.OrderBook
                 return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.InvalidPriceIncrement);
             if (priceTicks.HasValue && !IsWithinPriceBand(priceTicks.Value))
                 return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.PriceOutsideBands);
-            var triggersVolatilityPause = _status == OrderBookStatus.Open && priceTicks.HasValue &&
-                !IsWithinVolatilityAuctionBand(priceTicks.Value);
             if (!_clientOrderIndex.TryGetValue((companyId, previousClientOrderId), out var order) ||
                 order.ClientOrderId != previousClientOrderId)
                 return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.OrderNotInBook);
@@ -471,17 +460,7 @@ namespace Circus.OrderBook
 
             List<OrderBookEvent> events = new();
             events.Add(new UpdateOrderConfirmed(_security, Now(), order.CompanyId, order.ToOrder(), previousClientOrderId));
-
-            if (triggersVolatilityPause)
-            {
-                _status = OrderBookStatus.PreOpen;
-                events.Add(new StatusChanged(_security, Now(), _status));
-            }
-            else
-            {
-                Match(events);
-            }
-
+            Match(events);
             return events;
         }
 
@@ -626,6 +605,19 @@ namespace Circus.OrderBook
                 var quantity = Math.Min(resting.RemainingQuantity, aggressor.RemainingQuantity);
                 var priceTicks = auctionPriceTicks ?? resting.Price ??
                     throw new InvalidOperationException("limit order requires price");
+
+                // Checked against the prospective trade price, not either order's own submitted
+                // limit price - a resting order sitting far from the market doesn't represent any
+                // actual price movement, only an executed trade at an extreme price does. Doesn't
+                // apply to an auction uncrossing pass itself (auctionPriceTicks set) - the auction
+                // print is already the resolution mechanism, not something to interrupt.
+                if (auctionPriceTicks == null && !IsWithinVolatilityAuctionBand(priceTicks))
+                {
+                    _status = OrderBookStatus.PreOpen;
+                    events.Add(new StatusChanged(_security, Now(), _status));
+                    return;
+                }
+
                 var price = ToDecimal(priceTicks);
 
                 FillOrder(resting, time, quantity);

@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Circus.OrderBook;
 using Circus.TimeProviders;
 using NUnit.Framework;
@@ -180,10 +181,31 @@ namespace Circus.Tests.OrderBook
         }
 
         [Test]
-        public void VolatilityBandBreach_PausesInsteadOfRejecting_StopElectsOnReopen()
+        public void RestingOrderOutsideBand_WithoutCrossingAnything_DoesNotPause()
+        {
+            // arrange - a resting limit order sitting far from the market doesn't represent any
+            // actual price movement by itself; only an executed trade at an extreme price should
+            // pause the book. This order doesn't cross anything (isolated at 200, nothing on the
+            // opposing side), so it must not trigger a pause just for being entered.
+            var security = new Security("GCZ6", SecurityType.Future, 10, 10, VolatilityAuctionBandTicks: 5);
+            var book = new InMemoryOrderBook(security, TimeProvider);
+            book.UpdateStatus(OrderBookStatus.Open, 100);
+
+            // act
+            var events = book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Sell, 10, 200);
+
+            // assert - accepted normally, no pause
+            Assert.AreEqual(1, events.Count);
+            Assert.IsInstanceOf<CreateOrderConfirmed>(events[0]);
+            Assert.AreEqual(OrderBookStatus.Open, book.Status);
+        }
+
+        [Test]
+        public void VolatilityBandBreach_OnActualTrade_PausesInsteadOfExecuting_StopElectsOnReopen()
         {
             // arrange - continuous trading establishes a reference price of 100, then a resting
-            // sell stop (trigger 90) is added
+            // sell stop (trigger 90) is added, plus a resting sell at 200 that hasn't crossed
+            // anything yet (so hasn't paused anything, per the test above)
             var security = new Security("GCZ6", SecurityType.Future, 10, 10, VolatilityAuctionBandTicks: 5);
             var book = new InMemoryOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.Open);
@@ -191,37 +213,40 @@ namespace Circus.Tests.OrderBook
             book.CreateOrder(CompanyId2, OrderId2, OrderValidity.Day, Side.Sell, 5, 100);
             TimeProvider.SetCurrentTime(Now2);
             book.CreateOrder(CompanyId3, OrderId3, OrderValidity.Day, Side.Sell, 5, 80, 90);
+            book.CreateOrder(CompanyId4, OrderId4, OrderValidity.Day, Side.Sell, 10, 200);
 
-            // act - an order 100 away from the 100 reference breaches the 50-wide volatility band;
-            // it doesn't cross anything (isolated at 200) so it's just accepted and rests
+            // act - a buy at 200 would actually cross and trade against the resting 200 sell, at a
+            // price 100 away from the 100 reference - breaching the 50-wide volatility band. The
+            // trade is prevented (not executed) and the book pauses instead; neither order fills
             TimeProvider.SetCurrentTime(Now3);
-            var events = book.CreateOrder(CompanyId4, OrderId4, OrderValidity.Day, Side.Sell, 10, 200);
+            var events = book.CreateOrder(CompanyId5, OrderId5, OrderValidity.Day, Side.Buy, 10, 200);
 
-            // assert - accepted (not rejected) and the book pauses
+            // assert
+            Assert.AreEqual(2, events.Count);
             Assert.IsInstanceOf<CreateOrderConfirmed>(events[0]);
-            Assert.IsInstanceOf<StatusChanged>(events[1]);
             Assert.AreEqual(OrderBookStatus.PreOpen, ((StatusChanged) events[1]).Status);
             Assert.AreEqual(OrderBookStatus.PreOpen, book.Status);
 
+            var sellLevels = book.GetLevels(Side.Sell, 10);
+            Assert.AreEqual(1, sellLevels.Count);
+            Assert.AreEqual(200, sellLevels[0].Price);
+            Assert.AreEqual(10, sellLevels[0].Quantity); // untouched - the trade was prevented
+
             // orders can still be entered/cancelled while paused
             TimeProvider.SetCurrentTime(Now4);
-            book.CreateOrder(CompanyId5, OrderId5, OrderValidity.Day, Side.Buy, 10, 90);
-            book.CreateOrder("Company6", "Order6", OrderValidity.Day, Side.Sell, 10, 90);
+            book.CreateOrder(CompanyId1, "Order1b", OrderValidity.Day, Side.Buy, 10, 90);
+            book.CreateOrder(CompanyId2, "Order2b", OrderValidity.Day, Side.Sell, 10, 90);
 
-            // act - ending the pause runs the same uncrossing pass; the two 90 orders clear there
-            // (the isolated 200 sell doesn't cross), moving the last traded price to 90, which
-            // elects the resting stop (trigger 90, satisfied by <= 90)
-            var reopenEvents = book.UpdateStatus(OrderBookStatus.Open);
+            // act - ending the pause (seeding a fresh reference of 90) runs the same uncrossing
+            // pass, clearing at 90 and moving the last traded price there, which elects the
+            // resting stop (trigger 90, satisfied by <= 90)
+            var reopenEvents = book.UpdateStatus(OrderBookStatus.Open, 90);
 
             // assert
-            var matched = reopenEvents[1] as OrdersMatched;
-            Assert.IsNotNull(matched);
-            Assert.AreEqual(90, matched.Price);
-
-            var stopElected = reopenEvents[2] as UpdateOrderConfirmed;
-            Assert.IsNotNull(stopElected);
-            Assert.AreEqual(OrderId3, stopElected.Order.ClientOrderId);
-            Assert.AreEqual(OrderStatus.Working, stopElected.Order.Status);
+            Assert.IsTrue(reopenEvents.OfType<OrdersMatched>().Any(m => m.Price == 90));
+            var stopElected = reopenEvents.Any(e => e is UpdateOrderConfirmed u && u.Order.ClientOrderId == OrderId3) ||
+                reopenEvents.OfType<OrdersMatched>().Any(m => m.Fills.Any(f => f.ClientOrderId == OrderId3));
+            Assert.IsTrue(stopElected);
         }
 
         [Test]
