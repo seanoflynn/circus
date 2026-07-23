@@ -38,7 +38,7 @@ namespace Circus.Tests.OrderBook
             book.UpdateStatus(OrderBookStatus.Open, 100);
 
             // act
-            var events = book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Buy, 5, 1000);
+            var events = book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 1000);
 
             // assert
             Assert.IsInstanceOf<CreateOrderConfirmed>(events[0]);
@@ -53,7 +53,7 @@ namespace Circus.Tests.OrderBook
             book.UpdateStatus(OrderBookStatus.Open);
 
             // act
-            var events = book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Buy, 5, 1000);
+            var events = book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 1000);
 
             // assert
             Assert.IsInstanceOf<CreateOrderConfirmed>(events[0]);
@@ -68,15 +68,15 @@ namespace Circus.Tests.OrderBook
             book.UpdateStatus(OrderBookStatus.Open, 100);
 
             // act/assert - at the reference price
-            var atReference = book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Buy, 5, 100);
+            var atReference = book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100);
             Assert.IsInstanceOf<CreateOrderConfirmed>(atReference[0]);
 
             // act/assert - exactly on the band edge, inclusive
-            var atEdge = book.CreateOrder(CompanyId1, OrderId2, OrderValidity.Day, Side.Buy, 5, 150);
+            var atEdge = book.CreateLimitOrder(CompanyId1, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 150);
             Assert.IsInstanceOf<CreateOrderConfirmed>(atEdge[0]);
 
             // act/assert - one tick beyond the edge
-            var beyondEdge = book.CreateOrder(CompanyId1, OrderId3, OrderValidity.Day, Side.Buy, 5, 160);
+            var beyondEdge = book.CreateLimitOrder(CompanyId1, OrderId3, new OrderValidity.Day(), Side.Buy, 5, 160);
             var rejected = beyondEdge[0] as CreateOrderRejected;
             Assert.IsNotNull(rejected);
             Assert.AreEqual(OrderRejectedReason.PriceOutsideBands, rejected.Reason);
@@ -91,20 +91,20 @@ namespace Circus.Tests.OrderBook
             book.UpdateStatus(OrderBookStatus.Open, 100);
 
             // 160 is outside the original [50, 150] band
-            var beforeTrade = book.CreateOrder(CompanyId2, OrderId1, OrderValidity.Day, Side.Sell, 5, 160);
+            var beforeTrade = book.CreateLimitOrder(CompanyId2, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 160);
             Assert.AreEqual(OrderRejectedReason.PriceOutsideBands, (beforeTrade[0] as CreateOrderRejected)?.Reason);
 
             // act - a trade prints at 140, re-anchoring the band to [90, 190]
-            book.CreateOrder(CompanyId1, OrderId2, OrderValidity.Day, Side.Buy, 5, 140);
-            var matchEvents = book.CreateOrder(CompanyId3, OrderId3, OrderValidity.Day, Side.Sell, 5, 140);
+            book.CreateLimitOrder(CompanyId1, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 140);
+            var matchEvents = book.CreateLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Sell, 5, 140);
             Assert.IsInstanceOf<OrdersMatched>(matchEvents[^1]);
 
             // assert - 160 is now within the new [90, 190] band
-            var afterTrade = book.CreateOrder(CompanyId2, OrderId4, OrderValidity.Day, Side.Sell, 5, 160);
+            var afterTrade = book.CreateLimitOrder(CompanyId2, OrderId4, new OrderValidity.Day(), Side.Sell, 5, 160);
             Assert.IsInstanceOf<CreateOrderConfirmed>(afterTrade[0]);
 
             // assert - 60 was within the original [50, 150] band, but is now outside [90, 190]
-            var nowOutOfBand = book.CreateOrder(CompanyId4, "Order5", OrderValidity.Day, Side.Buy, 5, 60);
+            var nowOutOfBand = book.CreateLimitOrder(CompanyId4, "Order5", new OrderValidity.Day(), Side.Buy, 5, 60);
             Assert.AreEqual(OrderRejectedReason.PriceOutsideBands, (nowOutOfBand[0] as CreateOrderRejected)?.Reason);
         }
 
@@ -115,7 +115,7 @@ namespace Circus.Tests.OrderBook
             var security = new Security("GCZ6", SecurityType.Future, 10, 10, PriceBandTicks: 5);
             var book = new InMemoryOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.Open, 100);
-            book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Buy, 5, 100);
+            book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100);
 
             // act - reprice to 200, outside the band
             var events = book.UpdateOrder(CompanyId1, OrderId2, OrderId1, price: 200);

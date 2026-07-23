@@ -19,7 +19,6 @@ namespace Circus.OrderBook
         NoChange,
         InsufficientLiquidityForFillOrKill,
         InvalidExpireDate,
-        GoodTilDateRequired,
         ClientOrderIdRequired,
         ClientOrderIdTooLong,
         CompanyIdRequired,

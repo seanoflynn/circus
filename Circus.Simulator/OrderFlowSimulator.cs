@@ -162,29 +162,39 @@ namespace Circus.Simulator
             return BuildCreateLimit();
         }
 
-        private CreateOrder BuildCreateLimit()
+        private CreateLimitOrder BuildCreateLimit()
         {
             var side = _random.Next(2) == 0 ? Side.Buy : Side.Sell;
             var price = ComputePrice(side);
             var quantity = _random.Next(_options.MinQuantity, _options.MaxQuantity + 1);
 
-            return new CreateOrder(_security, NextCompanyId(), NextClientOrderId(), OrderValidity.GoodTilCanceled,
-                side, quantity, price);
+            return new CreateLimitOrder
+            {
+                Security = _security, CompanyId = NextCompanyId(), ClientOrderId = NextClientOrderId(),
+                OrderValidity = new OrderValidity.GoodTilCanceled(), Side = side, Quantity = quantity, Price = price
+            };
         }
 
-        private CreateOrder BuildCreateMarket()
+        private CreateMarketOrder BuildCreateMarket()
         {
             var side = _random.Next(2) == 0 ? Side.Buy : Side.Sell;
             var quantity = _random.Next(_options.MinQuantity, _options.MaxQuantity + 1);
 
-            return new CreateOrder(_security, NextCompanyId(), NextClientOrderId(), OrderValidity.GoodTilCanceled,
-                side, quantity);
+            return new CreateMarketOrder
+            {
+                Security = _security, CompanyId = NextCompanyId(), ClientOrderId = NextClientOrderId(),
+                OrderValidity = new OrderValidity.GoodTilCanceled(), Side = side, Quantity = quantity
+            };
         }
 
         private CancelOrder BuildCancel()
         {
             TryPickLive(out _, out var info);
-            return new CancelOrder(_security, info.CompanyId, NextClientOrderId(), info.ClientOrderId);
+            return new CancelOrder
+            {
+                Security = _security, CompanyId = info.CompanyId, ClientOrderId = NextClientOrderId(),
+                PreviousClientOrderId = info.ClientOrderId
+            };
         }
 
         private UpdateOrder BuildUpdate()
@@ -198,8 +208,11 @@ namespace Circus.Simulator
             if (updateQuantityOnly || _random.NextDouble() < 0.5)
             {
                 var quantity = _random.Next(_options.MinQuantity, _options.MaxQuantity + 1);
-                return new UpdateOrder(_security, info.CompanyId, newClientOrderId, info.ClientOrderId,
-                    Quantity: quantity);
+                return new UpdateOrder
+                {
+                    Security = _security, CompanyId = info.CompanyId, ClientOrderId = newClientOrderId,
+                    PreviousClientOrderId = info.ClientOrderId, NewTotalQuantity = quantity
+                };
             }
 
             var tick = _security.TickSize;
@@ -207,7 +220,11 @@ namespace Circus.Simulator
             var reference = info.Price ?? AlignToTick(_options.StartingPrice);
             var newPrice = reference + direction * _random.Next(1, 4) * tick;
 
-            return new UpdateOrder(_security, info.CompanyId, newClientOrderId, info.ClientOrderId, Price: newPrice);
+            return new UpdateOrder
+            {
+                Security = _security, CompanyId = info.CompanyId, ClientOrderId = newClientOrderId,
+                PreviousClientOrderId = info.ClientOrderId, Price = newPrice
+            };
         }
 
         private decimal ComputePrice(Side side)

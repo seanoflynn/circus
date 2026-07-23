@@ -51,12 +51,12 @@ namespace Circus.Tests.OrderBook
             var book = new InMemoryOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.PreOpen);
 
-            book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Buy, 3, 140);
-            book.CreateOrder(CompanyId2, OrderId2, OrderValidity.Day, Side.Buy, 7, 130);
-            book.CreateOrder(CompanyId3, OrderId3, OrderValidity.Day, Side.Buy, 15, 120);
-            book.CreateOrder(CompanyId4, OrderId4, OrderValidity.Day, Side.Sell, 5, 110);
-            book.CreateOrder(CompanyId5, OrderId5, OrderValidity.Day, Side.Sell, 6, 120);
-            book.CreateOrder(CompanyId6, OrderId6, OrderValidity.Day, Side.Sell, 20, 130);
+            book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 140);
+            book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Buy, 7, 130);
+            book.CreateLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Buy, 15, 120);
+            book.CreateLimitOrder(CompanyId4, OrderId4, new OrderValidity.Day(), Side.Sell, 5, 110);
+            book.CreateLimitOrder(CompanyId5, OrderId5, new OrderValidity.Day(), Side.Sell, 6, 120);
+            book.CreateLimitOrder(CompanyId6, OrderId6, new OrderValidity.Day(), Side.Sell, 20, 130);
 
             // act
             var events = book.UpdateStatus(OrderBookStatus.Open);
@@ -98,12 +98,12 @@ namespace Circus.Tests.OrderBook
             var book = new InMemoryOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.PreOpen);
 
-            book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Buy, 3, 140);
-            book.CreateOrder(CompanyId2, OrderId2, OrderValidity.Day, Side.Buy, 7, 130);
-            book.CreateOrder(CompanyId3, OrderId3, OrderValidity.Day, Side.Buy, 15, 110);
-            book.CreateOrder(CompanyId4, OrderId4, OrderValidity.Day, Side.Sell, 5, 100);
-            book.CreateOrder(CompanyId5, OrderId5, OrderValidity.Day, Side.Sell, 6, 120);
-            book.CreateOrder(CompanyId6, OrderId6, OrderValidity.Day, Side.Sell, 20, 140);
+            book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 140);
+            book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Buy, 7, 130);
+            book.CreateLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Buy, 15, 110);
+            book.CreateLimitOrder(CompanyId4, OrderId4, new OrderValidity.Day(), Side.Sell, 5, 100);
+            book.CreateLimitOrder(CompanyId5, OrderId5, new OrderValidity.Day(), Side.Sell, 6, 120);
+            book.CreateLimitOrder(CompanyId6, OrderId6, new OrderValidity.Day(), Side.Sell, 20, 140);
 
             // act
             var events = book.UpdateStatus(OrderBookStatus.Open);
@@ -123,12 +123,12 @@ namespace Circus.Tests.OrderBook
             var book = new InMemoryOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.PreOpen, 130);
 
-            book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Buy, 3, 140);
-            book.CreateOrder(CompanyId2, OrderId2, OrderValidity.Day, Side.Buy, 7, 130);
-            book.CreateOrder(CompanyId3, OrderId3, OrderValidity.Day, Side.Buy, 15, 110);
-            book.CreateOrder(CompanyId4, OrderId4, OrderValidity.Day, Side.Sell, 5, 100);
-            book.CreateOrder(CompanyId5, OrderId5, OrderValidity.Day, Side.Sell, 6, 120);
-            book.CreateOrder(CompanyId6, OrderId6, OrderValidity.Day, Side.Sell, 20, 140);
+            book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 140);
+            book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Buy, 7, 130);
+            book.CreateLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Buy, 15, 110);
+            book.CreateLimitOrder(CompanyId4, OrderId4, new OrderValidity.Day(), Side.Sell, 5, 100);
+            book.CreateLimitOrder(CompanyId5, OrderId5, new OrderValidity.Day(), Side.Sell, 6, 120);
+            book.CreateLimitOrder(CompanyId6, OrderId6, new OrderValidity.Day(), Side.Sell, 20, 140);
 
             // act
             var events = book.UpdateStatus(OrderBookStatus.Open);
@@ -146,7 +146,7 @@ namespace Circus.Tests.OrderBook
             var security = new Security("GCZ6", SecurityType.Future, 10, 10);
             var book = new InMemoryOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.PreOpen);
-            book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Buy, 5, 100);
+            book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100);
 
             // act
             var events = book.UpdateStatus(OrderBookStatus.Open);
@@ -171,11 +171,11 @@ namespace Circus.Tests.OrderBook
             Assert.IsFalse(book.TryGetIndicativeAuctionPrice(out _, out _));
 
             // act - one-sided book, still no cross
-            book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Buy, 10, 100);
+            book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 10, 100);
             Assert.IsFalse(book.TryGetIndicativeAuctionPrice(out _, out _));
 
             // act - a crossing sell arrives
-            book.CreateOrder(CompanyId2, OrderId2, OrderValidity.Day, Side.Sell, 10, 100);
+            book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 10, 100);
             Assert.IsTrue(book.TryGetIndicativeAuctionPrice(out var price, out var quantity));
             Assert.AreEqual(100, price);
             Assert.AreEqual(10, quantity);
@@ -197,7 +197,7 @@ namespace Circus.Tests.OrderBook
             book.UpdateStatus(OrderBookStatus.Open, 100);
 
             // act
-            var events = book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Sell, 10, 200);
+            var events = book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 10, 200);
 
             // assert - accepted normally, no pause
             Assert.AreEqual(1, events.Count);
@@ -214,17 +214,17 @@ namespace Circus.Tests.OrderBook
             var security = new Security("GCZ6", SecurityType.Future, 10, 10, VolatilityAuctionBandTicks: 5);
             var book = new InMemoryOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.Open);
-            book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Buy, 5, 100);
-            book.CreateOrder(CompanyId2, OrderId2, OrderValidity.Day, Side.Sell, 5, 100);
+            book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100);
+            book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 5, 100);
             TimeProvider.SetCurrentTime(Now2);
-            book.CreateOrder(CompanyId3, OrderId3, OrderValidity.Day, Side.Sell, 5, 80, 90);
-            book.CreateOrder(CompanyId4, OrderId4, OrderValidity.Day, Side.Sell, 10, 200);
+            book.CreateStopLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Sell, 5, 80, 90);
+            book.CreateLimitOrder(CompanyId4, OrderId4, new OrderValidity.Day(), Side.Sell, 10, 200);
 
             // act - a buy at 200 would actually cross and trade against the resting 200 sell, at a
             // price 100 away from the 100 reference - breaching the 50-wide volatility band. The
             // trade is prevented (not executed) and the book pauses instead; neither order fills
             TimeProvider.SetCurrentTime(Now3);
-            var events = book.CreateOrder(CompanyId5, OrderId5, OrderValidity.Day, Side.Buy, 10, 200);
+            var events = book.CreateLimitOrder(CompanyId5, OrderId5, new OrderValidity.Day(), Side.Buy, 10, 200);
 
             // assert
             Assert.AreEqual(2, events.Count);
@@ -239,8 +239,8 @@ namespace Circus.Tests.OrderBook
 
             // orders can still be entered/cancelled while paused
             TimeProvider.SetCurrentTime(Now4);
-            book.CreateOrder(CompanyId1, OrderId7, OrderValidity.Day, Side.Buy, 10, 90);
-            book.CreateOrder(CompanyId2, OrderId8, OrderValidity.Day, Side.Sell, 10, 90);
+            book.CreateLimitOrder(CompanyId1, OrderId7, new OrderValidity.Day(), Side.Buy, 10, 90);
+            book.CreateLimitOrder(CompanyId2, OrderId8, new OrderValidity.Day(), Side.Sell, 10, 90);
 
             // act - ending the pause (seeding a fresh reference of 90) runs the same uncrossing
             // pass, clearing at 90 and moving the last traded price there, which elects the
@@ -264,7 +264,7 @@ namespace Circus.Tests.OrderBook
             book.UpdateStatus(OrderBookStatus.Open, 100);
 
             // act
-            var events = book.CreateOrder(CompanyId1, OrderId1, OrderValidity.Day, Side.Buy, 5, 200);
+            var events = book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 200);
 
             // assert - rejected outright, no pause
             var rejected = events[0] as CreateOrderRejected;

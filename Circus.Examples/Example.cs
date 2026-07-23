@@ -18,10 +18,10 @@ namespace Circus.Examples
             IOrderBook book1 = new InMemoryOrderBook(sec1, time);
 
             Print(producer.Process(book1,
-                book1.CreateOrder("Buyer", "Order1", OrderValidity.Day, Side.Buy, 3, 100)));
+                book1.CreateLimitOrder("Buyer", "Order1", new OrderValidity.Day(), Side.Buy, 3, 100)));
 
             Print(producer.Process(book1,
-                book1.CreateOrder("Seller", "Order2", OrderValidity.Day, Side.Sell, 5, 100)));
+                book1.CreateLimitOrder("Seller", "Order2", new OrderValidity.Day(), Side.Sell, 5, 100)));
         }
 
         private static void Print(IEnumerable<TradedDataEvent> events)

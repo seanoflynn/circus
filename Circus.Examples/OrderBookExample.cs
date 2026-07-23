@@ -24,8 +24,8 @@ namespace Circus.Examples
             sessionProvider.Changed += (_, args) => book.UpdateStatus(args.Status);
             sessionProvider.Update(new DateTime(2020, 1, 1, 1, 30, 0));
 
-            Print(book.CreateOrder("Buyer", "Order1", OrderValidity.Day, Side.Buy, 3, 100));
-            Print(book.CreateOrder("Seller", "Order2", OrderValidity.Day, Side.Sell, 5, 100));
+            Print(book.CreateLimitOrder("Buyer", "Order1", new OrderValidity.Day(), Side.Buy, 3, 100));
+            Print(book.CreateLimitOrder("Seller", "Order2", new OrderValidity.Day(), Side.Sell, 5, 100));
         }
 
         public static void BackTestExample()
@@ -56,7 +56,7 @@ namespace Circus.Examples
                 timeProvider.SetCurrentTime(time);
                 // pass in data - each order needs its own ClientOrderId, since Buyer's ids are
                 // permanently reserved once used
-                Print(book.CreateOrder("Buyer", $"Order{i}", OrderValidity.Day, Side.Buy, 3, 100));
+                Print(book.CreateLimitOrder("Buyer", $"Order{i}", new OrderValidity.Day(), Side.Buy, 3, 100));
             }
         }
 
@@ -84,8 +84,8 @@ namespace Circus.Examples
                 }
             });
 
-            Print(book.CreateOrder("Buyer", "Order1", OrderValidity.Day, Side.Buy, 3, 100));
-            Print(book.CreateOrder("Seller", "Order2", OrderValidity.Day, Side.Sell, 5, 100));
+            Print(book.CreateLimitOrder("Buyer", "Order1", new OrderValidity.Day(), Side.Buy, 3, 100));
+            Print(book.CreateLimitOrder("Seller", "Order2", new OrderValidity.Day(), Side.Sell, 5, 100));
         }
 
         private static void Print(IEnumerable<OrderBookEvent> events)
