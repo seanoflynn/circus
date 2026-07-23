@@ -51,11 +51,16 @@ namespace Circus.OrderBook
         public IList<Level> GetLevels(Side side, int maxPrices)
         {
             return _working[side].EnumerateFromBest().Take(maxPrices)
-                .Select(x => new Level(
-                    ToDecimal(x.Tick),
-                    x.Level.Sum(y => y.Value.RemainingQuantity),
-                    x.Level.Count))
+                .Select(x => new Level(ToDecimal(x.Tick), SumRemaining(x.First), x.Count))
                 .ToList();
+        }
+
+        private static int SumRemaining(InternalOrder? first)
+        {
+            var total = 0;
+            for (var order = first; order != null; order = order.LevelNext)
+                total += order.RemainingQuantity;
+            return total;
         }
 
         public IList<OrderBookEvent> Process(OrderBookAction action)
@@ -153,7 +158,7 @@ namespace Circus.OrderBook
             _clientOrderIndex.Add((companyId, clientOrderId), order);
             var orders = (triggerTicks.HasValue ? _stops : _working);
             var newPriceTicks = (triggerTicks ?? priceTicks) ?? throw new Exception("error");
-            orders[side].Add(newPriceTicks, _nextSequenceNumber, order);
+            orders[side].Add(newPriceTicks, order);
 
             List<OrderBookEvent> events = new();
             events.Add(new CreateOrderConfirmed(_security, Now(), companyId, order.ToOrder()));
@@ -212,13 +217,13 @@ namespace Circus.OrderBook
         {
             var opposing = _working[side == Side.Buy ? Side.Sell : Side.Buy];
             var total = 0;
-            foreach (var (tick, level) in opposing.EnumerateFromBest())
+            foreach (var (tick, first, _) in opposing.EnumerateFromBest())
             {
                 var crosses = side == Side.Buy ? tick <= priceTicks : tick >= priceTicks;
                 if (!crosses)
                     break;
 
-                foreach (var (_, restingOrder) in level)
+                for (var restingOrder = first; restingOrder != null; restingOrder = restingOrder.LevelNext)
                 {
                     if (TryGetSelfMatchInstruction(restingOrder, selfMatchPreventionId,
                             selfMatchPreventionInstruction, out var instruction))
@@ -341,8 +346,8 @@ namespace Circus.OrderBook
                 var updatedPriceTicks =
                     (order.Status == OrderStatus.Hidden ? triggerTicks ?? order.TriggerPrice : priceTicks ?? order.Price) ??
                     throw new InvalidOperationException("missing price");
-                orders[order.Side].Remove(currentPriceTicks, order.SequenceNumber);
-                orders[order.Side].Add(updatedPriceTicks, sequenceNumber, order);
+                orders[order.Side].Remove(currentPriceTicks, order);
+                orders[order.Side].Add(updatedPriceTicks, order);
             }
             order.Update(sequenceNumber, Now(), quantity, triggerTicks, priceTicks, clientOrderId);
             _clientOrderIndex[(companyId, clientOrderId)] = order;
@@ -423,12 +428,12 @@ namespace Circus.OrderBook
             if (order.Type == OrderType.StopLimit || order.Type == OrderType.StopMarket)
             {
                 var price = order.TriggerPrice ?? throw new InvalidOperationException("stop order missing stop price");
-                _stops[order.Side].Remove(price, order.SequenceNumber);
+                _stops[order.Side].Remove(price, order);
             }
             else
             {
                 var price = order.Price ?? throw new InvalidOperationException("limit order missing price");
-                _working[order.Side].Remove(price, order.SequenceNumber);
+                _working[order.Side].Remove(price, order);
             }
 
             FinishOrder(order);
@@ -450,7 +455,7 @@ namespace Circus.OrderBook
         }
 
         private InternalOrder? BestOrder(Side side) =>
-            _working[side].TryGetBest(out _, out var level) ? level.FirstOrDefault().Value : null;
+            _working[side].TryGetBest(out _, out var order) ? order : null;
 
         private IEnumerable<OrderBookEvent> Match()
         {
@@ -551,21 +556,17 @@ namespace Circus.OrderBook
             var time = Now();
             var triggered = new SortedDictionary<long, InternalOrder>();
 
-            while (_stops[Side.Buy].TryGetBest(out var buyTick, out var buyLevel) && buyTick <= _lastTradedPrice)
+            while (_stops[Side.Buy].TryGetBest(out var buyTick, out var buyFirst) && buyTick <= _lastTradedPrice)
             {
-                foreach (var (seqNum, order) in buyLevel)
-                {
-                    triggered.Add(seqNum, order);
-                }
+                for (var order = buyFirst; order != null; order = order.LevelNext)
+                    triggered.Add(order.SequenceNumber, order);
                 _stops[Side.Buy].RemoveLevel(buyTick);
             }
 
-            while (_stops[Side.Sell].TryGetBest(out var sellTick, out var sellLevel) && sellTick >= _lastTradedPrice)
+            while (_stops[Side.Sell].TryGetBest(out var sellTick, out var sellFirst) && sellTick >= _lastTradedPrice)
             {
-                foreach (var (seqNum, order) in sellLevel)
-                {
-                    triggered.Add(seqNum, order);
-                }
+                for (var order = sellFirst; order != null; order = order.LevelNext)
+                    triggered.Add(order.SequenceNumber, order);
                 _stops[Side.Sell].RemoveLevel(sellTick);
             }
 
@@ -623,7 +624,7 @@ namespace Circus.OrderBook
                 order.ConvertToLimit(time, _nextSequenceNumber, newPriceTicks);
 
                 var limitPriceTicks = order.Price ?? throw new Exception("missing price");
-                _working[order.Side].Add(limitPriceTicks, order.SequenceNumber, order);
+                _working[order.Side].Add(limitPriceTicks, order);
 
                 events.Add(new UpdateOrderConfirmed(_security, time, order.CompanyId, order.ToOrder(),
                     order.ClientOrderId));
