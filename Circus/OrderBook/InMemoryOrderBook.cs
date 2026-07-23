@@ -171,7 +171,7 @@ namespace Circus.OrderBook
 
             List<OrderBookEvent> events = new();
             events.Add(new CreateOrderConfirmed(_security, Now(), companyId, order.ToOrder()));
-            events.AddRange(Match());
+            Match(events);
 
             if (order.Validity == OrderValidity.FillAndKill && order.Status == OrderStatus.Working)
                 events.Add(CancelRemainder(order, OrderCancelledReason.FillAndKillNotFilled));
@@ -374,7 +374,7 @@ namespace Circus.OrderBook
 
             List<OrderBookEvent> events = new();
             events.Add(new UpdateOrderConfirmed(_security, Now(), order.CompanyId, order.ToOrder(), previousClientOrderId));
-            events.AddRange(Match());
+            Match(events);
             return events;
         }
 
@@ -477,14 +477,13 @@ namespace Circus.OrderBook
         private InternalOrder? BestOrder(Side side) =>
             _working[side].TryGetBest(out _, out var order) ? order : null;
 
-        private IEnumerable<OrderBookEvent> Match()
+        private void Match(List<OrderBookEvent> events)
         {
             if (_status != OrderBookStatus.Open)
             {
-                return Array.Empty<OrderBookEvent>();
+                return;
             }
 
-            var events = new List<OrderBookEvent>();
             var time = Now();
 
             var buy = BestOrder(Side.Buy);
@@ -538,14 +537,12 @@ namespace Circus.OrderBook
                 {
                     _lastTradedPrice = priceTicks;
                     _bandReferencePriceTicks = priceTicks;
-                    events.AddRange(CheckStops());
+                    CheckStops(events);
                 }
 
                 buy = BestOrder(Side.Buy);
                 sell = BestOrder(Side.Sell);
             }
-
-            return events;
         }
 
         // Two orders are a prevented self-match only if both carry the same non-null
@@ -572,7 +569,7 @@ namespace Circus.OrderBook
             return true;
         }
 
-        private IEnumerable<OrderBookEvent> CheckStops()
+        private void CheckStops(List<OrderBookEvent> events)
         {
             var time = Now();
             var triggered = new SortedDictionary<long, InternalOrder>();
@@ -591,12 +588,10 @@ namespace Circus.OrderBook
                 _stops[Side.Sell].RemoveLevel(sellTick);
             }
 
-            var events = new List<OrderBookEvent>();
-
             if (triggered.Any())
             {
-                events.AddRange(TriggerStops(triggered, time));
-                events.AddRange(Match());
+                TriggerStops(triggered, time, events);
+                Match(events);
 
                 foreach (var order in triggered.Values)
                 {
@@ -604,14 +599,11 @@ namespace Circus.OrderBook
                         events.Add(CancelRemainder(order, OrderCancelledReason.FillAndKillNotFilled));
                 }
             }
-
-            return events;
         }
 
-        private IList<OrderBookEvent> TriggerStops(SortedDictionary<long, InternalOrder> orders, DateTime time)
+        private void TriggerStops(SortedDictionary<long, InternalOrder> orders, DateTime time,
+            List<OrderBookEvent> events)
         {
-            var events = new List<OrderBookEvent>();
-
             foreach (var (_, order) in orders)
             {
                 // calculate price for stop market orders
@@ -650,8 +642,6 @@ namespace Circus.OrderBook
                 events.Add(new UpdateOrderConfirmed(_security, time, order.CompanyId, order.ToOrder(),
                     order.ClientOrderId));
             }
-
-            return events;
         }
 
         public IList<OrderBookEvent> UpdateStatus(OrderBookStatus status, decimal? referencePrice = null)
@@ -681,7 +671,7 @@ namespace Circus.OrderBook
         {
             _status = OrderBookStatus.Open;
             var events = new List<OrderBookEvent> {new StatusChanged(_security, Now(), _status)};
-            events.AddRange(Match());
+            Match(events);
             return events;
         }
 
