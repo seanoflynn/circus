@@ -19,12 +19,17 @@ namespace Circus.Tests.OrderBook
         private static readonly string CompanyId3 = "Company3";
         private static readonly string CompanyId4 = "Company4";
         private static readonly string CompanyId5 = "Company5";
+        private static readonly string CompanyId6 = "Company6";
 
         private static readonly string OrderId1 = "Order1";
         private static readonly string OrderId2 = "Order2";
         private static readonly string OrderId3 = "Order3";
         private static readonly string OrderId4 = "Order4";
         private static readonly string OrderId5 = "Order5";
+        private static readonly string OrderId6 = "Order6";
+        private static readonly string OrderId7 = "Order7";
+        private static readonly string OrderId8 = "Order8";
+        private static readonly string CancelId1 = "Cancel1";
 
         private static TestTimeProvider TimeProvider;
 
@@ -51,7 +56,7 @@ namespace Circus.Tests.OrderBook
             book.CreateOrder(CompanyId3, OrderId3, OrderValidity.Day, Side.Buy, 15, 120);
             book.CreateOrder(CompanyId4, OrderId4, OrderValidity.Day, Side.Sell, 5, 110);
             book.CreateOrder(CompanyId5, OrderId5, OrderValidity.Day, Side.Sell, 6, 120);
-            book.CreateOrder("Company6", "Order6", OrderValidity.Day, Side.Sell, 20, 130);
+            book.CreateOrder(CompanyId6, OrderId6, OrderValidity.Day, Side.Sell, 20, 130);
 
             // act
             var events = book.UpdateStatus(OrderBookStatus.Open);
@@ -98,7 +103,7 @@ namespace Circus.Tests.OrderBook
             book.CreateOrder(CompanyId3, OrderId3, OrderValidity.Day, Side.Buy, 15, 110);
             book.CreateOrder(CompanyId4, OrderId4, OrderValidity.Day, Side.Sell, 5, 100);
             book.CreateOrder(CompanyId5, OrderId5, OrderValidity.Day, Side.Sell, 6, 120);
-            book.CreateOrder("Company6", "Order6", OrderValidity.Day, Side.Sell, 20, 140);
+            book.CreateOrder(CompanyId6, OrderId6, OrderValidity.Day, Side.Sell, 20, 140);
 
             // act
             var events = book.UpdateStatus(OrderBookStatus.Open);
@@ -123,7 +128,7 @@ namespace Circus.Tests.OrderBook
             book.CreateOrder(CompanyId3, OrderId3, OrderValidity.Day, Side.Buy, 15, 110);
             book.CreateOrder(CompanyId4, OrderId4, OrderValidity.Day, Side.Sell, 5, 100);
             book.CreateOrder(CompanyId5, OrderId5, OrderValidity.Day, Side.Sell, 6, 120);
-            book.CreateOrder("Company6", "Order6", OrderValidity.Day, Side.Sell, 20, 140);
+            book.CreateOrder(CompanyId6, OrderId6, OrderValidity.Day, Side.Sell, 20, 140);
 
             // act
             var events = book.UpdateStatus(OrderBookStatus.Open);
@@ -176,7 +181,7 @@ namespace Circus.Tests.OrderBook
             Assert.AreEqual(10, quantity);
 
             // act - cancelling the crossing sell removes the cross again
-            book.CancelOrder(CompanyId2, "Cancel1", OrderId2);
+            book.CancelOrder(CompanyId2, CancelId1, OrderId2);
             Assert.IsFalse(book.TryGetIndicativeAuctionPrice(out _, out _));
         }
 
@@ -234,8 +239,8 @@ namespace Circus.Tests.OrderBook
 
             // orders can still be entered/cancelled while paused
             TimeProvider.SetCurrentTime(Now4);
-            book.CreateOrder(CompanyId1, "Order1b", OrderValidity.Day, Side.Buy, 10, 90);
-            book.CreateOrder(CompanyId2, "Order2b", OrderValidity.Day, Side.Sell, 10, 90);
+            book.CreateOrder(CompanyId1, OrderId7, OrderValidity.Day, Side.Buy, 10, 90);
+            book.CreateOrder(CompanyId2, OrderId8, OrderValidity.Day, Side.Sell, 10, 90);
 
             // act - ending the pause (seeding a fresh reference of 90) runs the same uncrossing
             // pass, clearing at 90 and moving the last traded price there, which elects the
