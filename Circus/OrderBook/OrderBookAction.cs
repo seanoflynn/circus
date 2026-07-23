@@ -4,7 +4,7 @@ namespace Circus.OrderBook
 {
     public record OrderBookAction(Security Security);
 
-    public record UpdateStatus(Security Security, OrderBookStatus Status)
+    public record UpdateStatus(Security Security, OrderBookStatus Status, decimal? ReferencePrice = null)
         : OrderBookAction(Security);
 
     public record OrderAction(Security Security, string CompanyId, string ClientOrderId)
