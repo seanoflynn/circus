@@ -16,8 +16,8 @@ Order types
 - [x] Market limit orders
 
 Order properties
-- [ ] Min quantity
-- [ ] Max visible quantity
+- [x] Min quantity
+- [x] Max visible quantity
 
 Time in force/order validity
 - [x] Day orders
