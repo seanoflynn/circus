@@ -26,6 +26,7 @@ namespace Circus.OrderBook
         PriceOutsideBands,
         MinQuantityOutOfRange,
         InsufficientLiquidityForMinQuantity,
+        MaxVisibleQuantityOutOfRange,
         // PendingCancelOrReplace,
         // PriceExceedsCurrentPrice,
         // PriceExceedsCurrentPriceBand,

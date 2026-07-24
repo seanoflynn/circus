@@ -12,58 +12,68 @@ namespace Circus.OrderBook
         public static IReadOnlyList<OrderBookEvent> CreateLimitOrder(this IOrderBook book, string companyId,
             string clientOrderId, OrderValidity orderValidity, Side side, int quantity, decimal price,
             string? selfMatchPreventionId = null,
-            SelfMatchPreventionInstruction? selfMatchPreventionInstruction = null) =>
+            SelfMatchPreventionInstruction? selfMatchPreventionInstruction = null,
+            int? maxVisibleQuantity = null) =>
             book.Process(new CreateLimitOrder
             {
                 Security = book.Security, CompanyId = companyId, ClientOrderId = clientOrderId,
                 OrderValidity = orderValidity, Side = side, Quantity = quantity, Price = price,
-                SelfMatchPrevention = BuildSelfMatchPrevention(selfMatchPreventionId, selfMatchPreventionInstruction)
+                SelfMatchPrevention = BuildSelfMatchPrevention(selfMatchPreventionId, selfMatchPreventionInstruction),
+                MaxVisibleQuantity = maxVisibleQuantity
             });
 
         public static IReadOnlyList<OrderBookEvent> CreateMarketOrder(this IOrderBook book, string companyId,
             string clientOrderId, OrderValidity orderValidity, Side side, int quantity,
             string? selfMatchPreventionId = null,
-            SelfMatchPreventionInstruction? selfMatchPreventionInstruction = null) =>
+            SelfMatchPreventionInstruction? selfMatchPreventionInstruction = null,
+            int? maxVisibleQuantity = null) =>
             book.Process(new CreateMarketOrder
             {
                 Security = book.Security, CompanyId = companyId, ClientOrderId = clientOrderId,
                 OrderValidity = orderValidity, Side = side, Quantity = quantity,
-                SelfMatchPrevention = BuildSelfMatchPrevention(selfMatchPreventionId, selfMatchPreventionInstruction)
+                SelfMatchPrevention = BuildSelfMatchPrevention(selfMatchPreventionId, selfMatchPreventionInstruction),
+                MaxVisibleQuantity = maxVisibleQuantity
             });
 
         public static IReadOnlyList<OrderBookEvent> CreateMarketLimitOrder(this IOrderBook book, string companyId,
             string clientOrderId, OrderValidity orderValidity, Side side, int quantity,
             string? selfMatchPreventionId = null,
-            SelfMatchPreventionInstruction? selfMatchPreventionInstruction = null) =>
+            SelfMatchPreventionInstruction? selfMatchPreventionInstruction = null,
+            int? maxVisibleQuantity = null) =>
             book.Process(new CreateMarketLimitOrder
             {
                 Security = book.Security, CompanyId = companyId, ClientOrderId = clientOrderId,
                 OrderValidity = orderValidity, Side = side, Quantity = quantity,
-                SelfMatchPrevention = BuildSelfMatchPrevention(selfMatchPreventionId, selfMatchPreventionInstruction)
+                SelfMatchPrevention = BuildSelfMatchPrevention(selfMatchPreventionId, selfMatchPreventionInstruction),
+                MaxVisibleQuantity = maxVisibleQuantity
             });
 
         public static IReadOnlyList<OrderBookEvent> CreateStopLimitOrder(this IOrderBook book, string companyId,
             string clientOrderId, OrderValidity orderValidity, Side side, int quantity, decimal price,
             decimal triggerPrice, string? selfMatchPreventionId = null,
-            SelfMatchPreventionInstruction? selfMatchPreventionInstruction = null) =>
+            SelfMatchPreventionInstruction? selfMatchPreventionInstruction = null,
+            int? maxVisibleQuantity = null) =>
             book.Process(new CreateStopLimitOrder
             {
                 Security = book.Security, CompanyId = companyId, ClientOrderId = clientOrderId,
                 OrderValidity = orderValidity, Side = side, Quantity = quantity,
                 Price = price, TriggerPrice = triggerPrice,
-                SelfMatchPrevention = BuildSelfMatchPrevention(selfMatchPreventionId, selfMatchPreventionInstruction)
+                SelfMatchPrevention = BuildSelfMatchPrevention(selfMatchPreventionId, selfMatchPreventionInstruction),
+                MaxVisibleQuantity = maxVisibleQuantity
             });
 
         public static IReadOnlyList<OrderBookEvent> CreateStopMarketOrder(this IOrderBook book, string companyId,
             string clientOrderId, OrderValidity orderValidity, Side side, int quantity, decimal triggerPrice,
             string? selfMatchPreventionId = null,
-            SelfMatchPreventionInstruction? selfMatchPreventionInstruction = null) =>
+            SelfMatchPreventionInstruction? selfMatchPreventionInstruction = null,
+            int? maxVisibleQuantity = null) =>
             book.Process(new CreateStopMarketOrder
             {
                 Security = book.Security, CompanyId = companyId, ClientOrderId = clientOrderId,
                 OrderValidity = orderValidity, Side = side, Quantity = quantity,
                 TriggerPrice = triggerPrice,
-                SelfMatchPrevention = BuildSelfMatchPrevention(selfMatchPreventionId, selfMatchPreventionInstruction)
+                SelfMatchPrevention = BuildSelfMatchPrevention(selfMatchPreventionId, selfMatchPreventionInstruction),
+                MaxVisibleQuantity = maxVisibleQuantity
             });
 
         public static IReadOnlyList<OrderBookEvent> UpdateOrder(this IOrderBook book, string companyId,

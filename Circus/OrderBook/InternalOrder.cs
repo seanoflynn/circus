@@ -27,6 +27,13 @@ namespace Circus.OrderBook
         public long? TriggerPrice { get; private set; }
         public string? SelfMatchPreventionId { get; }
         public SelfMatchPreventionInstruction? SelfMatchPreventionInstruction { get; }
+        public int? MaxVisibleQuantity { get; }
+
+        // The currently-shown portion of an iceberg order, distinct from RemainingQuantity (the
+        // true total including hidden reserve) - equal to RemainingQuantity for a non-iceberg
+        // order (MaxVisibleQuantity null), so nothing elsewhere needs to special-case that. Shrinks
+        // with each fill against it and is replenished (see Fill) once it hits zero.
+        public int DisplayedQuantity { get; private set; }
 
         // intrusive doubly-linked-list pointers used by PriceLadder for the price level currently
         // holding this order (an order only ever rests in one level at a time, so a single pair of
@@ -37,7 +44,7 @@ namespace Circus.OrderBook
         public InternalOrder(long sequenceNumber, string companyId, string clientOrderId, Security security, DateTime time,
             OrderStatus status, OrderType type, OrderValidity validity, Side side, int quantity, long? price,
             long? triggerPrice, string? selfMatchPreventionId = null,
-            SelfMatchPreventionInstruction? selfMatchPreventionInstruction = null)
+            SelfMatchPreventionInstruction? selfMatchPreventionInstruction = null, int? maxVisibleQuantity = null)
         {
             SequenceNumber = sequenceNumber;
             CompanyId = companyId;
@@ -57,6 +64,8 @@ namespace Circus.OrderBook
             TriggerPrice = triggerPrice;
             SelfMatchPreventionId = selfMatchPreventionId;
             SelfMatchPreventionInstruction = selfMatchPreventionInstruction;
+            MaxVisibleQuantity = maxVisibleQuantity;
+            DisplayedQuantity = Math.Min(maxVisibleQuantity ?? quantity, quantity);
         }
 
         public override string ToString() =>
@@ -65,8 +74,9 @@ namespace Circus.OrderBook
         public Order ToOrder()
         {
             return new(CompanyId, ExchangeOrderId, ClientOrderId, Security, CreatedTime, ModifiedTime, CompletedTime,
-                Status, Type, Validity, Side, Quantity, FilledQuantity, RemainingQuantity, ToDecimal(Price),
-                ToDecimal(TriggerPrice), SelfMatchPreventionId, SelfMatchPreventionInstruction);
+                Status, Type, Validity, Side, Quantity, FilledQuantity, RemainingQuantity, DisplayedQuantity,
+                ToDecimal(Price), ToDecimal(TriggerPrice), SelfMatchPreventionId, SelfMatchPreventionInstruction,
+                MaxVisibleQuantity);
         }
 
         private decimal? ToDecimal(long? ticks) => ticks.HasValue ? ticks.Value * Security.TickSize : null;
@@ -101,6 +111,11 @@ namespace Circus.OrderBook
                 // quantity is the new total size, so remaining = new total - already filled
                 RemainingQuantity -= (Quantity - quantity.Value);
                 Quantity = quantity.Value;
+
+                // keep displayed in sync - for a non-iceberg order this just mirrors
+                // RemainingQuantity (no peak to cap it below); for an iceberg it's re-derived the
+                // same way construction does, capped to whatever peak is still configured
+                DisplayedQuantity = Math.Min(MaxVisibleQuantity ?? RemainingQuantity, RemainingQuantity);
             }
 
             if (triggerPrice.HasValue)
@@ -120,12 +135,23 @@ namespace Circus.OrderBook
 
             FilledQuantity += quantity;
             RemainingQuantity -= quantity;
+            DisplayedQuantity -= quantity;
 
             if (RemainingQuantity == 0)
             {
                 Status = OrderStatus.Filled;
                 CompletedTime = time;
             }
+        }
+
+        // Called when an iceberg's displayed peak hits zero with hidden reserve still remaining -
+        // refreshes the display and bumps ModifiedTime, since the caller re-queues this order to
+        // the back of its price level immediately afterward (losing time priority, matching both
+        // CME and Eurex).
+        public void Replenish(DateTime time)
+        {
+            DisplayedQuantity = Math.Min(MaxVisibleQuantity!.Value, RemainingQuantity);
+            ModifiedTime = time;
         }
 
         public void ConvertToLimit(DateTime time, long sequenceNumber, long? price = null)

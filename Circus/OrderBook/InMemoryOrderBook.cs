@@ -58,7 +58,7 @@ namespace Circus.OrderBook
         public IReadOnlyList<Level> GetLevels(Side side, int maxPrices)
         {
             return _working[side].EnumerateFromBest().Take(maxPrices)
-                .Select(x => new Level(ToDecimal(x.Tick), SumRemaining(x.First), x.Count))
+                .Select(x => new Level(ToDecimal(x.Tick), SumDisplayed(x.First), x.Count))
                 .ToList();
         }
 
@@ -67,6 +67,17 @@ namespace Circus.OrderBook
             var total = 0;
             for (var order = first; order != null; order = order.LevelNext)
                 total += order.RemainingQuantity;
+            return total;
+        }
+
+        // Market data reports what's publicly visible - an iceberg's hidden reserve is
+        // deliberately excluded here even though HasSufficientLiquidity/TryComputeAuctionPrice
+        // (via SumRemaining) still count it in full for liquidity/price-discovery purposes.
+        private static int SumDisplayed(InternalOrder? first)
+        {
+            var total = 0;
+            for (var order = first; order != null; order = order.LevelNext)
+                total += order.DisplayedQuantity;
             return total;
         }
 
@@ -151,15 +162,15 @@ namespace Circus.OrderBook
             return action switch
             {
                 CreateLimitOrder o => CreateOrder(o.CompanyId, o.ClientOrderId, o.OrderValidity, o.Side, o.Quantity,
-                    OrderType.Limit, o.Price, null, o.SelfMatchPrevention),
+                    OrderType.Limit, o.Price, null, o.SelfMatchPrevention, o.MaxVisibleQuantity),
                 CreateMarketOrder o => CreateOrder(o.CompanyId, o.ClientOrderId, o.OrderValidity, o.Side, o.Quantity,
-                    OrderType.Market, null, null, o.SelfMatchPrevention),
+                    OrderType.Market, null, null, o.SelfMatchPrevention, o.MaxVisibleQuantity),
                 CreateMarketLimitOrder o => CreateOrder(o.CompanyId, o.ClientOrderId, o.OrderValidity, o.Side,
-                    o.Quantity, OrderType.MarketLimit, null, null, o.SelfMatchPrevention),
+                    o.Quantity, OrderType.MarketLimit, null, null, o.SelfMatchPrevention, o.MaxVisibleQuantity),
                 CreateStopLimitOrder o => CreateOrder(o.CompanyId, o.ClientOrderId, o.OrderValidity, o.Side,
-                    o.Quantity, OrderType.StopLimit, o.Price, o.TriggerPrice, o.SelfMatchPrevention),
+                    o.Quantity, OrderType.StopLimit, o.Price, o.TriggerPrice, o.SelfMatchPrevention, o.MaxVisibleQuantity),
                 CreateStopMarketOrder o => CreateOrder(o.CompanyId, o.ClientOrderId, o.OrderValidity, o.Side,
-                    o.Quantity, OrderType.StopMarket, null, o.TriggerPrice, o.SelfMatchPrevention),
+                    o.Quantity, OrderType.StopMarket, null, o.TriggerPrice, o.SelfMatchPrevention, o.MaxVisibleQuantity),
                 UpdateOrder update => UpdateOrder(update.CompanyId, update.ClientOrderId,
                     update.PreviousClientOrderId, update.NewTotalQuantity, update.Price, update.TriggerPrice),
                 CancelOrder cancel => CancelOrder(cancel.CompanyId, cancel.ClientOrderId, cancel.PreviousClientOrderId),
@@ -172,7 +183,7 @@ namespace Circus.OrderBook
 
         private List<OrderBookEvent> CreateOrder(string companyId, string clientOrderId, OrderValidity validity,
             Side side, int quantity, OrderType type, decimal? price = null, decimal? triggerPrice = null,
-            SelfMatchPrevention? selfMatchPrevention = null)
+            SelfMatchPrevention? selfMatchPrevention = null, int? maxVisibleQuantity = null)
         {
             var selfMatchPreventionId = selfMatchPrevention?.Id;
             var selfMatchPreventionInstruction = selfMatchPrevention?.Instruction;
@@ -212,6 +223,8 @@ namespace Circus.OrderBook
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.PriceOutsideBands);
             if (validity is OrderValidity.ImmediateOrCancel { MinQuantity: int minQty } && (minQty < 1 || minQty > quantity))
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.MinQuantityOutOfRange);
+            if (maxVisibleQuantity.HasValue && (maxVisibleQuantity < 1 || maxVisibleQuantity > quantity))
+                return RejectCreate(companyId, clientOrderId, OrderRejectedReason.MaxVisibleQuantityOutOfRange);
             if (_clientOrderIndex.TryGetValue((companyId, clientOrderId), out var existingOrder))
             {
                 return existingOrder.Status is OrderStatus.Working or OrderStatus.Hidden
@@ -236,7 +249,7 @@ namespace Circus.OrderBook
             _nextSequenceNumber++;
             var order = new InternalOrder(_nextSequenceNumber, companyId, clientOrderId, _security, Now(), status,
                 type, validity, side, quantity, priceTicks, triggerTicks, selfMatchPreventionId,
-                selfMatchPreventionInstruction);
+                selfMatchPreventionInstruction, maxVisibleQuantity);
 
             _orders.Add(order.ExchangeOrderId, order);
             _clientOrderIndex.Add((companyId, clientOrderId), order);
@@ -438,7 +451,11 @@ namespace Circus.OrderBook
             var sequenceNumber = order.SequenceNumber;
             var isPriceChange = (triggerTicks != null && order.Status == OrderStatus.Hidden && triggerTicks != order.TriggerPrice) ||
                                 (priceTicks != null && order.Status != OrderStatus.Hidden && priceTicks != order.Price);
-            var isQuantityIncrease = (newTotalQuantity != null && newTotalQuantity > order.Quantity);
+            // For an iceberg order, MaxVisibleQuantity (the peak) is immutable, so any quantity
+            // increase here can only be growing the hidden reserve - CME/Eurex don't lose
+            // priority for that, only for a peak increase, which isn't possible in this scope.
+            var isQuantityIncrease = order.MaxVisibleQuantity == null &&
+                (newTotalQuantity != null && newTotalQuantity > order.Quantity);
 
             var orders = (order.Status == OrderStatus.Hidden ? _stops : _working);
 
@@ -557,6 +574,16 @@ namespace Circus.OrderBook
             {
                 CompleteOrder(order);
             }
+            else if (order.DisplayedQuantity == 0 && order.MaxVisibleQuantity.HasValue)
+            {
+                // iceberg peak exhausted with hidden reserve remaining - replenish and requeue to
+                // the back of this price level (PriceLadder.Add always appends to the tail),
+                // losing time priority - matches both CME and Eurex.
+                var priceTicks = order.Price ?? throw new InvalidOperationException("limit order missing price");
+                _working[order.Side].Remove(priceTicks, order);
+                order.Replenish(time);
+                _working[order.Side].Add(priceTicks, order);
+            }
         }
 
         private InternalOrder? BestOrder(Side side) =>
@@ -601,7 +628,7 @@ namespace Circus.OrderBook
                     continue;
                 }
 
-                var quantity = Math.Min(resting.RemainingQuantity, aggressor.RemainingQuantity);
+                var quantity = Math.Min(resting.DisplayedQuantity, aggressor.DisplayedQuantity);
                 var priceTicks = auctionPriceTicks ?? resting.Price ??
                     throw new InvalidOperationException("limit order requires price");
 

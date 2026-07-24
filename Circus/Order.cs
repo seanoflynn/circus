@@ -17,9 +17,11 @@ namespace Circus
         int Quantity,
         int FilledQuantity,
         int RemainingQuantity,
+        int DisplayedQuantity,
         decimal? Price,
         decimal? TriggerPrice,
         string? SelfMatchPreventionId = null,
-        SelfMatchPreventionInstruction? SelfMatchPreventionInstruction = null
+        SelfMatchPreventionInstruction? SelfMatchPreventionInstruction = null,
+        int? MaxVisibleQuantity = null
     );
 }
