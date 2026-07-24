@@ -24,6 +24,14 @@ namespace Circus.DataProducers
     // Stop orders (still Hidden) are excluded entirely, same as a real market's undisplayed
     // contingent orders - a stop activating into a working limit order is reported as Added, not
     // Modified, since it has no prior presence in the working book to "move" from.
+    //
+    // Quantity is always DisplayedQuantity, never RemainingQuantity - an iceberg's hidden reserve
+    // must never appear on a public depth feed. Known gap: when an iceberg's displayed peak is
+    // exhausted mid-fill and immediately replenished (InMemoryOrderBook.FillOrder/InternalOrder.
+    // Replenish), that happens silently within the same Match() pass with no event of its own -
+    // the Filled delta this producer emits only carries the traded quantity, not the fact that
+    // the order's displayed size (and book priority) just reset. A consumer's mirrored view of
+    // that order will under-report until the next event touches it.
     public class OrderBookDeltaDataProducer : IDataProducer<OrderBookDeltaEvent>
     {
         public IList<OrderBookDeltaEvent> Process(IOrderBook book, IReadOnlyList<OrderBookEvent> events)
@@ -49,17 +57,17 @@ namespace Circus.DataProducers
                 {
                     CreateOrderConfirmed {Order.Status: not OrderStatus.Hidden} create =>
                         new OrderBookDeltaEvent(create.Time, create.Order.Side, create.Order.ExchangeOrderId,
-                            create.Order.Price!.Value, create.Order.RemainingQuantity, OrderBookDeltaAction.Added),
+                            create.Order.Price!.Value, create.Order.DisplayedQuantity, OrderBookDeltaAction.Added),
 
                     UpdateOrderConfirmed {PreviousPrice: null, Order.Status: OrderStatus.Hidden} => null,
 
                     UpdateOrderConfirmed {PreviousPrice: null} update =>
                         new OrderBookDeltaEvent(update.Time, update.Order.Side, update.Order.ExchangeOrderId,
-                            update.Order.Price!.Value, update.Order.RemainingQuantity, OrderBookDeltaAction.Added),
+                            update.Order.Price!.Value, update.Order.DisplayedQuantity, OrderBookDeltaAction.Added),
 
                     UpdateOrderConfirmed update =>
                         new OrderBookDeltaEvent(update.Time, update.Order.Side, update.Order.ExchangeOrderId,
-                            update.Order.Price!.Value, update.Order.RemainingQuantity, OrderBookDeltaAction.Modified),
+                            update.Order.Price!.Value, update.Order.DisplayedQuantity, OrderBookDeltaAction.Modified),
 
                     CancelOrderConfirmed {PreviousPrice: {} previousPrice} cancel =>
                         new OrderBookDeltaEvent(cancel.Time, cancel.Order.Side, cancel.Order.ExchangeOrderId,

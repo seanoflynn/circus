@@ -56,7 +56,7 @@ namespace Circus.Tests.OrderBook
             Assert.AreEqual(OrderId1, cancelled.PreviousClientOrderId);
             Assert.AreEqual(OrderCancelledReason.Cancelled, cancelled.Reason);
             Assert.AreEqual(100, cancelled.PreviousPrice, "the working-book price it's being removed from");
-            Assert.AreEqual(3, cancelled.PreviousQuantity, "RemainingQuantity before Cancel() zeroed it");
+            Assert.AreEqual(3, cancelled.PreviousQuantity, "the working-book displayed quantity being removed");
             Assert.AreEqual(CompanyId1, cancelled.Order.CompanyId);
             Assert.AreEqual(OrderId4, cancelled.Order.ClientOrderId);
             Assert.AreEqual(Sec, cancelled.Order.Security);
@@ -98,7 +98,7 @@ namespace Circus.Tests.OrderBook
             Assert.AreEqual(OrderId3, cancelled.PreviousClientOrderId);
             Assert.AreEqual(OrderCancelledReason.Cancelled, cancelled.Reason);
             Assert.IsNull(cancelled.PreviousPrice, "still Hidden - never resting in the working book");
-            Assert.AreEqual(3, cancelled.PreviousQuantity, "RemainingQuantity before Cancel() zeroed it");
+            Assert.AreEqual(3, cancelled.PreviousQuantity, "the working-book displayed quantity being removed");
             Assert.AreEqual(CompanyId3, cancelled.Order.CompanyId);
             Assert.AreEqual(OrderId4, cancelled.Order.ClientOrderId);
             Assert.AreEqual(Sec, cancelled.Order.Security);

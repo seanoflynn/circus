@@ -9,6 +9,14 @@ namespace Circus.DataProducers
     // stream, rather than querying IOrderBook.GetLevels - so one instance is required per
     // IOrderBook, created before that book processes its first action, and it can never resync
     // after a missed event (there's no snapshot fallback).
+    //
+    // Tracks DisplayedQuantity, not RemainingQuantity - an iceberg's hidden reserve must never
+    // appear in market data. Known gap: when an iceberg's displayed peak is exhausted mid-fill
+    // and immediately replenished (InMemoryOrderBook.FillOrder/InternalOrder.Replenish), that
+    // replenishment happens silently within the same Match() pass with no event of its own - the
+    // Fill event this producer sees only carries the traded quantity, not the fact that the
+    // order's displayed size just jumped back up. The level will under-report until the next
+    // event touches that order.
     public class LevelDataProducer : IDataProducer<LevelsDataEvent>
     {
         private class LevelState
@@ -40,14 +48,14 @@ namespace Circus.DataProducers
                 {
                     case CreateOrderConfirmed create:
                         if (create.Order.Status != OrderStatus.Hidden)
-                            Add(create.Order.Side, create.Order.Price!.Value, create.Order.RemainingQuantity);
+                            Add(create.Order.Side, create.Order.Price!.Value, create.Order.DisplayedQuantity);
                         break;
 
                     case UpdateOrderConfirmed update:
                         if (update.PreviousPrice.HasValue)
                             Remove(update.Order.Side, update.PreviousPrice.Value, update.PreviousQuantity);
                         if (update.Order.Status != OrderStatus.Hidden)
-                            Add(update.Order.Side, update.Order.Price!.Value, update.Order.RemainingQuantity);
+                            Add(update.Order.Side, update.Order.Price!.Value, update.Order.DisplayedQuantity);
                         break;
 
                     case CancelOrderConfirmed cancel:

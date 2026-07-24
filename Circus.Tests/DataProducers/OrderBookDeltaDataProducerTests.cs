@@ -59,6 +59,22 @@ namespace Circus.Tests.DataProducers
         }
 
         [Test]
+        public void Iceberg_AddedDelta_ShowsOnlyDisplayedPeak_NotHiddenReserve()
+        {
+            var producer = new OrderBookDeltaDataProducer();
+            Book.UpdateStatus(OrderBookStatus.Open);
+
+            // total 20, only 5 displayed at a time
+            var bookEvents = Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 20, 100,
+                maxVisibleQuantity: 5);
+            var deltas = producer.Process(Book, bookEvents);
+
+            Assert.AreEqual(1, deltas.Count);
+            Assert.AreEqual(5, deltas[0].Quantity, "only the displayed peak, never the hidden reserve");
+            Assert.AreEqual(OrderBookDeltaAction.Added, deltas[0].Action);
+        }
+
+        [Test]
         public void Reprice_ProducesModifiedDelta()
         {
             var producer = new OrderBookDeltaDataProducer();

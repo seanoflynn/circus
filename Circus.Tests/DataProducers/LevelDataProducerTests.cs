@@ -246,6 +246,40 @@ namespace Circus.Tests.DataProducers
         }
 
         [Test]
+        public void Iceberg_ShowsOnlyDisplayedPeak_NotHiddenReserve()
+        {
+            var producer = new LevelDataProducer(2);
+            Publish(producer, Book.UpdateStatus(OrderBookStatus.Open));
+
+            // total 20, only 5 displayed at a time
+            var level = Publish(producer,
+                Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 20, 100,
+                    maxVisibleQuantity: 5));
+
+            Assert.AreEqual(1, level.Offers.Count);
+            Assert.AreEqual(100, level.Offers[0].Price);
+            Assert.AreEqual(5, level.Offers[0].Quantity, "only the displayed peak, never the hidden reserve");
+            Assert.AreEqual(1, level.Offers[0].Count);
+        }
+
+        [Test]
+        public void Iceberg_Reprice_MovesOnlyDisplayedPeak()
+        {
+            var producer = new LevelDataProducer(2);
+            Publish(producer, Book.UpdateStatus(OrderBookStatus.Open));
+            Publish(producer,
+                Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 20, 100,
+                    maxVisibleQuantity: 5));
+
+            var level = Publish(producer, Book.UpdateOrder(CompanyId1, OrderId2, OrderId1, price: 110));
+
+            Assert.IsEmpty(level.Bids);
+            Assert.AreEqual(1, level.Offers.Count);
+            Assert.AreEqual(110, level.Offers[0].Price);
+            Assert.AreEqual(5, level.Offers[0].Quantity, "still only the displayed peak after moving levels");
+        }
+
+        [Test]
         public void StopOrderActivation_ReportedAsArrival_NotDoubleCounted()
         {
             var producer = new LevelDataProducer(2);

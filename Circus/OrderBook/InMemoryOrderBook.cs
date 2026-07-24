@@ -367,7 +367,7 @@ namespace Circus.OrderBook
         {
             var previousClientOrderId = order.ClientOrderId;
             var previousPrice = ToDecimal(order.Price!.Value);
-            var previousQuantity = order.RemainingQuantity;
+            var previousQuantity = order.DisplayedQuantity;
             order.Cancel(Now());
             CompleteOrder(order);
             return new CancelOrderConfirmed(_security, Now(), order.CompanyId, order.ToOrder(), previousClientOrderId,
@@ -442,7 +442,7 @@ namespace Circus.OrderBook
             // Captured before any mutation below. previousPrice is null when the order isn't
             // currently resting in the working book (still Hidden) - the working-book level
             // aggregate treats that case as an arrival, not a move.
-            var previousQuantity = order.RemainingQuantity;
+            var previousQuantity = order.DisplayedQuantity;
             var previousPrice = order.Status == OrderStatus.Hidden ? (decimal?) null : ToDecimal(order.Price!.Value);
 
             if (newTotalQuantity <= order.FilledQuantity)
@@ -519,7 +519,7 @@ namespace Circus.OrderBook
             }
 
             var previousPrice = order.Status == OrderStatus.Hidden ? (decimal?) null : ToDecimal(order.Price!.Value);
-            var previousQuantity = order.RemainingQuantity;
+            var previousQuantity = order.DisplayedQuantity;
             order.Cancel(Now(), clientOrderId);
             _clientOrderIndex[(companyId, clientOrderId)] = order;
             CompleteOrder(order);
@@ -553,7 +553,7 @@ namespace Circus.OrderBook
         private OrderBookEvent ExpireOrder(InternalOrder order)
         {
             var previousPrice = order.Status == OrderStatus.Hidden ? (decimal?) null : ToDecimal(order.Price!.Value);
-            var previousQuantity = order.RemainingQuantity;
+            var previousQuantity = order.DisplayedQuantity;
             order.Expire(Now());
             CompleteOrder(order);
 
@@ -754,7 +754,7 @@ namespace Circus.OrderBook
                     !TryGetLimitPrice(order.Side, _security.MarketOrderProtectionTicks, out newPriceTicks))
                 {
                     var previousClientOrderId = order.ClientOrderId;
-                    var previousQuantity = order.RemainingQuantity;
+                    var previousQuantity = order.DisplayedQuantity;
                     order.Cancel(Now());
                     FinishOrder(order);
 
@@ -771,7 +771,7 @@ namespace Circus.OrderBook
                         order.SelfMatchPreventionId, order.SelfMatchPreventionInstruction))
                 {
                     var previousClientOrderId = order.ClientOrderId;
-                    var previousQuantity = order.RemainingQuantity;
+                    var previousQuantity = order.DisplayedQuantity;
                     order.Cancel(Now());
                     FinishOrder(order);
 
@@ -790,7 +790,7 @@ namespace Circus.OrderBook
                 // previousPrice null - the order was resting in the stops ladder, not the
                 // working book, so this is an arrival, not a move between working-book levels.
                 events.Add(new UpdateOrderConfirmed(_security, time, order.CompanyId, order.ToOrder(),
-                    order.ClientOrderId, null, order.RemainingQuantity));
+                    order.ClientOrderId, null, order.DisplayedQuantity));
             }
         }
 
