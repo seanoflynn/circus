@@ -33,7 +33,7 @@ Sessions
 Market data
 - [x] Trades
 - [x] Price/qty/count for x levels
-- [ ] All order updates
+- [x] All order updates
 - [x] Indicative open
 
 Safety features

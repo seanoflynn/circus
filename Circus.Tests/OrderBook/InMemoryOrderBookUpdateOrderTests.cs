@@ -57,6 +57,40 @@ namespace Circus.Tests.OrderBook
             Assert.AreNotEqual(OrderId1, updated.Order.ClientOrderId);
         }
 
+        [Test]
+        public void Reprice_SetsPreviousPriceAndPreviousQuantity()
+        {
+            // arrange
+            Book.UpdateStatus(OrderBookStatus.Open);
+            Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 100);
+            TimeProvider.SetCurrentTime(Now2);
+
+            // act
+            var events = Book.UpdateOrder(CompanyId1, OrderId4, OrderId1, price: 110);
+
+            // assert
+            var updated = events.OfType<UpdateOrderConfirmed>().Single();
+            Assert.AreEqual(100, updated.PreviousPrice);
+            Assert.AreEqual(3, updated.PreviousQuantity);
+        }
+
+        [Test]
+        public void QuantityOnlyUpdate_PreviousPriceIsThePriceItStillRestsAt()
+        {
+            // arrange
+            Book.UpdateStatus(OrderBookStatus.Open);
+            Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 100);
+            TimeProvider.SetCurrentTime(Now2);
+
+            // act
+            var events = Book.UpdateOrder(CompanyId1, OrderId4, OrderId1, newTotalQuantity: 8);
+
+            // assert
+            var updated = events.OfType<UpdateOrderConfirmed>().Single();
+            Assert.AreEqual(100, updated.PreviousPrice);
+            Assert.AreEqual(3, updated.PreviousQuantity);
+        }
+
         [TestCase(5)]
         [TestCase(1)]
         public void LimitOrder_UpdateQuantity_Success(int quantity)

@@ -79,6 +79,8 @@ namespace Circus.Tests.OrderBook
             Assert.AreEqual(OrderType.Limit, triggerConversion.Order.Type);
             Assert.AreEqual(OrderStatus.Working, triggerConversion.Order.Status);
             Assert.AreEqual(530, triggerConversion.Order.Price);
+            Assert.IsNull(triggerConversion.PreviousPrice,
+                "it was resting in the stops ladder, not the working book - this is an arrival, not a move");
 
             var tradedAtLimit = events.OfType<OrdersMatched>().FirstOrDefault(m => m.Price == 520);
             Assert.IsNotNull(tradedAtLimit, "expected the newly triggered order to match against the resting offer at 520");

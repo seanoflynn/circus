@@ -8,17 +8,18 @@ namespace Circus.DataProducers
     {
         public IList<TradedDataEvent> Process(IOrderBook book, IReadOnlyList<OrderBookEvent> events)
         {
-            var output = new List<TradedDataEvent>();
+            List<TradedDataEvent>? output = null;
 
             foreach (var ev in events)
             {
                 if (ev is OrdersMatched matched)
                 {
+                    output ??= new List<TradedDataEvent>();
                     output.Add(new TradedDataEvent(matched.Time, matched.Price, matched.Quantity));
                 }
             }
 
-            return output;
+            return output ?? (IList<TradedDataEvent>) Array.Empty<TradedDataEvent>();
         }
     }
 
