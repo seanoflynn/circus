@@ -39,6 +39,12 @@ namespace Circus.OrderBook
         public required Side Side { get; init; }
         public required int Quantity { get; init; }
         public SelfMatchPrevention? SelfMatchPrevention { get; init; }
+
+        // Iceberg/display quantity - the portion shown to the market at a time, with the rest
+        // held in reserve. Not restricted to CreateLimitOrder: Market/MarketLimit/triggered-Stop
+        // orders can all end up resting as a plain limit order too, so display quantity is
+        // meaningful for any of them.
+        public int? MaxVisibleQuantity { get; init; }
     }
 
     public sealed record CreateLimitOrder : CreateOrder
