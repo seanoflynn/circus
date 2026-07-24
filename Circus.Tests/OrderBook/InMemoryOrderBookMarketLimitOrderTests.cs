@@ -161,7 +161,7 @@ namespace Circus.Tests.OrderBook
         }
 
         [Test]
-        public void FillAndKill_RemainderCancelledInsteadOfResting()
+        public void ImmediateOrCancel_RemainderCancelledInsteadOfResting()
         {
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
@@ -169,7 +169,7 @@ namespace Circus.Tests.OrderBook
             TimeProvider.SetCurrentTime(Now2);
 
             // act
-            var events = Book.CreateMarketLimitOrder(CompanyId2, OrderId2, new OrderValidity.FillAndKill(), Side.Buy, 5);
+            var events = Book.CreateMarketLimitOrder(CompanyId2, OrderId2, new OrderValidity.ImmediateOrCancel(), Side.Buy, 5);
 
             // assert
             Assert.IsNotNull(events);
@@ -182,7 +182,7 @@ namespace Circus.Tests.OrderBook
 
             var cancelled = events[2] as CancelOrderConfirmed;
             Assert.IsNotNull(cancelled);
-            Assert.AreEqual(OrderCancelledReason.FillAndKillNotFilled, cancelled.Reason);
+            Assert.AreEqual(OrderCancelledReason.ImmediateOrCancelNotFilled, cancelled.Reason);
             Assert.AreEqual(OrderType.MarketLimit, cancelled.Order.Type);
             Assert.AreEqual(OrderStatus.Cancelled, cancelled.Order.Status);
             Assert.AreEqual(2, cancelled.Order.FilledQuantity);
@@ -192,7 +192,7 @@ namespace Circus.Tests.OrderBook
         }
 
         [Test]
-        public void FillOrKill_InsufficientLiquidityAtBestLevelAlone_Rejected()
+        public void ImmediateOrCancel_MinQuantity_InsufficientLiquidityAtBestLevelAlone_Rejected()
         {
             // arrange - 2 available at the best level, 10 more one level back; FOK must only
             // count the best level for a market-limit order, so this must be rejected even
@@ -203,14 +203,15 @@ namespace Circus.Tests.OrderBook
             TimeProvider.SetCurrentTime(Now2);
 
             // act
-            var events = Book.CreateMarketLimitOrder(CompanyId3, OrderId3, new OrderValidity.FillOrKill(), Side.Buy, 5);
+            var events = Book.CreateMarketLimitOrder(CompanyId3, OrderId3,
+                new OrderValidity.ImmediateOrCancel { MinQuantity = 5 }, Side.Buy, 5);
 
             // assert
             Assert.IsNotNull(events);
             Assert.AreEqual(1, events.Count);
             var rejected = events[0] as CreateOrderRejected;
             Assert.IsNotNull(rejected);
-            Assert.AreEqual(OrderRejectedReason.InsufficientLiquidityForFillOrKill, rejected.Reason);
+            Assert.AreEqual(OrderRejectedReason.InsufficientLiquidityForMinQuantity, rejected.Reason);
 
             // book is completely untouched
             var levels = Book.GetLevels(Side.Sell, 10);

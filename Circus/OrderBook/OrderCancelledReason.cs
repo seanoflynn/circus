@@ -5,8 +5,7 @@ namespace Circus.OrderBook
         Cancelled,
         UpdatedQuantityLowerThanFilledQuantity,
         NoOrdersToMatchMarketOrder,
-        FillAndKillNotFilled,
-        FillOrKillNotFilled,
+        ImmediateOrCancelNotFilled,
         SelfMatchPrevention
     }
 }
