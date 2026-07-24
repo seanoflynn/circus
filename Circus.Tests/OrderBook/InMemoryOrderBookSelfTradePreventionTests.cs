@@ -234,7 +234,7 @@ namespace Circus.Tests.OrderBook
         }
 
         [Test]
-        public void FillOrKill_OnlyLiquidityIsSelfMatchPrevented_Rejected()
+        public void ImmediateOrCancel_OnlyLiquidityIsSelfMatchPrevented_Rejected()
         {
             // arrange - the only resting liquidity shares the incoming order's SMP id, so it
             // must be excluded from the upfront liquidity check rather than partially filled
@@ -243,7 +243,7 @@ namespace Circus.Tests.OrderBook
             TimeProvider.SetCurrentTime(Now2);
 
             // act
-            var events = Book.CreateLimitOrder(CompanyId1, OrderId2, new OrderValidity.FillOrKill(), Side.Buy, 5, 100, selfMatchPreventionId: Smp1);
+            var events = Book.CreateLimitOrder(CompanyId1, OrderId2, new OrderValidity.ImmediateOrCancel { MinQuantity = 5 }, Side.Buy, 5, 100, selfMatchPreventionId: Smp1);
 
             // assert
             Assert.IsNotNull(events);
@@ -251,7 +251,7 @@ namespace Circus.Tests.OrderBook
 
             var rejected = events[0] as CreateOrderRejected;
             Assert.IsNotNull(rejected);
-            Assert.AreEqual(OrderRejectedReason.InsufficientLiquidityForFillOrKill, rejected.Reason);
+            Assert.AreEqual(OrderRejectedReason.InsufficientLiquidityForMinQuantity, rejected.Reason);
 
             // book is untouched - no partial fill leaked through
             var sellLevels = Book.GetLevels(Side.Sell, 10);
@@ -261,7 +261,7 @@ namespace Circus.Tests.OrderBook
         }
 
         [Test]
-        public void FillOrKill_CancelResting_SkipsSelfMatchedOrder_CountsLiquidityBeyondIt()
+        public void ImmediateOrCancel_CancelResting_SkipsSelfMatchedOrder_CountsLiquidityBeyondIt()
         {
             // arrange - a self-matched order at the front of the queue, with real liquidity
             // from a different company right behind it. CancelResting only kills the resting
@@ -273,7 +273,7 @@ namespace Circus.Tests.OrderBook
             TimeProvider.SetCurrentTime(Now3);
 
             // act
-            var events = Book.CreateLimitOrder(CompanyId1, OrderId3, new OrderValidity.FillOrKill(), Side.Buy, 5, 100, selfMatchPreventionId: Smp1, selfMatchPreventionInstruction: SelfMatchPreventionInstruction.CancelResting);
+            var events = Book.CreateLimitOrder(CompanyId1, OrderId3, new OrderValidity.ImmediateOrCancel { MinQuantity = 5 }, Side.Buy, 5, 100, selfMatchPreventionId: Smp1, selfMatchPreventionInstruction: SelfMatchPreventionInstruction.CancelResting);
 
             // assert - accepted: the 2@100 self-match is skipped, the 5@100 behind it is enough
             Assert.IsNotNull(events);
@@ -295,7 +295,7 @@ namespace Circus.Tests.OrderBook
         }
 
         [Test]
-        public void FillOrKill_CancelAggressor_StopsCountingAtSelfMatch_RejectedDespiteLaterLiquidity()
+        public void ImmediateOrCancel_CancelAggressor_StopsCountingAtSelfMatch_RejectedDespiteLaterLiquidity()
         {
             // arrange - same shape as above, but with CancelAggressor/CancelBoth the incoming
             // order itself would be cancelled the instant it reaches the self-matched order, so
@@ -309,7 +309,7 @@ namespace Circus.Tests.OrderBook
             TimeProvider.SetCurrentTime(Now3);
 
             // act
-            var events = Book.CreateLimitOrder(CompanyId1, OrderId3, new OrderValidity.FillOrKill(), Side.Buy, 5, 100, selfMatchPreventionId: Smp1, selfMatchPreventionInstruction: SelfMatchPreventionInstruction.CancelAggressor);
+            var events = Book.CreateLimitOrder(CompanyId1, OrderId3, new OrderValidity.ImmediateOrCancel { MinQuantity = 5 }, Side.Buy, 5, 100, selfMatchPreventionId: Smp1, selfMatchPreventionInstruction: SelfMatchPreventionInstruction.CancelAggressor);
 
             // assert - rejected: reachable liquidity before the self-match is 0, well short of 5,
             // even though 10 more sits just behind it in the queue
@@ -318,7 +318,7 @@ namespace Circus.Tests.OrderBook
 
             var rejected = events[0] as CreateOrderRejected;
             Assert.IsNotNull(rejected);
-            Assert.AreEqual(OrderRejectedReason.InsufficientLiquidityForFillOrKill, rejected.Reason);
+            Assert.AreEqual(OrderRejectedReason.InsufficientLiquidityForMinQuantity, rejected.Reason);
 
             // book is completely untouched - both resting orders survive, nothing was cancelled
             var sellLevels = Book.GetLevels(Side.Sell, 10);
@@ -330,7 +330,7 @@ namespace Circus.Tests.OrderBook
         }
 
         [Test]
-        public void FillOrKill_CancelAggressor_StopsAtSelfMatch_AcrossPriceLevels_Rejected()
+        public void ImmediateOrCancel_CancelAggressor_StopsAtSelfMatch_AcrossPriceLevels_Rejected()
         {
             // arrange - the self-match sits at the best price level; genuine liquidity sits at
             // the next (worse but still-crossing) price level. CancelAggressor kills the
@@ -343,7 +343,7 @@ namespace Circus.Tests.OrderBook
             TimeProvider.SetCurrentTime(Now3);
 
             // act
-            var events = Book.CreateLimitOrder(CompanyId1, OrderId3, new OrderValidity.FillOrKill(), Side.Buy, 5, 110, selfMatchPreventionId: Smp1, selfMatchPreventionInstruction: SelfMatchPreventionInstruction.CancelAggressor);
+            var events = Book.CreateLimitOrder(CompanyId1, OrderId3, new OrderValidity.ImmediateOrCancel { MinQuantity = 5 }, Side.Buy, 5, 110, selfMatchPreventionId: Smp1, selfMatchPreventionInstruction: SelfMatchPreventionInstruction.CancelAggressor);
 
             // assert - rejected: the self-match at 100 stops the search cold, so the 20 sitting
             // at 110 is never even considered
@@ -352,7 +352,7 @@ namespace Circus.Tests.OrderBook
 
             var rejected = events[0] as CreateOrderRejected;
             Assert.IsNotNull(rejected);
-            Assert.AreEqual(OrderRejectedReason.InsufficientLiquidityForFillOrKill, rejected.Reason);
+            Assert.AreEqual(OrderRejectedReason.InsufficientLiquidityForMinQuantity, rejected.Reason);
 
             // book is completely untouched - both price levels survive, nothing was cancelled
             var sellLevels = Book.GetLevels(Side.Sell, 10);
