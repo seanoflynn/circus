@@ -38,7 +38,7 @@ namespace Circus.Tests.OrderBook
         }
         
         [Test]
-        public void ExchangeOrderId_StaysConstantAcrossReprice_WhileClientOrderIdChains()
+        public void ExchangeOrderId_ChangesOnReprice_MatchingRealExchangeBehaviorForLostPriority()
         {
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
@@ -46,15 +46,70 @@ namespace Circus.Tests.OrderBook
                 .OfType<CreateOrderConfirmed>().Single();
             TimeProvider.SetCurrentTime(Now2);
 
-            // act - reprice, which changes SequenceNumber (priority) but must not change ExchangeOrderId
+            // act - reprice loses time priority, so ExchangeOrderId is re-derived (the order is
+            // functionally a new entry at the back of the queue), same as a real exchange's own
+            // drop-copy and public depth feed would both show
             var events = Book.UpdateOrder(CompanyId1, OrderId4, OrderId1, price: 110);
 
             // assert
             var updated = events.OfType<UpdateOrderConfirmed>().Single();
-            Assert.AreEqual(created.Order.ExchangeOrderId, updated.Order.ExchangeOrderId);
+            Assert.AreNotEqual(created.Order.ExchangeOrderId, updated.Order.ExchangeOrderId);
+            Assert.AreEqual(created.Order.ExchangeOrderId, updated.PreviousExchangeOrderId);
             Assert.AreEqual(OrderId4, updated.Order.ClientOrderId);
             Assert.AreEqual(OrderId1, updated.PreviousClientOrderId);
             Assert.AreNotEqual(OrderId1, updated.Order.ClientOrderId);
+        }
+
+        [Test]
+        public void ExchangeOrderId_StaysConstantAcrossQuantityDecrease_WhichPreservesPriority()
+        {
+            // arrange
+            Book.UpdateStatus(OrderBookStatus.Open);
+            var created = Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100)
+                .OfType<CreateOrderConfirmed>().Single();
+            TimeProvider.SetCurrentTime(Now2);
+
+            // act - a quantity decrease alone preserves time priority, so ExchangeOrderId must not change
+            var events = Book.UpdateOrder(CompanyId1, OrderId4, OrderId1, newTotalQuantity: 3);
+
+            // assert
+            var updated = events.OfType<UpdateOrderConfirmed>().Single();
+            Assert.AreEqual(created.Order.ExchangeOrderId, updated.Order.ExchangeOrderId);
+            Assert.AreEqual(updated.Order.ExchangeOrderId, updated.PreviousExchangeOrderId);
+        }
+
+        [Test]
+        public void Reprice_SetsPreviousPriceAndPreviousQuantity()
+        {
+            // arrange
+            Book.UpdateStatus(OrderBookStatus.Open);
+            Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 100);
+            TimeProvider.SetCurrentTime(Now2);
+
+            // act
+            var events = Book.UpdateOrder(CompanyId1, OrderId4, OrderId1, price: 110);
+
+            // assert
+            var updated = events.OfType<UpdateOrderConfirmed>().Single();
+            Assert.AreEqual(100, updated.PreviousPrice);
+            Assert.AreEqual(3, updated.PreviousQuantity);
+        }
+
+        [Test]
+        public void QuantityOnlyUpdate_PreviousPriceIsThePriceItStillRestsAt()
+        {
+            // arrange
+            Book.UpdateStatus(OrderBookStatus.Open);
+            Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 100);
+            TimeProvider.SetCurrentTime(Now2);
+
+            // act
+            var events = Book.UpdateOrder(CompanyId1, OrderId4, OrderId1, newTotalQuantity: 8);
+
+            // assert
+            var updated = events.OfType<UpdateOrderConfirmed>().Single();
+            Assert.AreEqual(100, updated.PreviousPrice);
+            Assert.AreEqual(3, updated.PreviousQuantity);
         }
 
         [TestCase(5)]
