@@ -7,7 +7,7 @@ using NUnit.Framework;
 
 namespace Circus.Tests.DataProducers
 {
-    public class OrderBookDeltaDataProducerTests
+    public class FullBookDataProducerTests
     {
         private static readonly Security Sec = new("GCZ6", SecurityType.Future, 10, 10);
 
@@ -45,7 +45,7 @@ namespace Circus.Tests.DataProducers
         [Test]
         public void Create_ProducesAddedDelta()
         {
-            var producer = new OrderBookDeltaDataProducer();
+            var producer = new FullBookDataProducer();
             Book.UpdateStatus(OrderBookStatus.Open);
 
             var bookEvents = Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 100);
@@ -61,7 +61,7 @@ namespace Circus.Tests.DataProducers
         [Test]
         public void Iceberg_AddedDelta_ShowsOnlyDisplayedPeak_NotHiddenReserve()
         {
-            var producer = new OrderBookDeltaDataProducer();
+            var producer = new FullBookDataProducer();
             Book.UpdateStatus(OrderBookStatus.Open);
 
             // total 20, only 5 displayed at a time
@@ -75,24 +75,77 @@ namespace Circus.Tests.DataProducers
         }
 
         [Test]
-        public void Reprice_ProducesModifiedDelta()
+        public void IcebergReplenish_ProducesRemovedThenAddedWithNewId()
         {
-            var producer = new OrderBookDeltaDataProducer();
+            var producer = new FullBookDataProducer();
             Book.UpdateStatus(OrderBookStatus.Open);
-            Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 100);
+            var created = Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 12, 100,
+                    maxVisibleQuantity: 5)
+                .OfType<CreateOrderConfirmed>().Single();
+            producer.Process(Book, new OrderBookEvent[] {created});
+
+            // aggressor larger than the peak - exhausts and replenishes the iceberg mid-match
+            var bookEvents = Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 100);
+            var deltas = producer.Process(Book, bookEvents);
+
+            // one Filled delta per leg of the match (the iceberg resting, and the aggressor)
+            var filled = deltas.Where(d => d.Action == OrderBookDeltaAction.Filled).ToList();
+            Assert.AreEqual(2, filled.Count);
+            Assert.IsTrue(filled.Any(d => d.ExchangeOrderId == created.Order.ExchangeOrderId),
+                "the iceberg's fill happened against its pre-replenish id");
+
+            var removed = deltas.Single(d => d.Action == OrderBookDeltaAction.Removed);
+            Assert.AreEqual(created.Order.ExchangeOrderId, removed.ExchangeOrderId);
+
+            // Side.Sell, not Side.Buy - the aggressor itself also produces its own Added delta
+            // (its CreateOrderConfirmed), distinct from the iceberg's replenish arrival
+            var added = deltas.Single(d => d.Action == OrderBookDeltaAction.Added && d.Side == Side.Sell);
+            Assert.AreNotEqual(created.Order.ExchangeOrderId, added.ExchangeOrderId);
+            Assert.AreEqual(5, added.Quantity, "replenished back to the full peak");
+        }
+
+        [Test]
+        public void Reprice_LosesPriority_ProducesRemovedThenAddedWithNewId()
+        {
+            var producer = new FullBookDataProducer();
+            Book.UpdateStatus(OrderBookStatus.Open);
+            var created = Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 100)
+                .OfType<CreateOrderConfirmed>().Single();
 
             var bookEvents = Book.UpdateOrder(CompanyId1, OrderId2, OrderId1, price: 110);
             var deltas = producer.Process(Book, bookEvents);
 
+            Assert.AreEqual(2, deltas.Count);
+            Assert.AreEqual(created.Order.ExchangeOrderId, deltas[0].ExchangeOrderId);
+            Assert.AreEqual(100, deltas[0].Price);
+            Assert.AreEqual(OrderBookDeltaAction.Removed, deltas[0].Action);
+
+            Assert.AreNotEqual(created.Order.ExchangeOrderId, deltas[1].ExchangeOrderId);
+            Assert.AreEqual(110, deltas[1].Price);
+            Assert.AreEqual(OrderBookDeltaAction.Added, deltas[1].Action);
+        }
+
+        [Test]
+        public void QuantityDecrease_PreservesPriority_ProducesModifiedWithSameId()
+        {
+            var producer = new FullBookDataProducer();
+            Book.UpdateStatus(OrderBookStatus.Open);
+            var created = Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100)
+                .OfType<CreateOrderConfirmed>().Single();
+
+            var bookEvents = Book.UpdateOrder(CompanyId1, OrderId2, OrderId1, newTotalQuantity: 3);
+            var deltas = producer.Process(Book, bookEvents);
+
             Assert.AreEqual(1, deltas.Count);
-            Assert.AreEqual(110, deltas[0].Price);
+            Assert.AreEqual(created.Order.ExchangeOrderId, deltas[0].ExchangeOrderId);
+            Assert.AreEqual(3, deltas[0].Quantity);
             Assert.AreEqual(OrderBookDeltaAction.Modified, deltas[0].Action);
         }
 
         [Test]
         public void Cancel_ProducesRemovedDelta_WithPreCancelQuantity()
         {
-            var producer = new OrderBookDeltaDataProducer();
+            var producer = new FullBookDataProducer();
             Book.UpdateStatus(OrderBookStatus.Open);
             Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 100);
 
@@ -108,7 +161,7 @@ namespace Circus.Tests.DataProducers
         [Test]
         public void PartialFill_ProducesFilledDeltaPerLeg_WithFillQuantityNotRemaining()
         {
-            var producer = new OrderBookDeltaDataProducer();
+            var producer = new FullBookDataProducer();
             Book.UpdateStatus(OrderBookStatus.Open);
             Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100);
 
@@ -132,7 +185,7 @@ namespace Circus.Tests.DataProducers
         [Test]
         public void StillHiddenStopOrder_Create_ProducesNoDelta()
         {
-            var producer = new OrderBookDeltaDataProducer();
+            var producer = new FullBookDataProducer();
             Book.UpdateStatus(OrderBookStatus.Open);
             Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 500);
             Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 3, 500);
@@ -147,7 +200,7 @@ namespace Circus.Tests.DataProducers
         [Test]
         public void StopOrderActivation_ProducesAddedDelta_NotModified()
         {
-            var producer = new OrderBookDeltaDataProducer();
+            var producer = new FullBookDataProducer();
             Book.UpdateStatus(OrderBookStatus.Open);
             Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 500);
             Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 3, 500);

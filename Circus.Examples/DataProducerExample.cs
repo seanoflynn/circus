@@ -23,16 +23,16 @@ namespace Circus.Examples
             var tradeDataProducer1 = new TradeDataProducer();
             var bboDataProducer1 = new LevelDataProducer(1);
             var top10DataProducer1 = new LevelDataProducer(10);
-            var fullBookDataProducer1 = new OrderBookDeltaDataProducer();
+            var fullBookDataProducer1 = new FullBookDataProducer();
 
             var tradeDataProducer2 = new TradeDataProducer();
             var bboDataProducer2 = new LevelDataProducer(1);
             var top10DataProducer2 = new LevelDataProducer(10);
-            var fullBookDataProducer2 = new OrderBookDeltaDataProducer();
+            var fullBookDataProducer2 = new FullBookDataProducer();
 
             void Publish(IOrderBook book, IReadOnlyList<OrderBookEvent> events, TradeDataProducer tradeDataProducer,
                 LevelDataProducer bboDataProducer, LevelDataProducer top10DataProducer,
-                OrderBookDeltaDataProducer fullBookDataProducer)
+                FullBookDataProducer fullBookDataProducer)
             {
                 Print(tradeDataProducer.Process(book, events));
                 Print(bboDataProducer.Process(book, events));

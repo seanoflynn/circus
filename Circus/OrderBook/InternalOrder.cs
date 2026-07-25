@@ -9,8 +9,22 @@ namespace Circus.OrderBook
     internal class InternalOrder
     {
         public long SequenceNumber { get; private set; }
+
+        // Stable for the order's whole life - purely an internal bookkeeping key (InMemoryOrderBook's
+        // _orders/_completedOrders dictionaries), never exposed on Order or any event. ExchangeOrderId
+        // is the public identity, and unlike this one it deliberately does change.
+        public long InternalId { get; }
+
         public string CompanyId { get; }
-        public string ExchangeOrderId { get; }
+
+        // Derived from SequenceNumber rather than stored separately, so it can never drift out of
+        // sync with it: every priority-losing mutation (reprice, quantity increase, an iceberg's
+        // displayed peak refilling from its hidden reserve) bumps SequenceNumber, and this changes
+        // right along with it - matching real exchanges, where the client's own drop-copy and the
+        // public depth feed both see a new exchange-assigned order id after such an amend, since the
+        // order is functionally a new entry at the back of the queue.
+        public string ExchangeOrderId => SequenceNumber.ToString();
+
         public string ClientOrderId { get; private set; }
         public Security Security { get; }
         public DateTime CreatedTime { get; }
@@ -47,8 +61,8 @@ namespace Circus.OrderBook
             SelfMatchPreventionInstruction? selfMatchPreventionInstruction = null, int? maxVisibleQuantity = null)
         {
             SequenceNumber = sequenceNumber;
+            InternalId = sequenceNumber;
             CompanyId = companyId;
-            ExchangeOrderId = sequenceNumber.ToString();
             ClientOrderId = clientOrderId;
             Security = security;
             CreatedTime = time;
@@ -145,12 +159,13 @@ namespace Circus.OrderBook
         }
 
         // Called when an iceberg's displayed peak hits zero with hidden reserve still remaining -
-        // refreshes the display and bumps ModifiedTime, since the caller re-queues this order to
-        // the back of its price level immediately afterward (losing time priority, matching both
-        // CME and Eurex).
-        public void Replenish(DateTime time)
+        // refreshes the display and bumps SequenceNumber/ModifiedTime, since the caller re-queues
+        // this order to the back of its price level immediately afterward (losing time priority,
+        // matching both CME and Eurex) and it gets a fresh ExchangeOrderId along with it.
+        public void Replenish(long sequenceNumber, DateTime time)
         {
             DisplayedQuantity = Math.Min(MaxVisibleQuantity!.Value, RemainingQuantity);
+            SequenceNumber = sequenceNumber;
             ModifiedTime = time;
         }
 

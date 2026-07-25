@@ -26,8 +26,15 @@ namespace Circus.OrderBook
     // DisplayedQuantity (not RemainingQuantity) immediately before the update, so it lines up
     // with what a working-book level actually contained - for an iceberg, the hidden reserve was
     // never part of any level's displayed size.
+    //
+    // PreviousExchangeOrderId differs from Order.ExchangeOrderId whenever this update lost time
+    // priority (a reprice, a quantity increase, or an iceberg's displayed peak refilling from its
+    // hidden reserve) - Order.ExchangeOrderId is derived from SequenceNumber, which those bump.
+    // Equal to Order.ExchangeOrderId for a plain quantity decrease, which preserves priority. A
+    // full-order-book feed uses this to tell "moved to the back of the queue" (old id leaves,
+    // new id arrives) apart from an ordinary in-place modify.
     public record UpdateOrderConfirmed(Security Security, DateTime Time, string CompanyId, Order Order,
-            string PreviousClientOrderId, decimal? PreviousPrice, int PreviousQuantity)
+            string PreviousClientOrderId, string PreviousExchangeOrderId, decimal? PreviousPrice, int PreviousQuantity)
         : OrderConfirmedEvent(Security, Time, CompanyId, Order);
 
     // PreviousQuantity is the order's DisplayedQuantity immediately before cancellation (not

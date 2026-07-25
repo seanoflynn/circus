@@ -21,6 +21,12 @@ namespace Circus.Simulator
 
         private readonly InMemoryOrderBook _shadowBook;
 
+        // Keyed by ClientOrderId, not ExchangeOrderId - the latter no longer stays constant for
+        // an order's whole life (a reprice, a quantity increase, or an iceberg peak refilling
+        // from its hidden reserve all mint a fresh one), so it can't be used as a stable tracking
+        // key here. ClientOrderId changes too (a new one is chosen on every update/cancel), but
+        // this class is itself the one choosing each new value, so it renames its own tracking
+        // entries in lockstep rather than needing a truly immutable id.
         private readonly List<string> _liveIds = new();
         private readonly Dictionary<string, int> _liveIndex = new();
         private readonly Dictionary<string, LiveOrderInfo> _liveInfo = new();
@@ -68,49 +74,56 @@ namespace Circus.Simulator
                 switch (e)
                 {
                     case CreateOrderConfirmed c:
-                        Track(c.Order);
+                        Track(c.Order, previousClientOrderId: null);
                         break;
                     case UpdateOrderConfirmed u:
-                        Track(u.Order);
+                        Track(u.Order, u.PreviousClientOrderId);
                         break;
                     case CancelOrderConfirmed cancel:
-                        RemoveLive(cancel.Order.ExchangeOrderId);
+                        RemoveLive(cancel.PreviousClientOrderId);
                         break;
                     case ExpireOrderConfirmed expire:
-                        RemoveLive(expire.Order.ExchangeOrderId);
+                        RemoveLive(expire.Order.ClientOrderId);
                         break;
                     case OrdersMatched matched:
                         foreach (var fill in matched.Fills)
                         {
                             if (fill.Order.RemainingQuantity == 0)
-                                RemoveLive(fill.Order.ExchangeOrderId);
+                                RemoveLive(fill.Order.ClientOrderId);
                         }
                         break;
                 }
             }
         }
 
-        private void Track(Order order)
+        // previousClientOrderId is null for a fresh Create, and the id being renamed from for an
+        // Update - renaming (rather than remove-then-add under whatever key happens to already
+        // be there) keeps a single live entry across the chain of client order ids one logical
+        // resting order accumulates over its life.
+        private void Track(Order order, string? previousClientOrderId)
         {
             if (order.RemainingQuantity == 0)
             {
-                RemoveLive(order.ExchangeOrderId);
+                RemoveLive(previousClientOrderId ?? order.ClientOrderId);
                 return;
             }
 
-            if (!_liveIndex.ContainsKey(order.ExchangeOrderId))
+            if (previousClientOrderId != null && previousClientOrderId != order.ClientOrderId)
+                RemoveLive(previousClientOrderId);
+
+            if (!_liveIndex.ContainsKey(order.ClientOrderId))
             {
-                _liveIndex[order.ExchangeOrderId] = _liveIds.Count;
-                _liveIds.Add(order.ExchangeOrderId);
+                _liveIndex[order.ClientOrderId] = _liveIds.Count;
+                _liveIds.Add(order.ClientOrderId);
             }
 
-            _liveInfo[order.ExchangeOrderId] = new LiveOrderInfo(order.CompanyId, order.ClientOrderId, order.Side,
+            _liveInfo[order.ClientOrderId] = new LiveOrderInfo(order.CompanyId, order.ClientOrderId, order.Side,
                 order.Price, order.TriggerPrice);
         }
 
-        private void RemoveLive(string exchangeOrderId)
+        private void RemoveLive(string clientOrderId)
         {
-            if (!_liveIndex.TryGetValue(exchangeOrderId, out var index))
+            if (!_liveIndex.TryGetValue(clientOrderId, out var index))
                 return;
 
             var lastIndex = _liveIds.Count - 1;
@@ -119,21 +132,21 @@ namespace Circus.Simulator
             _liveIndex[lastId] = index;
             _liveIds.RemoveAt(lastIndex);
 
-            _liveIndex.Remove(exchangeOrderId);
-            _liveInfo.Remove(exchangeOrderId);
+            _liveIndex.Remove(clientOrderId);
+            _liveInfo.Remove(clientOrderId);
         }
 
-        private bool TryPickLive(out string exchangeOrderId, out LiveOrderInfo info)
+        private bool TryPickLive(out string clientOrderId, out LiveOrderInfo info)
         {
             if (_liveIds.Count == 0)
             {
-                exchangeOrderId = default!;
+                clientOrderId = default!;
                 info = default!;
                 return false;
             }
 
-            exchangeOrderId = _liveIds[_random.Next(_liveIds.Count)];
-            info = _liveInfo[exchangeOrderId];
+            clientOrderId = _liveIds[_random.Next(_liveIds.Count)];
+            info = _liveInfo[clientOrderId];
             return true;
         }
 

@@ -26,13 +26,15 @@ namespace Circus.DataProducers
     // Modified, since it has no prior presence in the working book to "move" from.
     //
     // Quantity is always DisplayedQuantity, never RemainingQuantity - an iceberg's hidden reserve
-    // must never appear on a public depth feed. Known gap: when an iceberg's displayed peak is
-    // exhausted mid-fill and immediately replenished (InMemoryOrderBook.FillOrder/InternalOrder.
-    // Replenish), that happens silently within the same Match() pass with no event of its own -
-    // the Filled delta this producer emits only carries the traded quantity, not the fact that
-    // the order's displayed size (and book priority) just reset. A consumer's mirrored view of
-    // that order will under-report until the next event touches it.
-    public class OrderBookDeltaDataProducer : IDataProducer<OrderBookDeltaEvent>
+    // must never appear on a public depth feed.
+    //
+    // An update that lost time priority (a reprice, a quantity increase, or an iceberg peak
+    // refilling from its hidden reserve - see UpdateOrderConfirmed.PreviousExchangeOrderId) is
+    // reported as Removed(old id) + Added(new id), not Modified - a real order-by-order feed
+    // shows this as the old id leaving the book and a new one arriving at the back of the queue,
+    // since a consumer reconstructing time priority needs to see that, not just a quantity/price
+    // change against an id that kept its place.
+    public class FullBookDataProducer : IDataProducer<OrderBookDeltaEvent>
     {
         public IList<OrderBookDeltaEvent> Process(IOrderBook book, IReadOnlyList<OrderBookEvent> events)
         {
@@ -53,6 +55,27 @@ namespace Circus.DataProducers
                     continue;
                 }
 
+                if (ev is UpdateOrderConfirmed {PreviousPrice: {} movedFromPrice} moved)
+                {
+                    if (moved.PreviousExchangeOrderId != moved.Order.ExchangeOrderId)
+                    {
+                        Add(ref output, new OrderBookDeltaEvent(moved.Time, moved.Order.Side,
+                            moved.PreviousExchangeOrderId, movedFromPrice, moved.PreviousQuantity,
+                            OrderBookDeltaAction.Removed));
+                        Add(ref output, new OrderBookDeltaEvent(moved.Time, moved.Order.Side,
+                            moved.Order.ExchangeOrderId, moved.Order.Price!.Value, moved.Order.DisplayedQuantity,
+                            OrderBookDeltaAction.Added));
+                    }
+                    else
+                    {
+                        Add(ref output, new OrderBookDeltaEvent(moved.Time, moved.Order.Side,
+                            moved.Order.ExchangeOrderId, moved.Order.Price!.Value, moved.Order.DisplayedQuantity,
+                            OrderBookDeltaAction.Modified));
+                    }
+
+                    continue;
+                }
+
                 OrderBookDeltaEvent? delta = ev switch
                 {
                     CreateOrderConfirmed {Order.Status: not OrderStatus.Hidden} create =>
@@ -64,10 +87,6 @@ namespace Circus.DataProducers
                     UpdateOrderConfirmed {PreviousPrice: null} update =>
                         new OrderBookDeltaEvent(update.Time, update.Order.Side, update.Order.ExchangeOrderId,
                             update.Order.Price!.Value, update.Order.DisplayedQuantity, OrderBookDeltaAction.Added),
-
-                    UpdateOrderConfirmed update =>
-                        new OrderBookDeltaEvent(update.Time, update.Order.Side, update.Order.ExchangeOrderId,
-                            update.Order.Price!.Value, update.Order.DisplayedQuantity, OrderBookDeltaAction.Modified),
 
                     CancelOrderConfirmed {PreviousPrice: {} previousPrice} cancel =>
                         new OrderBookDeltaEvent(cancel.Time, cancel.Order.Side, cancel.Order.ExchangeOrderId,
