@@ -588,20 +588,17 @@ namespace Circus.OrderBook
             _completedOrders.Add(order.InternalId, order);
         }
 
-        // Returns the order's snapshot as of the moment it was filled (before any replenish below
-        // mutates it further) - that's what FillOrderConfirmed must report, since a replenish
-        // changes ExchangeOrderId and the fill happened against the old one - plus a separate
-        // event for the replenish itself, if the fill triggered one.
-        private (Order Snapshot, OrderBookEvent? ReplenishEvent) FillOrder(InternalOrder order, DateTime time,
-            int quantity)
+        // Called immediately after order.Fill(...) - completes the order if that fill finished it
+        // off, or replenishes it if it's an iceberg whose displayed peak just hit zero with
+        // hidden reserve still remaining. Returns the replenish event, if any; the caller is
+        // responsible for snapshotting the order for FillOrderConfirmed before calling this,
+        // since a replenish changes ExchangeOrderId and the fill happened against the old one.
+        private OrderBookEvent? FinishFill(InternalOrder order, DateTime time)
         {
-            order.Fill(time, quantity);
-            var snapshot = order.ToOrder();
-
             if (order.Status == OrderStatus.Filled)
             {
                 CompleteOrder(order);
-                return (snapshot, null);
+                return null;
             }
 
             if (order.DisplayedQuantity == 0 && order.MaxVisibleQuantity.HasValue)
@@ -618,12 +615,11 @@ namespace Circus.OrderBook
                 order.Replenish(_nextSequenceNumber, time);
                 _working[order.Side].Add(priceTicks, order);
 
-                var replenishEvent = new UpdateOrderConfirmed(_security, time, order.CompanyId, order.ToOrder(),
+                return new UpdateOrderConfirmed(_security, time, order.CompanyId, order.ToOrder(),
                     order.ClientOrderId, previousExchangeOrderId, ToDecimal(priceTicks), 0);
-                return (snapshot, replenishEvent);
             }
 
-            return (snapshot, null);
+            return null;
         }
 
         private InternalOrder? BestOrder(Side side) =>
@@ -686,8 +682,13 @@ namespace Circus.OrderBook
 
                 var price = ToDecimal(priceTicks);
 
-                var (restingSnapshot, restingReplenish) = FillOrder(resting, time, quantity);
-                var (aggressorSnapshot, aggressorReplenish) = FillOrder(aggressor, time, quantity);
+                resting.Fill(time, quantity);
+                var restingSnapshot = resting.ToOrder();
+                var restingReplenish = FinishFill(resting, time);
+
+                aggressor.Fill(time, quantity);
+                var aggressorSnapshot = aggressor.ToOrder();
+                var aggressorReplenish = FinishFill(aggressor, time);
 
                 events.Add(new OrdersMatched(_security, time, price, quantity,
                     new[]
