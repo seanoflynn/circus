@@ -14,12 +14,17 @@ namespace Circus.OrderBook
         private long _nextSequenceNumber;
         private long? _lastTradedPrice;
 
-        // Anchor for price banding, kept separate from _lastTradedPrice: it's seeded from an
-        // explicit reference price (mirroring CME's settlement price pre-open) before any trade
-        // has happened, whereas _lastTradedPrice being null specifically means "no trade yet" for
-        // the stop-trigger reasonability checks elsewhere. Tracks _lastTradedPrice once trading
-        // starts, so the band dynamically slides with the market like CME's does.
-        private long? _bandReferencePriceTicks;
+        // Reference anchor for the call-auction tie-break only (IsBetterAuctionPriceTieBreak):
+        // seeded from an explicit reference price (mirroring CME's settlement price pre-open)
+        // before any trade, then tracks the trade price. Kept separate from _lastTradedPrice,
+        // which being null specifically means "no trade yet" for the stop-trigger checks. The
+        // price restrictions no longer read this - each restriction owns its own anchor (see
+        // IPriceRestriction.OnTrade / OnSessionChange), so nothing here is shared with them.
+        private long? _auctionReferencePriceTicks;
+
+        // Order-entry and trade-time price bands, each maintaining its own reference anchor.
+        // A future velocity limit or circuit breaker is a new entry here, not a redesign.
+        private readonly IReadOnlyList<IPriceRestriction> _priceRestrictions;
 
         // Array-backed, indexed by tick count (price / Security.TickSize) rather than decimal —
         // see InternalOrder and PriceLadder for why.
@@ -49,6 +54,11 @@ namespace Circus.OrderBook
         {
             _security = security;
             _timeProvider = timeProvider;
+            _priceRestrictions = new IPriceRestriction[]
+            {
+                new OrderPriceRestriction(security),
+                new DailyPriceBandLimit(security)
+            };
         }
 
         private DateTime Now() => _timeProvider.GetCurrentTime();
@@ -97,7 +107,7 @@ namespace Circus.OrderBook
         // The call-auction uncrossing price: the price that maximizes executable volume across
         // the resting book, i.e. min(cumulative bid quantity at/above p, cumulative ask quantity
         // at/below p). Ties break by (1) minimum surplus - CME's rule, (2) closest to
-        // _bandReferencePriceTicks, since neither venue's public docs cover a case this granular,
+        // _auctionReferencePriceTicks, since neither venue's public docs cover a case this granular,
         // (3) CME's final rule: highest price if the surplus is on the buy side, lowest if on the
         // sell side. Stops are deliberately not folded into this search (unlike CME's iterative
         // stop-election loop) - they're picked up afterward by the existing CheckStops() pass,
@@ -146,10 +156,10 @@ namespace Circus.OrderBook
             if (candidateAbsSurplus != currentAbsSurplus)
                 return candidateAbsSurplus < currentAbsSurplus;
 
-            if (_bandReferencePriceTicks.HasValue)
+            if (_auctionReferencePriceTicks.HasValue)
             {
-                var candidateDistance = Math.Abs(candidatePrice - _bandReferencePriceTicks.Value);
-                var currentDistance = Math.Abs(currentPrice - _bandReferencePriceTicks.Value);
+                var candidateDistance = Math.Abs(candidatePrice - _auctionReferencePriceTicks.Value);
+                var currentDistance = Math.Abs(currentPrice - _auctionReferencePriceTicks.Value);
                 if (candidateDistance != currentDistance)
                     return candidateDistance < currentDistance;
             }
@@ -220,7 +230,7 @@ namespace Circus.OrderBook
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.TriggerPriceMustBeGreaterThanLastTradedPrice);
             if (triggerTicks != null && side == Side.Sell && triggerTicks >= _lastTradedPrice)
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.TriggerPriceMustBeLessThanLastTradedPrice);
-            if (priceTicks.HasValue && !IsWithinPriceBand(priceTicks.Value))
+            if (priceTicks.HasValue && !AllowsOrderEntry(priceTicks.Value))
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.PriceOutsideBands);
             if (validity is OrderValidity.ImmediateOrCancel { MinQuantity: int minQty } && (minQty < 1 || minQty > quantity))
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.MinQuantityOutOfRange);
@@ -306,21 +316,11 @@ namespace Circus.OrderBook
         // Only client-supplied resting limit prices go through this - not trigger prices (already
         // governed by the TriggerPriceMustBe.../LastTradedPrice checks above) and not the computed
         // effective price for Market/MarketLimit orders (already governed by the separate
-        // MarketOrderProtectionTicks mechanism). Band is inactive (returns true) until both a band
-        // width is configured and a reference price has been established.
-        private bool IsWithinPriceBand(long priceTicks) =>
-            !_security.PriceBandTicks.HasValue || !_bandReferencePriceTicks.HasValue ||
-            Math.Abs(priceTicks - _bandReferencePriceTicks.Value) <= _security.PriceBandTicks.Value;
-
-        // Same shape as IsWithinPriceBand, but a separate, independently-configurable (typically
-        // narrower) band checked in Match() against the prospective trade price, not the
-        // submitted order price checked by IsWithinPriceBand above - a breach here doesn't reject
-        // the order, it pauses continuous trading into an auction instead (Eurex-style volatility
-        // interruption). PriceBandTicks still applies as the hard outer limit checked at order
-        // entry, so this only ever matters for prices that already passed that check.
-        private bool IsWithinVolatilityAuctionBand(long priceTicks) =>
-            !_security.VolatilityAuctionBandTicks.HasValue || !_bandReferencePriceTicks.HasValue ||
-            Math.Abs(priceTicks - _bandReferencePriceTicks.Value) <= _security.VolatilityAuctionBandTicks.Value;
+        // MarketOrderProtectionTicks mechanism). Passes when every order-entry restriction allows
+        // the price; each restriction is inactive (allows) until it has both a configured width
+        // and an established reference.
+        private bool AllowsOrderEntry(long priceTicks) =>
+            _priceRestrictions.Where(r => r.Scope == RestrictionScope.OrderEntry).All(r => r.Allows(priceTicks));
 
         // selfMatchPreventionId/selfMatchPreventionInstruction are the incoming order's own
         // fields. Walks resting orders in the same price/time priority order Match() would
@@ -396,7 +396,7 @@ namespace Circus.OrderBook
                 return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.InvalidPriceIncrement);
             if (!TryConvertToTicks(triggerPrice, out var triggerTicks))
                 return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.InvalidPriceIncrement);
-            if (priceTicks.HasValue && !IsWithinPriceBand(priceTicks.Value))
+            if (priceTicks.HasValue && !AllowsOrderEntry(priceTicks.Value))
                 return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.PriceOutsideBands);
             if (!_clientOrderIndex.TryGetValue((companyId, previousClientOrderId), out var order) ||
                 order.ClientOrderId != previousClientOrderId)
@@ -673,12 +673,8 @@ namespace Circus.OrderBook
                 // actual price movement, only an executed trade at an extreme price does. Doesn't
                 // apply to an auction uncrossing pass itself (auctionPriceTicks set) - the auction
                 // print is already the resolution mechanism, not something to interrupt.
-                if (auctionPriceTicks == null && !IsWithinVolatilityAuctionBand(priceTicks))
-                {
-                    _status = OrderBookStatus.PreOpen;
-                    events.Add(new StatusChanged(_security, Now(), _status));
+                if (auctionPriceTicks == null && BreachesTradeRestriction(priceTicks, events))
                     return;
-                }
 
                 var price = ToDecimal(priceTicks);
 
@@ -708,13 +704,34 @@ namespace Circus.OrderBook
                 if (_lastTradedPrice != priceTicks)
                 {
                     _lastTradedPrice = priceTicks;
-                    _bandReferencePriceTicks = priceTicks;
+                    _auctionReferencePriceTicks = priceTicks;
+                    foreach (var restriction in _priceRestrictions)
+                        restriction.OnTrade(priceTicks, time);
                     CheckStops(events);
                 }
 
                 buy = BestOrder(Side.Buy);
                 sell = BestOrder(Side.Sell);
             }
+        }
+
+        // On the first Trade-scoped restriction that disallows priceTicks, applies its OnBreach
+        // consequence (Pause -> PreOpen, Halt -> Closed) and reports it as a StatusChanged event.
+        private bool BreachesTradeRestriction(long priceTicks, List<OrderBookEvent> events)
+        {
+            foreach (var restriction in _priceRestrictions)
+            {
+                if (restriction.Scope != RestrictionScope.Trade || restriction.Allows(priceTicks))
+                    continue;
+
+                _status = restriction.OnBreach == RestrictionBreachAction.Halt
+                    ? OrderBookStatus.Closed
+                    : OrderBookStatus.PreOpen;
+                events.Add(new StatusChanged(_security, Now(), _status));
+                return true;
+            }
+
+            return false;
         }
 
         // Two orders are a prevented self-match only if both carry the same non-null
@@ -828,7 +845,11 @@ namespace Circus.OrderBook
         private List<OrderBookEvent> UpdateStatus(OrderBookStatus status, decimal? referencePrice = null)
         {
             if (referencePrice.HasValue && TryConvertToTicks(referencePrice, out var referenceTicks))
-                _bandReferencePriceTicks = referenceTicks;
+            {
+                _auctionReferencePriceTicks = referenceTicks;
+                foreach (var restriction in _priceRestrictions)
+                    restriction.OnSessionChange(referenceTicks);
+            }
 
             return status switch
             {
