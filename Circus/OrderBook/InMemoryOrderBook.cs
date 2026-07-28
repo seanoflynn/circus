@@ -508,9 +508,19 @@ namespace Circus.OrderBook
             }
 
             var time = Now();
+            var pendingImmediateOrCancelStops = new List<InternalOrder>();
 
             foreach (var outcome in _matcher.Run(auctionPriceTicks, CheckTradeRestrictionBreach))
-                Apply(outcome, events, time);
+                Apply(outcome, events, time, pendingImmediateOrCancelStops);
+
+            // Deferred until the whole sweep is done, not checked right after each stop's own
+            // conversion: since this loop only ever exits once no crosses remain anywhere in the
+            // book, "did it fill" can't be answered any earlier than right here.
+            foreach (var order in pendingImmediateOrCancelStops)
+            {
+                if (order.RemainingQuantity > 0)
+                    events.Add(CancelRemainder(order, OrderCancelledReason.ImmediateOrCancelNotFilled));
+            }
         }
 
         // On the first Trade-scoped restriction that disallows priceTicks, returns its OnBreach
@@ -527,7 +537,8 @@ namespace Circus.OrderBook
             return null;
         }
 
-        private void Apply(MatchOutcome outcome, List<OrderBookEvent> events, DateTime time)
+        private void Apply(MatchOutcome outcome, List<OrderBookEvent> events, DateTime time,
+            List<InternalOrder> pendingImmediateOrCancelStops)
         {
             switch (outcome)
             {
@@ -545,6 +556,10 @@ namespace Circus.OrderBook
                 case TradeRestrictionBreached(_, var action):
                     _status = action == RestrictionBreachAction.Halt ? OrderBookStatus.Closed : OrderBookStatus.PreOpen;
                     events.Add(new StatusChanged(_security, Now(), _status));
+                    break;
+
+                case StopsTriggered(var orders):
+                    TriggerStops(orders, time, events, pendingImmediateOrCancelStops);
                     break;
             }
         }
@@ -583,47 +598,21 @@ namespace Circus.OrderBook
                 _auctionReferencePriceTicks = priceTicks;
                 foreach (var restriction in _priceRestrictions)
                     restriction.OnTrade(priceTicks, time);
-                CheckStops(events);
             }
         }
 
-        private void CheckStops(List<OrderBookEvent> events)
+        private void TriggerStops(IReadOnlyList<InternalOrder> orders, DateTime time, List<OrderBookEvent> events,
+            List<InternalOrder> pendingImmediateOrCancelStops)
         {
-            var time = Now();
-            var triggered = new SortedDictionary<long, InternalOrder>();
-
-            while (_matcher.Stops[Side.Buy].TryGetBest(out var buyTick, out var buyFirst) && buyTick <= _lastTradedPrice)
+            foreach (var order in orders)
             {
-                for (var order = buyFirst; order != null; order = order.LevelNext)
-                    triggered.Add(order.SequenceNumber, order);
-                _matcher.Stops[Side.Buy].RemoveLevel(buyTick);
-            }
+                var triggerPriceTicks = order.TriggerPrice ??
+                    throw new InvalidOperationException("stop order missing stop price");
+                _matcher.Stops[order.Side].Remove(triggerPriceTicks, order);
 
-            while (_matcher.Stops[Side.Sell].TryGetBest(out var sellTick, out var sellFirst) && sellTick >= _lastTradedPrice)
-            {
-                for (var order = sellFirst; order != null; order = order.LevelNext)
-                    triggered.Add(order.SequenceNumber, order);
-                _matcher.Stops[Side.Sell].RemoveLevel(sellTick);
-            }
+                if (order.Validity is OrderValidity.ImmediateOrCancel)
+                    pendingImmediateOrCancelStops.Add(order);
 
-            if (triggered.Any())
-            {
-                TriggerStops(triggered, time, events);
-                Match(events);
-
-                foreach (var order in triggered.Values)
-                {
-                    if (order.Validity is OrderValidity.ImmediateOrCancel && order.RemainingQuantity > 0)
-                        events.Add(CancelRemainder(order, OrderCancelledReason.ImmediateOrCancelNotFilled));
-                }
-            }
-        }
-
-        private void TriggerStops(SortedDictionary<long, InternalOrder> orders, DateTime time,
-            List<OrderBookEvent> events)
-        {
-            foreach (var (_, order) in orders)
-            {
                 // calculate price for stop market orders
                 long? newPriceTicks = order.Price;
                 if (order.Type == OrderType.StopMarket &&
