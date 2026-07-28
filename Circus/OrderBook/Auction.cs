@@ -4,44 +4,29 @@ using System.Linq;
 
 namespace Circus.OrderBook
 {
-    // A call-auction print. Every trade clears at one price - the price maximizing executable
-    // volume across the resting book, computed here - and is sized off each side's full remaining
-    // quantity rather than its displayed peak: the print is a single atomic allocation, not a
-    // sequence of continuous touches an iceberg would need to ration its displayed size across.
+    // A call-auction print: every trade clears at one price, sized off each side's full remaining
+    // quantity. The print is a single atomic allocation, not a sequence of continuous touches an
+    // iceberg would have to ration its displayed size across.
     internal sealed class Auction : IMatchingAlgorithm
     {
-        // Reference anchor for the tie-break below, and nothing else: seeded from an explicit
-        // reference price (mirroring CME's settlement price pre-open) before any trade, then
-        // tracking the trade price. Owned here rather than by the book for the same reason each
-        // IPriceRestriction owns its own anchor - no other concern reads it. Deliberately distinct
-        // from the book's _lastTradedPrice, which being null specifically means "no trade yet" for
-        // the stop-trigger checks.
+        // Feeds the tie-break below and nothing else. Seeded from an explicit reference price
+        // (CME's settlement price, pre-open) and thereafter tracks the last trade.
         private long? _referencePriceTicks;
 
-        // Fixed by TryBegin for the duration of one print, so the trades that print are allocated
-        // against the book as it stood when the price was struck - not re-derived per trade from a
-        // book those very trades are consuming.
+        // Held for the duration of one print, so trades are allocated against the book as it stood
+        // when the price was struck rather than one they are themselves consuming.
         private long _clearingPriceTicks;
 
-        // Lifecycle hooks mirroring IPriceRestriction.OnTrade / OnSessionChange, called by the
-        // book to keep the anchor above current.
         public void OnTrade(long priceTicks) => _referencePriceTicks = priceTicks;
 
         public void OnSessionChange(long? referencePriceTicks) => _referencePriceTicks = referencePriceTicks;
 
-        // Strikes the price this print will clear at and holds it for the run. False when the book
-        // isn't crossed, which is what makes an uncrossing pass over an uncrossed book a no-op
-        // rather than something the caller has to check for first.
-        //
-        // The price committed to here is exactly the one TryQuoteIndicative was publishing a
-        // moment earlier - quoting and printing are the same computation, differing only in
-        // whether the caller then runs the algorithm or merely asked it a question.
+        // Commits to the price already being quoted, so an uncrossing pass over an uncrossed book
+        // declines here rather than needing the caller to check first.
         public bool TryBegin(IReadOnlyDictionary<Side, IReadOnlyPriceLadder> working) =>
             TryQuoteIndicative(working, out _clearingPriceTicks, out _);
 
-        // Time priority at the clearing price: the FIFO-earliest order at the level fills first,
-        // same order the continuous algorithm would take them in - what differs is the price they
-        // all print at and the full-size allocation below.
+        // Time priority, at the clearing price rather than each order's own.
         public Allocation? SelectNext(InternalOrder restingHead, InternalOrder aggressor) =>
             new Allocation(restingHead,
                 Math.Min(restingHead.RemainingQuantity, aggressor.RemainingQuantity),
@@ -49,21 +34,16 @@ namespace Circus.OrderBook
 
         public bool UsesFullRemainingQuantity => true;
 
-        // The print is itself the resolution mechanism for a crossed book - not something a
-        // volatility pause should interrupt partway through.
+        // The print resolves a crossed book; a volatility pause must not interrupt it partway.
         public bool ChecksTradeRestrictions => false;
 
-        // The uncrossing price: the price that maximizes executable volume across the resting
-        // book, i.e. min(cumulative bid quantity at/above p, cumulative ask quantity at/below p).
-        // Ties break by (1) minimum surplus - CME's rule, (2) closest to _referencePriceTicks,
-        // since neither venue's public docs cover a case this granular, (3) CME's final rule:
-        // highest price if the surplus is on the buy side, lowest if on the sell side. Stops are
-        // deliberately not folded into this search (unlike CME's iterative stop-election loop) -
-        // they're picked up afterward by Matcher.Run's own stop-triggering check, same as any
-        // other trade.
+        // The price maximizing executable volume: min(cumulative bids at/above p, cumulative asks
+        // at/below p). Ties break by minimum surplus (CME's rule), then proximity to the reference
+        // price (no venue documents a case this granular), then CME's final rule - highest price
+        // if the surplus is on the buy side, lowest if on the sell side.
         //
-        // Side-effect-free, which is what lets pre-open publish it as a live indicative quote
-        // without committing to a print.
+        // Stops are deliberately excluded, unlike CME's iterative stop-election loop; Matcher.Run
+        // picks them up afterwards like any other trade.
         public bool TryQuoteIndicative(IReadOnlyDictionary<Side, IReadOnlyPriceLadder> working,
             out long priceTicks, out int quantity)
         {
@@ -121,8 +101,8 @@ namespace Circus.OrderBook
             return candidateSurplus > 0 ? candidatePrice > currentPrice : candidatePrice < currentPrice;
         }
 
-        // Counts an iceberg's hidden reserve in full - price discovery is on true size, unlike the
-        // displayed-only aggregates the book publishes as market data.
+        // Counts an iceberg's hidden reserve: price discovery is on true size, unlike the
+        // displayed-only aggregates published as market data.
         private static int SumRemaining(InternalOrder? first)
         {
             var total = 0;

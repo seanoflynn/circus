@@ -3,10 +3,8 @@ using System.Collections.Generic;
 
 namespace Circus.OrderBook
 {
-    // The reading half of PriceLadder, which is all anything outside Matcher is ever handed: market
-    // data, the market-order protection price, and an auction's clearing-price search all only look.
-    // Resting, removing and repricing go through Matcher's own verbs, so the ladders it owns cannot
-    // be written from outside it.
+    // All anything outside Matcher is handed. Writes go through Matcher's own Rest/Unrest/Reprice,
+    // so the ladders it owns cannot be mutated from outside.
     internal interface IReadOnlyPriceLadder
     {
         bool TryGetBest(out long tick, out InternalOrder? firstOrder);
@@ -19,22 +17,17 @@ namespace Circus.OrderBook
     // level access instead of an O(log n) tree lookup, with a cached best-price index so callers
     // don't need to scan the array to find the touch.
     //
-    // Each price level is an intrusive doubly-linked list threaded through InternalOrder.LevelNext/
-    // LevelPrev rather than a System.Collections.Generic.LinkedList<T> — that would still allocate a
-    // separate LinkedListNode<InternalOrder> wrapper per order, which is exactly the kind of
-    // per-order allocation this replaces the SortedDictionary to avoid. With the pointers embedded
-    // directly on InternalOrder (and per-level state as three more parallel arrays alongside
-    // _minTick), a newly-touched price level costs nothing beyond flipping array slots — no node
-    // object, no level container object, at all.
+    // Each level is an intrusive doubly-linked list threaded through InternalOrder.LevelNext/Prev
+    // rather than a LinkedList<T>, which would allocate a node wrapper per order - the very cost
+    // this exists to avoid. A newly-touched level costs nothing but flipping array slots.
     //
-    // It grows on demand (like List<T>'s doubling) if an order arrives outside the currently
-    // allocated range, so it stays correct with no pre-sizing at all.
+    // Grows on demand if an order arrives outside the allocated range, so it needs no pre-sizing.
+    //
+    // descending is true for sides whose priority runs from high tick to low - Side.Buy in the
+    // working book, Side.Sell in the stops book.
     internal sealed class PriceLadder(bool descending) : IReadOnlyPriceLadder
     {
         private const int InitialRadius = 64;
-
-        // true for sides whose priority order runs from high tick to low tick (Side.Buy in the
-        // working book, Side.Sell in the stops book) — mirrors what DescendingComparer did.
 
         private InternalOrder?[] _heads = [];
         private InternalOrder?[] _tails = [];

@@ -2,27 +2,22 @@ using System;
 
 namespace Circus.OrderBook
 {
-    // Price/TriggerPrice are stored as tick counts (price / Security.TickSize), not decimal.
-    // decimal division/comparison has no hardware path, so keeping the hot comparison and
-    // dictionary-key paths on long avoids that cost; conversion back to decimal only happens
-    // at the public-API boundary (ToOrder/ToString).
+    // Price/TriggerPrice are tick counts (price / Security.TickSize), not decimal: decimal
+    // comparison has no hardware path, so the hot paths stay on long and convert back only at the
+    // public-API boundary.
     internal class InternalOrder
     {
         public long SequenceNumber { get; private set; }
 
-        // Stable for the order's whole life - purely an internal bookkeeping key (InMemoryOrderBook's
-        // _orders/_completedOrders dictionaries), never exposed on Order or any event. ExchangeOrderId
-        // is the public identity, and unlike this one it deliberately does change.
+        // Stable for the order's whole life and never exposed. ExchangeOrderId is the public
+        // identity, and unlike this one it deliberately does change.
         public long InternalId { get; }
 
         public string CompanyId { get; }
 
-        // Derived from SequenceNumber rather than stored separately, so it can never drift out of
-        // sync with it: every priority-losing mutation (reprice, quantity increase, an iceberg's
-        // displayed peak refilling from its hidden reserve) bumps SequenceNumber, and this changes
-        // right along with it - matching real exchanges, where the client's own drop-copy and the
-        // public depth feed both see a new exchange-assigned order id after such an amend, since the
-        // order is functionally a new entry at the back of the queue.
+        // Derived from SequenceNumber so it cannot drift: every priority-losing mutation bumps
+        // that and so changes this. Real exchanges do the same, since an order sent to the back of
+        // the queue is functionally a new entry.
         public string ExchangeOrderId => SequenceNumber.ToString();
 
         public string ClientOrderId { get; private set; }
@@ -43,15 +38,12 @@ namespace Circus.OrderBook
         public SelfMatchPreventionInstruction? SelfMatchPreventionInstruction { get; }
         public int? MaxVisibleQuantity { get; }
 
-        // The currently-shown portion of an iceberg order, distinct from RemainingQuantity (the
-        // true total including hidden reserve) - equal to RemainingQuantity for a non-iceberg
-        // order (MaxVisibleQuantity null), so nothing elsewhere needs to special-case that. Shrinks
-        // with each fill against it and is replenished (see Fill) once it hits zero.
+        // The shown portion of an iceberg, against RemainingQuantity's true total. Equal to it for
+        // a non-iceberg order, so nothing elsewhere special-cases that.
         public int DisplayedQuantity { get; private set; }
 
-        // intrusive doubly-linked-list pointers used by PriceLadder for the price level currently
-        // holding this order (an order only ever rests in one level at a time, so a single pair of
-        // pointers is unambiguous). Avoids allocating a separate node object per order.
+        // Intrusive list pointers for the level currently holding this order - an order rests in
+        // only one at a time. Avoids a node object per order.
         internal InternalOrder? LevelNext { get; set; }
         internal InternalOrder? LevelPrev { get; set; }
 
@@ -158,14 +150,10 @@ namespace Circus.OrderBook
             }
         }
 
-        // Used only by an auction print, which allocates against an order's full remaining size in
-        // one shot rather than peeling from its displayed peak the way a continuous touch does -
-        // the print is a single atomic event, not a sequence of touches an iceberg needs to ration
-        // its displayed size across. Re-derives DisplayedQuantity from whatever's left afterward
-        // instead of subtracting from it directly (which could take it negative, since quantity
-        // here isn't capped to the current peak), and - unlike Replenish - bumps neither
-        // SequenceNumber nor ModifiedTime: this order isn't losing its place in a queue, only being
-        // sized differently for once.
+        // An auction print allocates full remaining size in one shot rather than peeling from the
+        // displayed peak. DisplayedQuantity is re-derived from what's left rather than subtracted
+        // from, since quantity here isn't capped to the peak and could take it negative. Bumps
+        // neither SequenceNumber nor ModifiedTime: the order keeps its place in the queue.
         public void FillFullSize(DateTime time, int quantity)
         {
             FilledQuantity += quantity;
@@ -179,10 +167,8 @@ namespace Circus.OrderBook
             }
         }
 
-        // Called when an iceberg's displayed peak hits zero with hidden reserve still remaining -
-        // refreshes the display and bumps SequenceNumber/ModifiedTime, since the caller re-queues
-        // this order to the back of its price level immediately afterward (losing time priority,
-        // matching both CME and Eurex) and it gets a fresh ExchangeOrderId along with it.
+        // Peak exhausted with reserve remaining. Bumps SequenceNumber/ModifiedTime because the
+        // caller requeues to the back of the level straight after, as CME and Eurex both do.
         public void Replenish(long sequenceNumber, DateTime time)
         {
             DisplayedQuantity = Math.Min(MaxVisibleQuantity!.Value, RemainingQuantity);

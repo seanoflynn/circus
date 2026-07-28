@@ -22,15 +22,9 @@ namespace Circus.OrderBook
         // self-match verdicts) that read them.
         private readonly Matcher _matcher = new();
 
-        // What each phase permits and which algorithm governs it - see TradingPhase. Nothing
-        // outside this table names a status: the rest of the book reads the current phase and acts
-        // on what it says, so adding a phase is adding a row here, and a security could eventually
-        // be handed a table of its own without anything else moving.
-        //
-        // PreOpen accumulates orders and quotes what they would clear at without trading any of
-        // them; leaving it commits that same auction instance as the opening print, so what opens
-        // is what was being quoted a moment earlier, on one reference anchor with nothing to keep
-        // in sync.
+        // Nothing outside this table names a status - the rest of the book reads the current phase
+        // and acts on what it says. Pre-open's auction instance is also what prints on the way out
+        // of it, so the opening print is the quote it had been publishing.
         private readonly IReadOnlyDictionary<OrderBookStatus, TradingPhase> _phases =
             new Dictionary<OrderBookStatus, TradingPhase>
             {
@@ -86,10 +80,8 @@ namespace Circus.OrderBook
                 .ToList();
         }
 
-        // Market data reports what's publicly visible - an iceberg's hidden reserve is
-        // deliberately excluded here even though Matcher.HasSufficientLiquidity and
-        // Auction.TryQuoteIndicative still count it in full for liquidity/price-discovery
-        // purposes.
+        // Market data shows only what is publicly visible, so an iceberg's hidden reserve is
+        // excluded - unlike liquidity checks and auction pricing, which count it in full.
         private static int SumDisplayed(InternalOrder? first)
         {
             var total = 0;
@@ -98,10 +90,8 @@ namespace Circus.OrderBook
             return total;
         }
 
-        // Answered by whichever algorithm governs the current phase, so this reports a price
-        // exactly when there is an auction to report one for: during PreOpen, whether that is the
-        // start-of-day session or a mid-session volatility pause. Continuous trading declines,
-        // which is what the interface has always documented this to mean.
+        // Answered by the current phase's algorithm, so a price comes back exactly when there is
+        // an auction to report one for - the start-of-day session or a volatility pause.
         public bool TryGetIndicativeAuctionPrice(out decimal price, out int quantity)
         {
             price = 0;
@@ -258,12 +248,9 @@ namespace Circus.OrderBook
             return true;
         }
 
-        // Only client-supplied resting limit prices go through this - not trigger prices (already
-        // governed by the TriggerPriceMustBe.../LastTradedPrice checks above) and not the computed
-        // effective price for Market/MarketLimit orders (already governed by the separate
-        // MarketOrderProtectionTicks mechanism). Passes when every order-entry restriction allows
-        // the price; each restriction is inactive (allows) until it has both a configured width
-        // and an established reference.
+        // Client-supplied resting limit prices only. Trigger prices are governed by the
+        // TriggerPriceMustBe... checks above, and Market/MarketLimit prices by
+        // MarketOrderProtectionTicks.
         private bool AllowsOrderEntry(long priceTicks) =>
             _priceRestrictions.Where(r => r.Scope == RestrictionScope.OrderEntry).All(r => r.Allows(priceTicks));
 
@@ -481,11 +468,8 @@ namespace Circus.OrderBook
             _completedOrders.Add(order.InternalId, order);
         }
 
-        // Called immediately after order.Fill(...) - completes the order if that fill finished it
-        // off, or replenishes it if it's an iceberg whose displayed peak just hit zero with
-        // hidden reserve still remaining. Returns the replenish event, if any; the caller is
-        // responsible for snapshotting the order for FillOrderConfirmed before calling this,
-        // since a replenish changes ExchangeOrderId and the fill happened against the old one.
+        // Called immediately after order.Fill(...). Snapshot the order for FillOrderConfirmed
+        // before calling: a replenish changes ExchangeOrderId, and the fill was against the old one.
         private OrderBookEvent? FinishFill(InternalOrder order, DateTime time)
         {
             if (order.Status == OrderStatus.Filled)
@@ -496,11 +480,9 @@ namespace Circus.OrderBook
 
             if (order.DisplayedQuantity == 0 && order.MaxVisibleQuantity.HasValue)
             {
-                // iceberg peak exhausted with hidden reserve remaining - replenish and requeue to
-                // the back of this price level (resting always appends to the tail of it),
-                // losing time priority and getting a fresh ExchangeOrderId - matches both CME and
-                // Eurex, and lets a full-order-book feed show the old id leaving the book and a
-                // new one arriving, rather than an in-place modify.
+                // Peak exhausted with reserve remaining. Requeues to the back of the level with a
+                // fresh ExchangeOrderId, as CME and Eurex both do - so a full-book feed sees the
+                // old id leave and a new one arrive rather than an in-place modify.
                 var previousExchangeOrderId = order.ExchangeOrderId;
                 var priceTicks = order.Price ?? throw new InvalidOperationException("limit order missing price");
                 _matcher.Unrest(order);
@@ -515,11 +497,9 @@ namespace Circus.OrderBook
             return null;
         }
 
-        // Matching under the current phase's algorithm, or under one supplied by the caller - a
-        // departing phase's auction, committed as it leaves. Either way this is the single gate on
-        // whether trading can happen at all right now, which is why the print of an exiting
-        // auction goes through it too: a phase that accumulated orders but is being left for one
-        // that does not trade abandons them rather than crossing them.
+        // The single gate on whether trading may happen right now, which is why an exiting
+        // auction's print goes through it too: a phase left for one that does not trade abandons
+        // the orders it accumulated rather than crossing them.
         private void Match(List<OrderBookEvent> events, IMatchingAlgorithm? algorithm = null)
         {
             var phase = CurrentPhase;
@@ -536,9 +516,8 @@ namespace Circus.OrderBook
             foreach (var outcome in _matcher.Run(algorithm ?? continuous, continuous, CheckTradeRestrictionBreach))
                 Apply(outcome, events, time, pendingImmediateOrCancelStops);
 
-            // Deferred until the whole sweep is done, not checked right after each stop's own
-            // conversion: since this loop only ever exits once no crosses remain anywhere in the
-            // book, "did it fill" can't be answered any earlier than right here.
+            // Deferred until the sweep is done: the loop only exits once nothing crosses anywhere,
+            // so "did it fill" cannot be answered any earlier.
             foreach (var order in pendingImmediateOrCancelStops)
             {
                 if (order.RemainingQuantity > 0)
@@ -638,8 +617,7 @@ namespace Circus.OrderBook
         {
             foreach (var order in orders)
             {
-                // Lifted out of the stops ladder while it is still typed as a stop; whether it
-                // then converts into the working book or is cancelled outright is decided below.
+                // Lifted out while still typed as a stop; converted or cancelled below.
                 _matcher.Unrest(order);
 
                 if (order.Validity is OrderValidity.ImmediateOrCancel)
@@ -655,9 +633,8 @@ namespace Circus.OrderBook
                     order.Cancel(Now());
                     FinishOrder(order);
 
-                    // FinishOrder, not CompleteOrder: it left the stops ladder above and never
-                    // reached the working book, so there is nothing left to unrest it from.
-                    // previousPrice null for the same reason - it was never at a working level.
+                    // FinishOrder, not CompleteOrder: already unrested above and never reached the
+                    // working book, which is also why previousPrice is null.
                     events.Add(new CancelOrderConfirmed(_security, Now(), order.CompanyId, order.ToOrder(),
                         previousClientOrderId, OrderCancelledReason.NoOrdersToMatchMarketOrder, null,
                         previousQuantity));
@@ -683,11 +660,10 @@ namespace Circus.OrderBook
                 _nextSequenceNumber++;
                 order.ConvertToLimit(time, _nextSequenceNumber, newPriceTicks);
 
-                // Now typed as a limit order, so this rests it in the working book.
+                // Retyped as a limit order, so this rests it in the working book.
                 _matcher.Rest(order);
 
-                // previousPrice null - the order was resting in the stops ladder, not the
-                // working book, so this is an arrival, not a move between working-book levels.
+                // previousPrice null - an arrival, not a move between working-book levels.
                 events.Add(new UpdateOrderConfirmed(_security, time, order.CompanyId, order.ToOrder(),
                     order.ClientOrderId, previousExchangeOrderId, null, order.DisplayedQuantity));
             }
@@ -719,12 +695,9 @@ namespace Circus.OrderBook
 
             var events = new List<OrderBookEvent> {new StatusChanged(_security, Now(), _status)};
 
-            // A phase that was quoting rather than trading has been accumulating orders for a
-            // print, and this is where that print happens - so the opening print is pre-open's own
-            // auction rather than anything the open phase owns, and a second auction phase would
-            // print on the way out of itself with nothing here to change. Match declines it
-            // outright if the phase just entered does not trade, which is what makes leaving
-            // pre-open for a close abandon the auction instead of crossing it.
+            // A quoting phase has been accumulating orders for a print, and leaving it is where
+            // that print happens - so a second auction phase would need nothing changed here.
+            // Match declines it if the phase just entered does not trade.
             if (departing.PrintsOnExit)
                 Match(events, departing.Algorithm);
 
