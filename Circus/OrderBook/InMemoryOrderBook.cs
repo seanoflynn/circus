@@ -509,8 +509,11 @@ namespace Circus.OrderBook
 
             var time = Now();
             var pendingImmediateOrCancelStops = new List<InternalOrder>();
+            IMatchingAlgorithm algorithm = auctionPriceTicks.HasValue
+                ? new Uncross(auctionPriceTicks.Value)
+                : ContinuousMatch.Instance;
 
-            foreach (var outcome in _matcher.Run(auctionPriceTicks, CheckTradeRestrictionBreach))
+            foreach (var outcome in _matcher.Run(algorithm, CheckTradeRestrictionBreach))
                 Apply(outcome, events, time, pendingImmediateOrCancelStops);
 
             // Deferred until the whole sweep is done, not checked right after each stop's own
@@ -549,8 +552,8 @@ namespace Circus.OrderBook
                         events.Add(CancelRemainder(aggressor, OrderCancelledReason.SelfMatchPrevention));
                     break;
 
-                case TradeExecuted(var resting, var aggressor, var priceTicks, var quantity, var isAuctionAllocation):
-                    ApplyTrade(resting, aggressor, priceTicks, quantity, isAuctionAllocation, events, time);
+                case TradeExecuted(var resting, var aggressor, var priceTicks, var quantity, var usesFullRemainingQuantity):
+                    ApplyTrade(resting, aggressor, priceTicks, quantity, usesFullRemainingQuantity, events, time);
                     break;
 
                 case TradeRestrictionBreached(_, var action):
@@ -565,13 +568,13 @@ namespace Circus.OrderBook
         }
 
         private void ApplyTrade(InternalOrder resting, InternalOrder aggressor, long priceTicks, int quantity,
-            bool isAuctionAllocation, List<OrderBookEvent> events, DateTime time)
+            bool usesFullRemainingQuantity, List<OrderBookEvent> events, DateTime time)
         {
             var price = ToDecimal(priceTicks);
 
             void FillOrder(InternalOrder order)
             {
-                if (isAuctionAllocation)
+                if (usesFullRemainingQuantity)
                     order.FillFullSize(time, quantity);
                 else
                     order.Fill(time, quantity);

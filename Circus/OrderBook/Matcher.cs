@@ -33,21 +33,19 @@ namespace Circus.OrderBook
 
         // Decides, one step at a time, what Match should do next against the current book state -
         // self-match cancellations, trades, trade-restriction breaches, and stop triggers -
-        // without mutating anything or emitting events. checkTradeRestrictionBreach is a pure
-        // query (not consulted during an auction uncrossing pass, same as before) returning the
-        // breach action of the first Trade-scoped restriction that disallows the prospective trade
-        // price, if any. Re-reads the book fresh on every iteration, so the caller must fully
-        // apply each yielded outcome - including any ladder mutation - before asking for the next
-        // one; a converted stop landing in Working is exactly what lets this same loop pick it up
-        // and keep matching, with no separate recursive pass needed.
-        public IEnumerable<MatchOutcome> Run(long? auctionPriceTicks,
+        // without mutating anything or emitting events. algorithm supplies the pricing/sizing
+        // policy (see IMatchingAlgorithm.cs); everything else here - the crossing condition,
+        // self-match detection, stop-triggering - is identical regardless of which algorithm is
+        // active. checkTradeRestrictionBreach is a pure query (consulted only when
+        // algorithm.ChecksTradeRestrictions) returning the breach action of the first Trade-scoped
+        // restriction that disallows the prospective trade price, if any. Re-reads the book fresh
+        // on every iteration, so the caller must fully apply each yielded outcome - including any
+        // ladder mutation - before asking for the next one; a converted stop landing in Working is
+        // exactly what lets this same loop pick it up and keep matching, with no separate
+        // recursive pass needed.
+        public IEnumerable<MatchOutcome> Run(IMatchingAlgorithm algorithm,
             Func<long, RestrictionBreachAction?> checkTradeRestrictionBreach)
         {
-            // Once a stop fires mid-sweep, everything after it prices continuously - an auction
-            // print is the resolution mechanism for the book as it stood at open, not for orders
-            // that have just newly arrived because of it.
-            var effectiveAuctionPriceTicks = auctionPriceTicks;
-
             var buy = BestOrder(Side.Buy);
             var sell = BestOrder(Side.Sell);
 
@@ -69,25 +67,10 @@ namespace Circus.OrderBook
                     continue;
                 }
 
-                // An auction print allocates against each side's full remaining size, not its
-                // displayed peak - it's one atomic clearing event, not a sequence of continuous
-                // touches an iceberg needs to ration its displayed size across. Sizing off the
-                // displayed peak here (as continuous matching correctly does) is what let a
-                // later-arriving order leapfrog an iceberg mid-print, every time the iceberg's
-                // peak needed replenishing.
-                var isAuctionAllocation = effectiveAuctionPriceTicks.HasValue;
-                var quantity = isAuctionAllocation
-                    ? Math.Min(resting.RemainingQuantity, aggressor.RemainingQuantity)
-                    : Math.Min(resting.DisplayedQuantity, aggressor.DisplayedQuantity);
-                var priceTicks = effectiveAuctionPriceTicks ?? resting.Price ??
-                    throw new InvalidOperationException("limit order requires price");
+                var priceTicks = algorithm.PriceTicks(resting);
+                var quantity = algorithm.Quantity(resting, aggressor);
 
-                // Checked against the prospective trade price, not either order's own submitted
-                // limit price - a resting order sitting far from the market doesn't represent any
-                // actual price movement, only an executed trade at an extreme price does. Doesn't
-                // apply to an auction uncrossing pass itself (auctionPriceTicks set) - the auction
-                // print is already the resolution mechanism, not something to interrupt.
-                if (!isAuctionAllocation)
+                if (algorithm.ChecksTradeRestrictions)
                 {
                     var breachAction = checkTradeRestrictionBreach(priceTicks);
                     if (breachAction.HasValue)
@@ -97,13 +80,18 @@ namespace Circus.OrderBook
                     }
                 }
 
-                yield return new TradeExecuted(resting, aggressor, priceTicks, quantity, isAuctionAllocation);
+                yield return new TradeExecuted(resting, aggressor, priceTicks, quantity,
+                    algorithm.UsesFullRemainingQuantity);
 
                 var triggeredStops = GatherTriggeredStops(priceTicks);
                 if (triggeredStops != null)
                 {
                     yield return new StopsTriggered(triggeredStops);
-                    effectiveAuctionPriceTicks = null;
+
+                    // Once a stop fires mid-sweep, everything after it prices continuously - an
+                    // auction print is the resolution mechanism for the book as it stood at open,
+                    // not for orders that have just newly arrived because of it.
+                    algorithm = ContinuousMatch.Instance;
                 }
 
                 buy = BestOrder(Side.Buy);
