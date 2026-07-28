@@ -33,10 +33,12 @@ namespace Circus.OrderBook
 
         // Decides, one step at a time, what Match should do next against the current book state -
         // self-match cancellations, trades, trade-restriction breaches, and stop triggers -
-        // without mutating anything or emitting events. algorithm supplies the pricing/sizing
-        // policy (see IMatchingAlgorithm.cs); everything else here - the crossing condition,
-        // self-match detection, stop-triggering - is identical regardless of which algorithm is
-        // active. afterStopTrigger is the algorithm the remainder of this run switches to once a
+        // without mutating anything or emitting events. algorithm picks the counterparty for each
+        // trade and prices it (see IMatchingAlgorithm.cs); everything else here - the crossing
+        // condition, which side is the aggressor, self-match detection, stop-triggering - is
+        // identical regardless of which algorithm is active and stays here rather than being
+        // reimplemented per algorithm.
+        // afterStopTrigger is the algorithm the remainder of this run switches to once a
         // stop fires (see below) - the security's continuous algorithm, which for a run that was
         // already continuous is simply the same instance again; it is taken as already prepared,
         // never TryBegin'd mid-run.
@@ -63,9 +65,20 @@ namespace Circus.OrderBook
 
             while (buy != null && sell != null && buy.Price >= sell.Price)
             {
-                var resting = buy.ModifiedTime < sell.ModifiedTime ? buy : sell;
-                var aggressor = buy == resting ? sell : buy;
+                // Which side is passive is the loop's call, not the algorithm's - the older of the
+                // two orders at the touch is resting by definition, whatever the algorithm then
+                // does with its level.
+                var restingHead = buy.ModifiedTime < sell.ModifiedTime ? buy : sell;
+                var aggressor = buy == restingHead ? sell : buy;
 
+                var selection = algorithm.SelectNext(restingHead, aggressor);
+                if (selection == null)
+                    yield break;
+
+                var (resting, quantity, priceTicks) = selection.Value;
+
+                // Checked against the order the algorithm actually picked, which for anything
+                // other than price-time need not be the head it was offered.
                 if (IsSelfMatch(resting, aggressor, out var instruction))
                 {
                     yield return new SelfMatchDetected(resting, aggressor, instruction);
@@ -73,9 +86,6 @@ namespace Circus.OrderBook
                     sell = BestOrder(Side.Sell);
                     continue;
                 }
-
-                var priceTicks = algorithm.PriceTicks(resting);
-                var quantity = algorithm.Quantity(resting, aggressor);
 
                 if (algorithm.ChecksTradeRestrictions)
                 {

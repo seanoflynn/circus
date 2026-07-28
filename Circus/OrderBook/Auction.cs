@@ -34,10 +34,13 @@ namespace Circus.OrderBook
         public bool TryBegin(IReadOnlyDictionary<Side, PriceLadder> working) =>
             TryComputeClearingPrice(working, out _clearingPriceTicks, out _);
 
-        public long PriceTicks(InternalOrder resting) => _clearingPriceTicks;
-
-        public int Quantity(InternalOrder resting, InternalOrder aggressor) =>
-            Math.Min(resting.RemainingQuantity, aggressor.RemainingQuantity);
+        // Time priority at the clearing price: the FIFO-earliest order at the level fills first,
+        // same order the continuous algorithm would take them in - what differs is the price they
+        // all print at and the full-size allocation below.
+        public Allocation? SelectNext(InternalOrder restingHead, InternalOrder aggressor) =>
+            new Allocation(restingHead,
+                Math.Min(restingHead.RemainingQuantity, aggressor.RemainingQuantity),
+                _clearingPriceTicks);
 
         public bool UsesFullRemainingQuantity => true;
 
