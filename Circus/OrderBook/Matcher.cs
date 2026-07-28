@@ -4,11 +4,17 @@ using System.Linq;
 
 namespace Circus.OrderBook
 {
-    // Owns the resting-order state (working + stop ladders), decides what should happen against
-    // that state via Run, and hosts the pure, state-reading decision helpers Run and
-    // InMemoryOrderBook both need. Run only ever decides - it never mutates state or emits
-    // events; InMemoryOrderBook.Apply does that, order by order, between calls into Run's
-    // enumerator, so Run always resumes against state Apply has already caught up to.
+    // Owns the resting-order state - the working and stop ladders - outright: Rest, Unrest and
+    // Reprice are the only ways an order enters, leaves or moves within them, and the ladders
+    // themselves never leave this class in a form anything else could write to. Callers name the
+    // order they want moved and this works out which ladder holds it and at what price, so the
+    // rule that an untriggered stop rests at its trigger price lives in one place.
+    //
+    // Also decides what should happen against that state via Run, and hosts the pure,
+    // state-reading decision helpers Run and InMemoryOrderBook both need. Run only ever decides -
+    // it never mutates state or emits events; InMemoryOrderBook.Apply does that, order by order,
+    // between calls into Run's enumerator, so Run always resumes against state Apply has already
+    // caught up to.
     internal sealed class Matcher
     {
         // Array-backed, indexed by tick count (price / Security.TickSize) rather than decimal —
@@ -25,8 +31,46 @@ namespace Circus.OrderBook
             {Side.Sell, new PriceLadder(descending: true)}
         };
 
-        public IReadOnlyDictionary<Side, PriceLadder> Working => _working;
-        public IReadOnlyDictionary<Side, PriceLadder> Stops => _stops;
+        // Projected once, so what leaves this class can be read but not written. The stop ladders
+        // are not projected at all - nothing outside has any business reading them, and everything
+        // that used to reach in to move a stop now goes through Rest/Unrest below.
+        private readonly IReadOnlyDictionary<Side, IReadOnlyPriceLadder> _workingView;
+
+        public Matcher()
+        {
+            _workingView = _working.ToDictionary(x => x.Key, x => (IReadOnlyPriceLadder) x.Value);
+        }
+
+        public IReadOnlyDictionary<Side, IReadOnlyPriceLadder> Working => _workingView;
+
+        // Which ladder an order rests in, and the price that ladder keys it by, both follow from
+        // its type: an untriggered stop sits in the stops ladder at its trigger price, everything
+        // else in the working book at its limit price. Type rather than Status is the discriminator
+        // because these are routinely called after Cancel/Expire/Fill has already overwritten
+        // Status - and ConvertToLimit moves an elected stop to Limit, so the two never disagree.
+        private static bool RestsInStops(InternalOrder order) =>
+            order.Type is OrderType.StopLimit or OrderType.StopMarket;
+
+        private PriceLadder LadderFor(InternalOrder order) =>
+            RestsInStops(order) ? _stops[order.Side] : _working[order.Side];
+
+        private static long RestingPriceOf(InternalOrder order) =>
+            (RestsInStops(order) ? order.TriggerPrice : order.Price) ??
+            throw new InvalidOperationException($"{order.Type} order missing the price it rests at");
+
+        public void Rest(InternalOrder order) => LadderFor(order).Add(RestingPriceOf(order), order);
+
+        public void Unrest(InternalOrder order) => LadderFor(order).Remove(RestingPriceOf(order), order);
+
+        // Moves an order to a new price within whichever ladder holds it, landing at the back of
+        // the new level. Passing the price it already rests at requeues it in place, which is what
+        // a quantity increase needs - losing time priority is the point, not a side effect.
+        public void Reprice(InternalOrder order, long newPriceTicks)
+        {
+            var ladder = LadderFor(order);
+            ladder.Remove(RestingPriceOf(order), order);
+            ladder.Add(newPriceTicks, order);
+        }
 
         private InternalOrder? BestOrder(Side side) =>
             _working[side].TryGetBest(out _, out var order) ? order : null;
@@ -52,7 +96,7 @@ namespace Circus.OrderBook
         public IEnumerable<MatchOutcome> Run(IMatchingAlgorithm algorithm, IMatchingAlgorithm afterStopTrigger,
             Func<long, RestrictionBreachAction?> checkTradeRestrictionBreach)
         {
-            if (!algorithm.TryBegin(_working))
+            if (!algorithm.TryBegin(_workingView))
                 yield break;
 
             var buy = BestOrder(Side.Buy);
