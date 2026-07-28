@@ -10,20 +10,23 @@ namespace Circus.OrderBook
     // seeded from an explicit reference price pre-open.
     internal sealed class OrderPriceRestriction : IPriceRestriction
     {
-        private readonly Security _security;
+        private readonly int? _bandTicks;
         private long? _referencePriceTicks;
 
-        internal OrderPriceRestriction(Security security)
+        // Takes the band width rather than the Security it came from: nothing else about the
+        // instrument is any of this restriction's business, and a test shouldn't have to invent
+        // an instrument to configure one number.
+        internal OrderPriceRestriction(int? bandTicks)
         {
-            _security = security;
+            _bandTicks = bandTicks;
         }
 
         public RestrictionScope Scope => RestrictionScope.OrderEntry;
         public RestrictionBreachAction OnBreach => RestrictionBreachAction.Reject;
 
         public bool Allows(long priceTicks) =>
-            !_security.PriceBandTicks.HasValue || !_referencePriceTicks.HasValue ||
-            Math.Abs(priceTicks - _referencePriceTicks.Value) <= _security.PriceBandTicks.Value;
+            !_bandTicks.HasValue || !_referencePriceTicks.HasValue ||
+            Math.Abs(priceTicks - _referencePriceTicks.Value) <= _bandTicks.Value;
 
         public void OnTrade(long priceTicks, DateTime time) => _referencePriceTicks = priceTicks;
 

@@ -194,13 +194,27 @@ namespace Circus.OrderBook
             return triggered?.Values.ToList();
         }
 
-        // selfMatchPreventionId/selfMatchPreventionInstruction are the incoming order's own
-        // fields. Walks resting orders in the same price/time priority order Match() would
-        // actually consume them in: a self-matched order with CancelResting is simply skipped
-        // (the incoming order keeps going, only the resting order would die), but with
-        // CancelAggressor/CancelBoth the incoming order itself would be cancelled right there,
-        // so nothing beyond that point can ever count - liquidity checking must stop dead,
-        // not just exclude that one order's quantity and keep summing past it.
+        // Answers whether an incoming order would find at least `quantity` immediately fillable,
+        // for the IOC minimum-quantity gate. selfMatchPreventionId/selfMatchPreventionInstruction
+        // are the incoming order's own fields: a self-matched resting order with CancelResting is
+        // simply skipped (the incoming order keeps going, only the resting order would die), but
+        // with CancelAggressor/CancelBoth the incoming order itself would be cancelled right
+        // there, so nothing beyond that point can ever count - the walk must stop dead, not just
+        // exclude that one order's quantity and keep summing past it.
+        //
+        // Walks head-first within each level, which is how both algorithms shipped today allocate.
+        // That is not a free assumption now that IMatchingAlgorithm.SelectNext owns allocation
+        // order, but it is a narrow one: the *total* reachable quantity does not depend on the
+        // order orders are visited in, only the point at which the self-match stop above
+        // truncates the walk does. So this stays exact for any algorithm whose allocation reaches
+        // a prevented self-match at the same point - which includes every algorithm with no
+        // self-match interaction at all - and needs revisiting alongside one where it does not,
+        // pro-rata being the obvious candidate.
+        //
+        // Deliberately not delegated to SelectNext: the gate runs in CreateOrder before the
+        // incoming order is constructed, so there is no aggressor to offer an algorithm, and a
+        // stateful algorithm would in any case have its per-level bookkeeping polluted by a walk
+        // that never trades.
         public bool HasSufficientLiquidity(Side side, long priceTicks, int quantity, string? selfMatchPreventionId,
             SelfMatchPreventionInstruction? selfMatchPreventionInstruction)
         {
