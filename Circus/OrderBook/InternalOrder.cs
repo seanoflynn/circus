@@ -158,6 +158,27 @@ namespace Circus.OrderBook
             }
         }
 
+        // Used only by an auction print, which allocates against an order's full remaining size in
+        // one shot rather than peeling from its displayed peak the way a continuous touch does -
+        // the print is a single atomic event, not a sequence of touches an iceberg needs to ration
+        // its displayed size across. Re-derives DisplayedQuantity from whatever's left afterward
+        // instead of subtracting from it directly (which could take it negative, since quantity
+        // here isn't capped to the current peak), and - unlike Replenish - bumps neither
+        // SequenceNumber nor ModifiedTime: this order isn't losing its place in a queue, only being
+        // sized differently for once.
+        public void FillFullSize(DateTime time, int quantity)
+        {
+            FilledQuantity += quantity;
+            RemainingQuantity -= quantity;
+            DisplayedQuantity = Math.Min(MaxVisibleQuantity ?? RemainingQuantity, RemainingQuantity);
+
+            if (RemainingQuantity == 0)
+            {
+                Status = OrderStatus.Filled;
+                CompletedTime = time;
+            }
+        }
+
         // Called when an iceberg's displayed peak hits zero with hidden reserve still remaining -
         // refreshes the display and bumps SequenceNumber/ModifiedTime, since the caller re-queues
         // this order to the back of its price level immediately afterward (losing time priority,

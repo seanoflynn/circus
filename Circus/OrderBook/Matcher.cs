@@ -69,7 +69,16 @@ namespace Circus.OrderBook
                     continue;
                 }
 
-                var quantity = Math.Min(resting.DisplayedQuantity, aggressor.DisplayedQuantity);
+                // An auction print allocates against each side's full remaining size, not its
+                // displayed peak - it's one atomic clearing event, not a sequence of continuous
+                // touches an iceberg needs to ration its displayed size across. Sizing off the
+                // displayed peak here (as continuous matching correctly does) is what let a
+                // later-arriving order leapfrog an iceberg mid-print, every time the iceberg's
+                // peak needed replenishing.
+                var isAuctionAllocation = effectiveAuctionPriceTicks.HasValue;
+                var quantity = isAuctionAllocation
+                    ? Math.Min(resting.RemainingQuantity, aggressor.RemainingQuantity)
+                    : Math.Min(resting.DisplayedQuantity, aggressor.DisplayedQuantity);
                 var priceTicks = effectiveAuctionPriceTicks ?? resting.Price ??
                     throw new InvalidOperationException("limit order requires price");
 
@@ -78,7 +87,7 @@ namespace Circus.OrderBook
                 // actual price movement, only an executed trade at an extreme price does. Doesn't
                 // apply to an auction uncrossing pass itself (auctionPriceTicks set) - the auction
                 // print is already the resolution mechanism, not something to interrupt.
-                if (effectiveAuctionPriceTicks == null)
+                if (!isAuctionAllocation)
                 {
                     var breachAction = checkTradeRestrictionBreach(priceTicks);
                     if (breachAction.HasValue)
@@ -88,7 +97,7 @@ namespace Circus.OrderBook
                     }
                 }
 
-                yield return new TradeExecuted(resting, aggressor, priceTicks, quantity);
+                yield return new TradeExecuted(resting, aggressor, priceTicks, quantity, isAuctionAllocation);
 
                 var triggeredStops = GatherTriggeredStops(priceTicks);
                 if (triggeredStops != null)
