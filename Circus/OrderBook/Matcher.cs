@@ -33,20 +33,27 @@ namespace Circus.OrderBook
 
         // Decides, one step at a time, what Match should do next against the current book state -
         // self-match cancellations, trades, trade-restriction breaches, and stop triggers -
-        // without mutating anything or emitting events. checkTradeRestrictionBreach is a pure
-        // query (not consulted during an auction uncrossing pass, same as before) returning the
-        // breach action of the first Trade-scoped restriction that disallows the prospective trade
-        // price, if any. Re-reads the book fresh on every iteration, so the caller must fully
-        // apply each yielded outcome - including any ladder mutation - before asking for the next
-        // one; a converted stop landing in Working is exactly what lets this same loop pick it up
-        // and keep matching, with no separate recursive pass needed.
-        public IEnumerable<MatchOutcome> Run(long? auctionPriceTicks,
+        // without mutating anything or emitting events. algorithm picks the counterparty for each
+        // trade and prices it (see IMatchingAlgorithm.cs); everything else here - the crossing
+        // condition, which side is the aggressor, self-match detection, stop-triggering - is
+        // identical regardless of which algorithm is active and stays here rather than being
+        // reimplemented per algorithm.
+        // afterStopTrigger is the algorithm the remainder of this run switches to once a
+        // stop fires (see below) - the security's continuous algorithm, which for a run that was
+        // already continuous is simply the same instance again; it is taken as already prepared,
+        // never TryBegin'd mid-run.
+        // checkTradeRestrictionBreach is a pure query (consulted only when
+        // algorithm.ChecksTradeRestrictions) returning the breach action of the first Trade-scoped
+        // restriction that disallows the prospective trade price, if any. Re-reads the book fresh
+        // on every iteration, so the caller must fully apply each yielded outcome - including any
+        // ladder mutation - before asking for the next one; a converted stop landing in Working is
+        // exactly what lets this same loop pick it up and keep matching, with no separate
+        // recursive pass needed.
+        public IEnumerable<MatchOutcome> Run(IMatchingAlgorithm algorithm, IMatchingAlgorithm afterStopTrigger,
             Func<long, RestrictionBreachAction?> checkTradeRestrictionBreach)
         {
-            // Once a stop fires mid-sweep, everything after it prices continuously - an auction
-            // print is the resolution mechanism for the book as it stood at open, not for orders
-            // that have just newly arrived because of it.
-            var effectiveAuctionPriceTicks = auctionPriceTicks;
+            if (!algorithm.TryBegin(_working))
+                yield break;
 
             var buy = BestOrder(Side.Buy);
             var sell = BestOrder(Side.Sell);
@@ -58,9 +65,20 @@ namespace Circus.OrderBook
 
             while (buy != null && sell != null && buy.Price >= sell.Price)
             {
-                var resting = buy.ModifiedTime < sell.ModifiedTime ? buy : sell;
-                var aggressor = buy == resting ? sell : buy;
+                // Which side is passive is the loop's call, not the algorithm's - the older of the
+                // two orders at the touch is resting by definition, whatever the algorithm then
+                // does with its level.
+                var restingHead = buy.ModifiedTime < sell.ModifiedTime ? buy : sell;
+                var aggressor = buy == restingHead ? sell : buy;
 
+                var selection = algorithm.SelectNext(restingHead, aggressor);
+                if (selection == null)
+                    yield break;
+
+                var (resting, quantity, priceTicks) = selection.Value;
+
+                // Checked against the order the algorithm actually picked, which for anything
+                // other than price-time need not be the head it was offered.
                 if (IsSelfMatch(resting, aggressor, out var instruction))
                 {
                     yield return new SelfMatchDetected(resting, aggressor, instruction);
@@ -69,25 +87,7 @@ namespace Circus.OrderBook
                     continue;
                 }
 
-                // An auction print allocates against each side's full remaining size, not its
-                // displayed peak - it's one atomic clearing event, not a sequence of continuous
-                // touches an iceberg needs to ration its displayed size across. Sizing off the
-                // displayed peak here (as continuous matching correctly does) is what let a
-                // later-arriving order leapfrog an iceberg mid-print, every time the iceberg's
-                // peak needed replenishing.
-                var isAuctionAllocation = effectiveAuctionPriceTicks.HasValue;
-                var quantity = isAuctionAllocation
-                    ? Math.Min(resting.RemainingQuantity, aggressor.RemainingQuantity)
-                    : Math.Min(resting.DisplayedQuantity, aggressor.DisplayedQuantity);
-                var priceTicks = effectiveAuctionPriceTicks ?? resting.Price ??
-                    throw new InvalidOperationException("limit order requires price");
-
-                // Checked against the prospective trade price, not either order's own submitted
-                // limit price - a resting order sitting far from the market doesn't represent any
-                // actual price movement, only an executed trade at an extreme price does. Doesn't
-                // apply to an auction uncrossing pass itself (auctionPriceTicks set) - the auction
-                // print is already the resolution mechanism, not something to interrupt.
-                if (!isAuctionAllocation)
+                if (algorithm.ChecksTradeRestrictions)
                 {
                     var breachAction = checkTradeRestrictionBreach(priceTicks);
                     if (breachAction.HasValue)
@@ -97,13 +97,18 @@ namespace Circus.OrderBook
                     }
                 }
 
-                yield return new TradeExecuted(resting, aggressor, priceTicks, quantity, isAuctionAllocation);
+                yield return new TradeExecuted(resting, aggressor, priceTicks, quantity,
+                    algorithm.UsesFullRemainingQuantity);
 
                 var triggeredStops = GatherTriggeredStops(priceTicks);
                 if (triggeredStops != null)
                 {
                     yield return new StopsTriggered(triggeredStops);
-                    effectiveAuctionPriceTicks = null;
+
+                    // Once a stop fires mid-sweep, everything after it prices continuously - an
+                    // auction print is the resolution mechanism for the book as it stood at open,
+                    // not for orders that have just newly arrived because of it.
+                    algorithm = afterStopTrigger;
                 }
 
                 buy = BestOrder(Side.Buy);
@@ -143,79 +148,6 @@ namespace Circus.OrderBook
             }
 
             return triggered?.Values.ToList();
-        }
-
-        private static int SumRemaining(InternalOrder? first)
-        {
-            var total = 0;
-            for (var order = first; order != null; order = order.LevelNext)
-                total += order.RemainingQuantity;
-            return total;
-        }
-
-        // The call-auction uncrossing price: the price that maximizes executable volume across
-        // the resting book, i.e. min(cumulative bid quantity at/above p, cumulative ask quantity
-        // at/below p). Ties break by (1) minimum surplus - CME's rule, (2) closest to
-        // auctionReferencePriceTicks, since neither venue's public docs cover a case this granular,
-        // (3) CME's final rule: highest price if the surplus is on the buy side, lowest if on the
-        // sell side. Stops are deliberately not folded into this search (unlike CME's iterative
-        // stop-election loop) - they're picked up afterward by Run's own stop-triggering check,
-        // same as any other trade.
-        public bool TryComputeAuctionPrice(long? auctionReferencePriceTicks, out long priceTicks, out int quantity)
-        {
-            priceTicks = 0;
-            quantity = 0;
-
-            var buyLevels = _working[Side.Buy].EnumerateFromBest()
-                .Select(x => (Tick: x.Tick, Qty: SumRemaining(x.First))).ToList();
-            var sellLevels = _working[Side.Sell].EnumerateFromBest()
-                .Select(x => (Tick: x.Tick, Qty: SumRemaining(x.First))).ToList();
-
-            if (buyLevels.Count == 0 || sellLevels.Count == 0 || buyLevels[0].Tick < sellLevels[0].Tick)
-                return false;
-
-            var candidates = buyLevels.Select(l => l.Tick).Concat(sellLevels.Select(l => l.Tick)).Distinct();
-
-            (long Price, int Executable, long Surplus)? best = null;
-            foreach (var p in candidates)
-            {
-                var cumBid = buyLevels.Where(l => l.Tick >= p).Sum(l => l.Qty);
-                var cumAsk = sellLevels.Where(l => l.Tick <= p).Sum(l => l.Qty);
-                var executable = Math.Min(cumBid, cumAsk);
-                var surplus = cumBid - cumAsk;
-
-                if (best == null || executable > best.Value.Executable ||
-                    (executable == best.Value.Executable &&
-                     IsBetterAuctionPriceTieBreak(p, surplus, best.Value.Price, best.Value.Surplus,
-                         auctionReferencePriceTicks)))
-                {
-                    best = (p, executable, surplus);
-                }
-            }
-
-            priceTicks = best!.Value.Price;
-            quantity = best.Value.Executable;
-            return quantity > 0;
-        }
-
-        private static bool IsBetterAuctionPriceTieBreak(long candidatePrice, long candidateSurplus,
-            long currentPrice, long currentSurplus, long? auctionReferencePriceTicks)
-        {
-            var candidateAbsSurplus = Math.Abs(candidateSurplus);
-            var currentAbsSurplus = Math.Abs(currentSurplus);
-            if (candidateAbsSurplus != currentAbsSurplus)
-                return candidateAbsSurplus < currentAbsSurplus;
-
-            if (auctionReferencePriceTicks.HasValue)
-            {
-                var candidateDistance = Math.Abs(candidatePrice - auctionReferencePriceTicks.Value);
-                var currentDistance = Math.Abs(currentPrice - auctionReferencePriceTicks.Value);
-                if (candidateDistance != currentDistance)
-                    return candidateDistance < currentDistance;
-            }
-
-            // surplus on the buy side (positive) -> prefer the higher price; sell side -> lower
-            return candidateSurplus > 0 ? candidatePrice > currentPrice : candidatePrice < currentPrice;
         }
 
         // selfMatchPreventionId/selfMatchPreventionInstruction are the incoming order's own
