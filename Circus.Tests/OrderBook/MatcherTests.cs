@@ -128,6 +128,22 @@ namespace Circus.Tests.OrderBook
 
             public bool UsesFullRemainingQuantity => true;
             public bool ChecksTradeRestrictions => false;
+
+            public bool TryQuoteIndicative(IReadOnlyDictionary<Side, IReadOnlyPriceLadder> working,
+                out long priceTicks, out int quantity)
+            {
+                priceTicks = 0;
+                quantity = 0;
+                return false;
+            }
+
+            public void OnTrade(long priceTicks)
+            {
+            }
+
+            public void OnSessionChange(long? referencePriceTicks)
+            {
+            }
         }
 
         private sealed class DeclinesToMatch : IMatchingAlgorithm
@@ -136,6 +152,22 @@ namespace Circus.Tests.OrderBook
             public Allocation? SelectNext(InternalOrder restingHead, InternalOrder aggressor) => null;
             public bool UsesFullRemainingQuantity => false;
             public bool ChecksTradeRestrictions => false;
+
+            public bool TryQuoteIndicative(IReadOnlyDictionary<Side, IReadOnlyPriceLadder> working,
+                out long priceTicks, out int quantity)
+            {
+                priceTicks = 0;
+                quantity = 0;
+                return false;
+            }
+
+            public void OnTrade(long priceTicks)
+            {
+            }
+
+            public void OnSessionChange(long? referencePriceTicks)
+            {
+            }
         }
 
         private sealed class DeclinesToBegin : IMatchingAlgorithm
@@ -145,6 +177,22 @@ namespace Circus.Tests.OrderBook
                 throw new InvalidOperationException("must not be consulted once TryBegin declines");
             public bool UsesFullRemainingQuantity => false;
             public bool ChecksTradeRestrictions => false;
+
+            public bool TryQuoteIndicative(IReadOnlyDictionary<Side, IReadOnlyPriceLadder> working,
+                out long priceTicks, out int quantity)
+            {
+                priceTicks = 0;
+                quantity = 0;
+                return false;
+            }
+
+            public void OnTrade(long priceTicks)
+            {
+            }
+
+            public void OnSessionChange(long? referencePriceTicks)
+            {
+            }
         }
     }
 }

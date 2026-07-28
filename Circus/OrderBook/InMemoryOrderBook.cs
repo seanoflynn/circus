@@ -28,7 +28,7 @@ namespace Circus.OrderBook
         // Held as instances rather than reached for statically so a security can eventually
         // supply its own set, differing by phase.
         private readonly IMatchingAlgorithm _continuous = new PriceTime();
-        private readonly Auction _auction = new();
+        private readonly IMatchingAlgorithm _auction = new Auction();
 
         // Keyed by InternalId, not ExchangeOrderId - the latter changes across an order's life.
         private readonly Dictionary<long, InternalOrder> _orders = new();
@@ -65,7 +65,7 @@ namespace Circus.OrderBook
 
         // Market data reports what's publicly visible - an iceberg's hidden reserve is
         // deliberately excluded here even though Matcher.HasSufficientLiquidity and
-        // Auction.TryComputeClearingPrice still count it in full for liquidity/price-discovery
+        // Auction.TryQuoteIndicative still count it in full for liquidity/price-discovery
         // purposes.
         private static int SumDisplayed(InternalOrder? first)
         {
@@ -77,7 +77,7 @@ namespace Circus.OrderBook
 
         public bool TryGetIndicativeAuctionPrice(out decimal price, out int quantity)
         {
-            if (!_auction.TryComputeClearingPrice(_matcher.Working, out var priceTicks, out quantity))
+            if (!_auction.TryQuoteIndicative(_matcher.Working, out var priceTicks, out quantity))
             {
                 price = 0;
                 return false;

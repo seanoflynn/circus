@@ -16,6 +16,17 @@ namespace Circus.OrderBook
         // touch - and whether anything crosses is the matching loop's own question to answer.
         public bool TryBegin(IReadOnlyDictionary<Side, IReadOnlyPriceLadder> working) => true;
 
+        // Continuous trading has no single price it would print at: it prints at as many prices as
+        // the sweep touches, and the best of them is already visible as the touch. Nothing to
+        // quote that the book isn't publishing anyway.
+        public bool TryQuoteIndicative(IReadOnlyDictionary<Side, IReadOnlyPriceLadder> working,
+            out long priceTicks, out int quantity)
+        {
+            priceTicks = 0;
+            quantity = 0;
+            return false;
+        }
+
         public Allocation? SelectNext(InternalOrder restingHead, InternalOrder aggressor) =>
             new Allocation(restingHead,
                 Math.Min(restingHead.DisplayedQuantity, aggressor.DisplayedQuantity),
@@ -24,5 +35,15 @@ namespace Circus.OrderBook
         public bool UsesFullRemainingQuantity => false;
 
         public bool ChecksTradeRestrictions => true;
+
+        // No anchor to maintain - every price this algorithm uses comes from the two orders at the
+        // touch, so there is nothing a reference price would tell it.
+        public void OnTrade(long priceTicks)
+        {
+        }
+
+        public void OnSessionChange(long? referencePriceTicks)
+        {
+        }
     }
 }
