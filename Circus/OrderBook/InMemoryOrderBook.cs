@@ -14,27 +14,21 @@ namespace Circus.OrderBook
         private long _nextSequenceNumber;
         private long? _lastTradedPrice;
 
-        // Reference anchor for the call-auction tie-break only (IsBetterAuctionPriceTieBreak):
-        // seeded from an explicit reference price (mirroring CME's settlement price pre-open)
-        // before any trade, then tracks the trade price. Kept separate from _lastTradedPrice,
-        // which being null specifically means "no trade yet" for the stop-trigger checks. The
-        // price restrictions no longer read this - each restriction owns its own anchor (see
-        // IPriceRestriction.OnTrade / OnSessionChange), so nothing here is shared with them.
-        private long? _auctionReferencePriceTicks;
-
         // Order-entry and trade-time price bands, each maintaining its own reference anchor.
         // A future velocity limit or circuit breaker is a new entry here, not a redesign.
         private readonly IReadOnlyList<IPriceRestriction> _priceRestrictions;
 
-        // Owns the working/stop ladders and the pure decision helpers (auction pricing,
-        // liquidity checks, self-match verdicts) that read them.
+        // Owns the working/stop ladders and the pure decision helpers (liquidity checks,
+        // self-match verdicts) that read them.
         private readonly Matcher _matcher = new();
 
-        // The algorithm continuous trading runs under, and the one an interrupted auction print
-        // hands the rest of its sweep to. Held as an instance rather than reached for statically
-        // so a security can eventually supply its own (a pro-rata variant, say) alongside the
-        // auction algorithms its pre-open and opening phases use.
+        // The algorithms this book matches under: one for continuous trading - also what an
+        // interrupted auction print hands the rest of its sweep to - and one for the auction
+        // print itself, which owns its own clearing-price computation and reference anchor.
+        // Held as instances rather than reached for statically so a security can eventually
+        // supply its own set, differing by phase.
         private readonly IMatchingAlgorithm _continuous = new PriceTime();
+        private readonly Auction _auction = new();
 
         // Keyed by InternalId, not ExchangeOrderId - the latter changes across an order's life.
         private readonly Dictionary<long, InternalOrder> _orders = new();
@@ -70,8 +64,9 @@ namespace Circus.OrderBook
         }
 
         // Market data reports what's publicly visible - an iceberg's hidden reserve is
-        // deliberately excluded here even though HasSufficientLiquidity/TryComputeAuctionPrice
-        // (via SumRemaining) still count it in full for liquidity/price-discovery purposes.
+        // deliberately excluded here even though Matcher.HasSufficientLiquidity and
+        // Auction.TryComputeClearingPrice still count it in full for liquidity/price-discovery
+        // purposes.
         private static int SumDisplayed(InternalOrder? first)
         {
             var total = 0;
@@ -82,7 +77,7 @@ namespace Circus.OrderBook
 
         public bool TryGetIndicativeAuctionPrice(out decimal price, out int quantity)
         {
-            if (!_matcher.TryComputeAuctionPrice(_auctionReferencePriceTicks, out var priceTicks, out quantity))
+            if (!_auction.TryComputeClearingPrice(_matcher.Working, out var priceTicks, out quantity))
             {
                 price = 0;
                 return false;
@@ -610,7 +605,7 @@ namespace Circus.OrderBook
             if (_lastTradedPrice != priceTicks)
             {
                 _lastTradedPrice = priceTicks;
-                _auctionReferencePriceTicks = priceTicks;
+                _auction.OnTrade(priceTicks);
                 foreach (var restriction in _priceRestrictions)
                     restriction.OnTrade(priceTicks, time);
             }
@@ -679,7 +674,7 @@ namespace Circus.OrderBook
         {
             if (referencePrice.HasValue && TryConvertToTicks(referencePrice, out var referenceTicks))
             {
-                _auctionReferencePriceTicks = referenceTicks;
+                _auction.OnSessionChange(referenceTicks);
                 foreach (var restriction in _priceRestrictions)
                     restriction.OnSessionChange(referenceTicks);
             }
@@ -708,9 +703,9 @@ namespace Circus.OrderBook
             var events = new List<OrderBookEvent> {new StatusChanged(_security, Now(), _status)};
 
             // Runs whether the prior status was the real start-of-day PreOpen or PreOpen
-            // re-entered mid-session for a volatility pause - same uncrossing either way.
-            if (_matcher.TryComputeAuctionPrice(_auctionReferencePriceTicks, out var auctionPriceTicks, out _))
-                Match(events, new Auction(auctionPriceTicks));
+            // re-entered mid-session for a volatility pause - same uncrossing either way, and a
+            // no-op when the book isn't crossed, since the auction declines to begin.
+            Match(events, _auction);
 
             Match(events);
             return events;

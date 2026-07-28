@@ -38,7 +38,8 @@ namespace Circus.OrderBook
         // self-match detection, stop-triggering - is identical regardless of which algorithm is
         // active. afterStopTrigger is the algorithm the remainder of this run switches to once a
         // stop fires (see below) - the security's continuous algorithm, which for a run that was
-        // already continuous is simply the same instance again.
+        // already continuous is simply the same instance again; it is taken as already prepared,
+        // never TryBegin'd mid-run.
         // checkTradeRestrictionBreach is a pure query (consulted only when
         // algorithm.ChecksTradeRestrictions) returning the breach action of the first Trade-scoped
         // restriction that disallows the prospective trade price, if any. Re-reads the book fresh
@@ -49,6 +50,9 @@ namespace Circus.OrderBook
         public IEnumerable<MatchOutcome> Run(IMatchingAlgorithm algorithm, IMatchingAlgorithm afterStopTrigger,
             Func<long, RestrictionBreachAction?> checkTradeRestrictionBreach)
         {
+            if (!algorithm.TryBegin(_working))
+                yield break;
+
             var buy = BestOrder(Side.Buy);
             var sell = BestOrder(Side.Sell);
 
@@ -134,79 +138,6 @@ namespace Circus.OrderBook
             }
 
             return triggered?.Values.ToList();
-        }
-
-        private static int SumRemaining(InternalOrder? first)
-        {
-            var total = 0;
-            for (var order = first; order != null; order = order.LevelNext)
-                total += order.RemainingQuantity;
-            return total;
-        }
-
-        // The call-auction uncrossing price: the price that maximizes executable volume across
-        // the resting book, i.e. min(cumulative bid quantity at/above p, cumulative ask quantity
-        // at/below p). Ties break by (1) minimum surplus - CME's rule, (2) closest to
-        // auctionReferencePriceTicks, since neither venue's public docs cover a case this granular,
-        // (3) CME's final rule: highest price if the surplus is on the buy side, lowest if on the
-        // sell side. Stops are deliberately not folded into this search (unlike CME's iterative
-        // stop-election loop) - they're picked up afterward by Run's own stop-triggering check,
-        // same as any other trade.
-        public bool TryComputeAuctionPrice(long? auctionReferencePriceTicks, out long priceTicks, out int quantity)
-        {
-            priceTicks = 0;
-            quantity = 0;
-
-            var buyLevels = _working[Side.Buy].EnumerateFromBest()
-                .Select(x => (Tick: x.Tick, Qty: SumRemaining(x.First))).ToList();
-            var sellLevels = _working[Side.Sell].EnumerateFromBest()
-                .Select(x => (Tick: x.Tick, Qty: SumRemaining(x.First))).ToList();
-
-            if (buyLevels.Count == 0 || sellLevels.Count == 0 || buyLevels[0].Tick < sellLevels[0].Tick)
-                return false;
-
-            var candidates = buyLevels.Select(l => l.Tick).Concat(sellLevels.Select(l => l.Tick)).Distinct();
-
-            (long Price, int Executable, long Surplus)? best = null;
-            foreach (var p in candidates)
-            {
-                var cumBid = buyLevels.Where(l => l.Tick >= p).Sum(l => l.Qty);
-                var cumAsk = sellLevels.Where(l => l.Tick <= p).Sum(l => l.Qty);
-                var executable = Math.Min(cumBid, cumAsk);
-                var surplus = cumBid - cumAsk;
-
-                if (best == null || executable > best.Value.Executable ||
-                    (executable == best.Value.Executable &&
-                     IsBetterAuctionPriceTieBreak(p, surplus, best.Value.Price, best.Value.Surplus,
-                         auctionReferencePriceTicks)))
-                {
-                    best = (p, executable, surplus);
-                }
-            }
-
-            priceTicks = best!.Value.Price;
-            quantity = best.Value.Executable;
-            return quantity > 0;
-        }
-
-        private static bool IsBetterAuctionPriceTieBreak(long candidatePrice, long candidateSurplus,
-            long currentPrice, long currentSurplus, long? auctionReferencePriceTicks)
-        {
-            var candidateAbsSurplus = Math.Abs(candidateSurplus);
-            var currentAbsSurplus = Math.Abs(currentSurplus);
-            if (candidateAbsSurplus != currentAbsSurplus)
-                return candidateAbsSurplus < currentAbsSurplus;
-
-            if (auctionReferencePriceTicks.HasValue)
-            {
-                var candidateDistance = Math.Abs(candidatePrice - auctionReferencePriceTicks.Value);
-                var currentDistance = Math.Abs(currentPrice - auctionReferencePriceTicks.Value);
-                if (candidateDistance != currentDistance)
-                    return candidateDistance < currentDistance;
-            }
-
-            // surplus on the buy side (positive) -> prefer the higher price; sell side -> lower
-            return candidateSurplus > 0 ? candidatePrice > currentPrice : candidatePrice < currentPrice;
         }
 
         // selfMatchPreventionId/selfMatchPreventionInstruction are the incoming order's own

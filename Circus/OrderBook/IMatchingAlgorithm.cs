@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace Circus.OrderBook
 {
     // How to price and size the next trade. Selected per phase by InMemoryOrderBook and consulted
@@ -11,6 +13,11 @@ namespace Circus.OrderBook
     // it) once continuous trading starts.
     internal interface IMatchingAlgorithm
     {
+        // Prepare for a run against the current working book, deriving whatever run-scoped state
+        // this algorithm needs from it - an auction strikes its clearing price here. False means
+        // there is nothing for this algorithm to match, so the run yields no outcomes at all.
+        bool TryBegin(IReadOnlyDictionary<Side, PriceLadder> working);
+
         // The price a trade against this resting order should print at.
         long PriceTicks(InternalOrder resting);
 

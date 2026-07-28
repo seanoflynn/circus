@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Circus.OrderBook
 {
@@ -9,6 +10,10 @@ namespace Circus.OrderBook
     // priority) once that peak is exhausted.
     internal sealed class PriceTime : IMatchingAlgorithm
     {
+        // Nothing to derive up front - each trade is priced and sized from the two orders at the
+        // touch - and whether anything crosses is the matching loop's own question to answer.
+        public bool TryBegin(IReadOnlyDictionary<Side, PriceLadder> working) => true;
+
         public long PriceTicks(InternalOrder resting) =>
             resting.Price ?? throw new InvalidOperationException("limit order requires price");
 
