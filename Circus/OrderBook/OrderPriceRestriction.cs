@@ -2,20 +2,15 @@ using System;
 
 namespace Circus.OrderBook
 {
-    // Only client-supplied resting limit prices go through this - not trigger prices (already
-    // governed by the TriggerPriceMustBe.../LastTradedPrice checks in InMemoryOrderBook) and not
-    // the computed effective price for Market/MarketLimit orders (already governed by the
-    // separate MarketOrderProtectionTicks mechanism). Inactive (always allows) until both a band
-    // width is configured and a reference price has been established. Anchored on the last trade,
-    // seeded from an explicit reference price pre-open.
+    // The hard band checked at order entry, anchored on the last trade and seeded from an explicit
+    // reference price pre-open. Inactive until it has both a width and a reference. Sees only
+    // client-supplied resting limit prices - trigger and Market/MarketLimit prices are governed
+    // elsewhere in InMemoryOrderBook.
     internal sealed class OrderPriceRestriction : IPriceRestriction
     {
         private readonly int? _bandTicks;
         private long? _referencePriceTicks;
 
-        // Takes the band width rather than the Security it came from: nothing else about the
-        // instrument is any of this restriction's business, and a test shouldn't have to invent
-        // an instrument to configure one number.
         internal OrderPriceRestriction(int? bandTicks)
         {
             _bandTicks = bandTicks;

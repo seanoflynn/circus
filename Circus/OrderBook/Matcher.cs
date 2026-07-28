@@ -4,17 +4,12 @@ using System.Linq;
 
 namespace Circus.OrderBook
 {
-    // Owns the resting-order state - the working and stop ladders - outright: Rest, Unrest and
-    // Reprice are the only ways an order enters, leaves or moves within them, and the ladders
-    // themselves never leave this class in a form anything else could write to. Callers name the
-    // order they want moved and this works out which ladder holds it and at what price, so the
-    // rule that an untriggered stop rests at its trigger price lives in one place.
+    // Owns the working and stop ladders outright: Rest, Unrest and Reprice are the only ways an
+    // order enters, leaves or moves within them, and the ladders never leave this class in a form
+    // anything else could write to.
     //
-    // Also decides what should happen against that state via Run, and hosts the pure,
-    // state-reading decision helpers Run and InMemoryOrderBook both need. Run only ever decides -
-    // it never mutates state or emits events; InMemoryOrderBook.Apply does that, order by order,
-    // between calls into Run's enumerator, so Run always resumes against state Apply has already
-    // caught up to.
+    // Run decides what should happen against that state but never mutates it or emits events;
+    // InMemoryOrderBook.Apply does both, between calls into Run's enumerator.
     internal sealed class Matcher
     {
         // Array-backed, indexed by tick count (price / Security.TickSize) rather than decimal —
@@ -31,9 +26,8 @@ namespace Circus.OrderBook
             {Side.Sell, new PriceLadder(descending: true)}
         };
 
-        // Projected once, so what leaves this class can be read but not written. The stop ladders
-        // are not projected at all - nothing outside has any business reading them, and everything
-        // that used to reach in to move a stop now goes through Rest/Unrest below.
+        // Projected once so what leaves this class can be read but not written. The stop ladders
+        // are not projected at all - nothing outside needs to read them.
         private readonly IReadOnlyDictionary<Side, IReadOnlyPriceLadder> _workingView;
 
         public Matcher()
@@ -43,11 +37,10 @@ namespace Circus.OrderBook
 
         public IReadOnlyDictionary<Side, IReadOnlyPriceLadder> Working => _workingView;
 
-        // Which ladder an order rests in, and the price that ladder keys it by, both follow from
-        // its type: an untriggered stop sits in the stops ladder at its trigger price, everything
-        // else in the working book at its limit price. Type rather than Status is the discriminator
-        // because these are routinely called after Cancel/Expire/Fill has already overwritten
-        // Status - and ConvertToLimit moves an elected stop to Limit, so the two never disagree.
+        // An untriggered stop rests in the stops ladder at its trigger price, everything else in
+        // the working book at its limit price. Type rather than Status is the discriminator: these
+        // run after Cancel/Expire/Fill has already overwritten Status, and ConvertToLimit retypes
+        // an elected stop, so the two never disagree.
         private static bool RestsInStops(InternalOrder order) =>
             order.Type is OrderType.StopLimit or OrderType.StopMarket;
 
@@ -62,9 +55,8 @@ namespace Circus.OrderBook
 
         public void Unrest(InternalOrder order) => LadderFor(order).Remove(RestingPriceOf(order), order);
 
-        // Moves an order to a new price within whichever ladder holds it, landing at the back of
-        // the new level. Passing the price it already rests at requeues it in place, which is what
-        // a quantity increase needs - losing time priority is the point, not a side effect.
+        // Lands at the back of the new level. Passing the price it already rests at requeues it in
+        // place, which is what a quantity increase needs - losing time priority is the point.
         public void Reprice(InternalOrder order, long newPriceTicks)
         {
             var ladder = LadderFor(order);
@@ -75,24 +67,18 @@ namespace Circus.OrderBook
         private InternalOrder? BestOrder(Side side) =>
             _working[side].TryGetBest(out _, out var order) ? order : null;
 
-        // Decides, one step at a time, what Match should do next against the current book state -
-        // self-match cancellations, trades, trade-restriction breaches, and stop triggers -
-        // without mutating anything or emitting events. algorithm picks the counterparty for each
-        // trade and prices it (see IMatchingAlgorithm.cs); everything else here - the crossing
-        // condition, which side is the aggressor, self-match detection, stop-triggering - is
-        // identical regardless of which algorithm is active and stays here rather than being
-        // reimplemented per algorithm.
-        // afterStopTrigger is the algorithm the remainder of this run switches to once a
-        // stop fires (see below) - the security's continuous algorithm, which for a run that was
-        // already continuous is simply the same instance again; it is taken as already prepared,
-        // never TryBegin'd mid-run.
-        // checkTradeRestrictionBreach is a pure query (consulted only when
-        // algorithm.ChecksTradeRestrictions) returning the breach action of the first Trade-scoped
-        // restriction that disallows the prospective trade price, if any. Re-reads the book fresh
-        // on every iteration, so the caller must fully apply each yielded outcome - including any
-        // ladder mutation - before asking for the next one; a converted stop landing in Working is
-        // exactly what lets this same loop pick it up and keep matching, with no separate
-        // recursive pass needed.
+        // One decision at a time: self-match cancellations, trades, restriction breaches and stop
+        // triggers. The algorithm supplies counterparty and price; everything else here is the same
+        // whichever one is active.
+        //
+        // The book is re-read every iteration, so the caller MUST apply each outcome - ladder
+        // mutation included - before asking for the next. Buffering the sequence instead of
+        // applying as you go never terminates. It is also what lets a converted stop landing in the
+        // working book be picked up by this same loop rather than a recursive pass.
+        //
+        // afterStopTrigger takes over once a stop fires, and is assumed already prepared.
+        // checkTradeRestrictionBreach reports the first Trade-scoped restriction to disallow a
+        // prospective price, and is consulted only when the algorithm asks for it.
         public IEnumerable<MatchOutcome> Run(IMatchingAlgorithm algorithm, IMatchingAlgorithm afterStopTrigger,
             Func<long, RestrictionBreachAction?> checkTradeRestrictionBreach)
         {
@@ -109,9 +95,8 @@ namespace Circus.OrderBook
 
             while (buy != null && sell != null && buy.Price >= sell.Price)
             {
-                // Which side is passive is the loop's call, not the algorithm's - the older of the
-                // two orders at the touch is resting by definition, whatever the algorithm then
-                // does with its level.
+                // The older of the two orders at the touch is passive by definition, whatever the
+                // algorithm then does with its level.
                 var restingHead = buy.ModifiedTime < sell.ModifiedTime ? buy : sell;
                 var aggressor = buy == restingHead ? sell : buy;
 
@@ -121,8 +106,7 @@ namespace Circus.OrderBook
 
                 var (resting, quantity, priceTicks) = selection.Value;
 
-                // Checked against the order the algorithm actually picked, which for anything
-                // other than price-time need not be the head it was offered.
+                // Against the order the algorithm picked, which need not be the head it was offered.
                 if (IsSelfMatch(resting, aggressor, out var instruction))
                 {
                     yield return new SelfMatchDetected(resting, aggressor, instruction);
@@ -160,13 +144,10 @@ namespace Circus.OrderBook
             }
         }
 
-        // Non-mutating: only identifies which resting stop orders now qualify to trigger at
-        // priceTicks - removing them from Stops, and converting or cancelling them, is Apply's
-        // job. Safe to call after every trade, even repeatedly at the same price: an order already
-        // removed from Stops by an earlier StopsTriggered within this same Run simply isn't found
-        // again. Buy stops trigger as price rises to/through their level, sell stops as it falls
-        // to/through theirs - same direction each ladder is already ordered in, so EnumerateFromBest
-        // can stop at the first level that no longer qualifies.
+        // Identifies only; Apply does the removing, converting and cancelling. Safe to call after
+        // every trade, even repeatedly at one price, since an order an earlier StopsTriggered
+        // already removed is not found again. Buy stops fire as price rises to their level and
+        // sell stops as it falls, which is the direction each ladder is already ordered in.
         private List<InternalOrder>? GatherTriggeredStops(long priceTicks)
         {
             SortedDictionary<long, InternalOrder>? triggered = null;
@@ -194,27 +175,20 @@ namespace Circus.OrderBook
             return triggered?.Values.ToList();
         }
 
-        // Answers whether an incoming order would find at least `quantity` immediately fillable,
-        // for the IOC minimum-quantity gate. selfMatchPreventionId/selfMatchPreventionInstruction
-        // are the incoming order's own fields: a self-matched resting order with CancelResting is
-        // simply skipped (the incoming order keeps going, only the resting order would die), but
-        // with CancelAggressor/CancelBoth the incoming order itself would be cancelled right
-        // there, so nothing beyond that point can ever count - the walk must stop dead, not just
-        // exclude that one order's quantity and keep summing past it.
+        // Whether an incoming order would find at least `quantity` immediately fillable, for the
+        // IOC minimum-quantity gate. The self-match arguments are the incoming order's own: a
+        // resting match under CancelResting is skipped, but under CancelAggressor/CancelBoth the
+        // incoming order would itself be cancelled there, so the walk must stop dead rather than
+        // skip one order and keep summing.
         //
-        // Walks head-first within each level, which is how both algorithms shipped today allocate.
-        // That is not a free assumption now that IMatchingAlgorithm.SelectNext owns allocation
-        // order, but it is a narrow one: the *total* reachable quantity does not depend on the
-        // order orders are visited in, only the point at which the self-match stop above
-        // truncates the walk does. So this stays exact for any algorithm whose allocation reaches
-        // a prevented self-match at the same point - which includes every algorithm with no
-        // self-match interaction at all - and needs revisiting alongside one where it does not,
-        // pro-rata being the obvious candidate.
+        // Walks head-first, which SelectNext no longer guarantees. A narrow assumption: total
+        // reachable quantity is independent of visit order, and only the point at which the
+        // self-match stop truncates the walk is not - so this stays exact for any algorithm
+        // without self-match interaction, and needs revisiting alongside one where it differs.
         //
-        // Deliberately not delegated to SelectNext: the gate runs in CreateOrder before the
-        // incoming order is constructed, so there is no aggressor to offer an algorithm, and a
-        // stateful algorithm would in any case have its per-level bookkeeping polluted by a walk
-        // that never trades.
+        // Not delegated to SelectNext: the gate runs before the incoming order is constructed, so
+        // there is no aggressor to offer, and a stateful algorithm's per-level bookkeeping would
+        // be polluted by a walk that never trades.
         public bool HasSufficientLiquidity(Side side, long priceTicks, int quantity, string? selfMatchPreventionId,
             SelfMatchPreventionInstruction? selfMatchPreventionInstruction)
         {

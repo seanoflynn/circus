@@ -26,18 +26,6 @@ namespace Circus.OrderBook
         PriceOutsideBands,
         MinQuantityOutOfRange,
         InsufficientLiquidityForMinQuantity,
-        MaxVisibleQuantityOutOfRange,
-        // PendingCancelOrReplace,
-        // PriceExceedsCurrentPrice,
-        // PriceExceedsCurrentPriceBand,
-        // PriceOutsideLimits,
-        // TypeMarketPreOpenPostClose,
-        // TypeNotPermitted,
-        // InstrumentHasRequestForCrossInProgress,
-        // InvalidSessionDate,
-        // MarketPaused,
-        // MarketNoCancel,
-        // MarketReserved,
-        // MarketForbidden
+        MaxVisibleQuantityOutOfRange
     }
 }
