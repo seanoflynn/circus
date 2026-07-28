@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace Circus.OrderBook
 {
     // What Matcher.Run decided should happen next, without having mutated anything or emitted any
@@ -13,4 +15,8 @@ namespace Circus.OrderBook
     // Terminal for the Run this came from - Matcher stops yielding after this, matching Match()'s
     // previous early-return on a trade-restriction breach.
     internal sealed record TradeRestrictionBreached(long PriceTicks, RestrictionBreachAction Action) : MatchOutcome;
+
+    // Orders pulled from Stops by the trade that just printed, in trigger order (FIFO by
+    // SequenceNumber across both sides) - still resting in Stops until Apply removes them.
+    internal sealed record StopsTriggered(IReadOnlyList<InternalOrder> Orders) : MatchOutcome;
 }

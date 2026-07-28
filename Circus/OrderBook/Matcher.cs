@@ -32,15 +32,22 @@ namespace Circus.OrderBook
             _working[side].TryGetBest(out _, out var order) ? order : null;
 
         // Decides, one step at a time, what Match should do next against the current book state -
-        // self-match cancellations, trades, and trade-restriction breaches - without mutating
-        // anything or emitting events. checkTradeRestrictionBreach is a pure query (not consulted
-        // during an auction uncrossing pass, same as before) returning the breach action of the
-        // first Trade-scoped restriction that disallows the prospective trade price, if any.
-        // Re-reads the book fresh on every iteration, so the caller must fully apply each yielded
-        // outcome - including any ladder mutation - before asking for the next one.
+        // self-match cancellations, trades, trade-restriction breaches, and stop triggers -
+        // without mutating anything or emitting events. checkTradeRestrictionBreach is a pure
+        // query (not consulted during an auction uncrossing pass, same as before) returning the
+        // breach action of the first Trade-scoped restriction that disallows the prospective trade
+        // price, if any. Re-reads the book fresh on every iteration, so the caller must fully
+        // apply each yielded outcome - including any ladder mutation - before asking for the next
+        // one; a converted stop landing in Working is exactly what lets this same loop pick it up
+        // and keep matching, with no separate recursive pass needed.
         public IEnumerable<MatchOutcome> Run(long? auctionPriceTicks,
             Func<long, RestrictionBreachAction?> checkTradeRestrictionBreach)
         {
+            // Once a stop fires mid-sweep, everything after it prices continuously - an auction
+            // print is the resolution mechanism for the book as it stood at open, not for orders
+            // that have just newly arrived because of it.
+            var effectiveAuctionPriceTicks = auctionPriceTicks;
+
             var buy = BestOrder(Side.Buy);
             var sell = BestOrder(Side.Sell);
 
@@ -63,7 +70,7 @@ namespace Circus.OrderBook
                 }
 
                 var quantity = Math.Min(resting.DisplayedQuantity, aggressor.DisplayedQuantity);
-                var priceTicks = auctionPriceTicks ?? resting.Price ??
+                var priceTicks = effectiveAuctionPriceTicks ?? resting.Price ??
                     throw new InvalidOperationException("limit order requires price");
 
                 // Checked against the prospective trade price, not either order's own submitted
@@ -71,7 +78,7 @@ namespace Circus.OrderBook
                 // actual price movement, only an executed trade at an extreme price does. Doesn't
                 // apply to an auction uncrossing pass itself (auctionPriceTicks set) - the auction
                 // print is already the resolution mechanism, not something to interrupt.
-                if (auctionPriceTicks == null)
+                if (effectiveAuctionPriceTicks == null)
                 {
                     var breachAction = checkTradeRestrictionBreach(priceTicks);
                     if (breachAction.HasValue)
@@ -83,9 +90,50 @@ namespace Circus.OrderBook
 
                 yield return new TradeExecuted(resting, aggressor, priceTicks, quantity);
 
+                var triggeredStops = GatherTriggeredStops(priceTicks);
+                if (triggeredStops != null)
+                {
+                    yield return new StopsTriggered(triggeredStops);
+                    effectiveAuctionPriceTicks = null;
+                }
+
                 buy = BestOrder(Side.Buy);
                 sell = BestOrder(Side.Sell);
             }
+        }
+
+        // Non-mutating: only identifies which resting stop orders now qualify to trigger at
+        // priceTicks - removing them from Stops, and converting or cancelling them, is Apply's
+        // job. Safe to call after every trade, even repeatedly at the same price: an order already
+        // removed from Stops by an earlier StopsTriggered within this same Run simply isn't found
+        // again. Buy stops trigger as price rises to/through their level, sell stops as it falls
+        // to/through theirs - same direction each ladder is already ordered in, so EnumerateFromBest
+        // can stop at the first level that no longer qualifies.
+        private List<InternalOrder>? GatherTriggeredStops(long priceTicks)
+        {
+            SortedDictionary<long, InternalOrder>? triggered = null;
+
+            foreach (var (tick, first, _) in _stops[Side.Buy].EnumerateFromBest())
+            {
+                if (tick > priceTicks)
+                    break;
+
+                triggered ??= new SortedDictionary<long, InternalOrder>();
+                for (var order = first; order != null; order = order.LevelNext)
+                    triggered.Add(order.SequenceNumber, order);
+            }
+
+            foreach (var (tick, first, _) in _stops[Side.Sell].EnumerateFromBest())
+            {
+                if (tick < priceTicks)
+                    break;
+
+                triggered ??= new SortedDictionary<long, InternalOrder>();
+                for (var order = first; order != null; order = order.LevelNext)
+                    triggered.Add(order.SequenceNumber, order);
+            }
+
+            return triggered?.Values.ToList();
         }
 
         private static int SumRemaining(InternalOrder? first)
@@ -102,7 +150,7 @@ namespace Circus.OrderBook
         // auctionReferencePriceTicks, since neither venue's public docs cover a case this granular,
         // (3) CME's final rule: highest price if the surplus is on the buy side, lowest if on the
         // sell side. Stops are deliberately not folded into this search (unlike CME's iterative
-        // stop-election loop) - they're picked up afterward by the existing CheckStops() pass,
+        // stop-election loop) - they're picked up afterward by Run's own stop-triggering check,
         // same as any other trade.
         public bool TryComputeAuctionPrice(long? auctionReferencePriceTicks, out long priceTicks, out int quantity)
         {
