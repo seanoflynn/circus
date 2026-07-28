@@ -90,6 +90,72 @@ namespace Circus.Tests.OrderBook
         }
 
         [Test]
+        public void Opening_IcebergAheadOfLaterOrder_FillsInFullBeforeTheLaterOrderGetsAnything()
+        {
+            // arrange - an iceberg (qty 100, peak 10) rests first at the clearing price; a plain
+            // order (qty 60) arrives second at the same price. Only 100 total sell liquidity is
+            // available - exactly enough to satisfy the iceberg's full size and nothing else.
+            // Price-time priority means the iceberg, having arrived first, must be filled in full
+            // before the later order gets anything - it must not lose its place in the queue just
+            // because its displayed peak needs replenishing mid-print.
+            var security = new Security("GCZ6", SecurityType.Future, 10, 10);
+            var book = new InMemoryOrderBook(security, TimeProvider);
+            book.UpdateStatus(OrderBookStatus.PreOpen);
+
+            book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 100, 100,
+                maxVisibleQuantity: 10);
+            TimeProvider.SetCurrentTime(Now2);
+            book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Buy, 60, 100);
+            TimeProvider.SetCurrentTime(Now3);
+            book.CreateLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Sell, 100, 100);
+
+            // act
+            var events = book.UpdateStatus(OrderBookStatus.Open);
+
+            // assert
+            var fills = events.OfType<OrdersMatched>().SelectMany(m => m.Fills).ToList();
+            var icebergFilled = fills.Where(f => f.Order.ClientOrderId == OrderId1).Sum(f => f.Quantity);
+            var laterOrderFilled = fills.Where(f => f.Order.ClientOrderId == OrderId2).Sum(f => f.Quantity);
+
+            Assert.AreEqual(100, icebergFilled, "the earlier-arriving iceberg should be filled in full");
+            Assert.AreEqual(0, laterOrderFilled,
+                "the later order should receive nothing once the earlier iceberg exhausts all available liquidity");
+        }
+
+        [Test]
+        public void Opening_IcebergPartiallyFilled_DisplayedPeakCorrectAfterwardsNotNegative()
+        {
+            // arrange - an iceberg (qty 100, peak 10) is the only buy order at the clearing price;
+            // only 45 units of sell liquidity are available, so it fills for 45 in a single
+            // auction allocation (not five separate peak-sized touches) and is left resting with
+            // 55 remaining. Sizing that single fill against the full remaining quantity rather
+            // than the 10-unit peak must not leave DisplayedQuantity negative or stale - it should
+            // come out re-derived to a fresh full peak, the same as if it had just been entered.
+            var security = new Security("GCZ6", SecurityType.Future, 10, 10);
+            var book = new InMemoryOrderBook(security, TimeProvider);
+            book.UpdateStatus(OrderBookStatus.PreOpen);
+
+            book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 100, 100,
+                maxVisibleQuantity: 10);
+            TimeProvider.SetCurrentTime(Now2);
+            book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 45, 100);
+
+            // act
+            var events = book.UpdateStatus(OrderBookStatus.Open);
+
+            // assert - one clean allocation of 45, not several smaller touches
+            var icebergFills = events.OfType<OrdersMatched>().SelectMany(m => m.Fills)
+                .Where(f => f.Order.ClientOrderId == OrderId1).ToList();
+            Assert.AreEqual(1, icebergFills.Count);
+            Assert.AreEqual(45, icebergFills[0].Quantity);
+
+            var buyLevels = book.GetLevels(Side.Buy, 10);
+            Assert.AreEqual(1, buyLevels.Count);
+            Assert.AreEqual(100, buyLevels[0].Price);
+            Assert.AreEqual(10, buyLevels[0].Quantity, "displayed peak should be a fresh full 10, not negative or stale");
+        }
+
+        [Test]
         public void Opening_TiedCandidates_DefaultsToCmeDirectionRule()
         {
             // arrange - 120 and 130 tie for max executable volume (10 each), with the surplus on

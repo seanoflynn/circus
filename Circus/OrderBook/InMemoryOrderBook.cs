@@ -549,8 +549,8 @@ namespace Circus.OrderBook
                         events.Add(CancelRemainder(aggressor, OrderCancelledReason.SelfMatchPrevention));
                     break;
 
-                case TradeExecuted(var resting, var aggressor, var priceTicks, var quantity):
-                    ApplyTrade(resting, aggressor, priceTicks, quantity, events, time);
+                case TradeExecuted(var resting, var aggressor, var priceTicks, var quantity, var isAuctionAllocation):
+                    ApplyTrade(resting, aggressor, priceTicks, quantity, isAuctionAllocation, events, time);
                     break;
 
                 case TradeRestrictionBreached(_, var action):
@@ -565,15 +565,23 @@ namespace Circus.OrderBook
         }
 
         private void ApplyTrade(InternalOrder resting, InternalOrder aggressor, long priceTicks, int quantity,
-            List<OrderBookEvent> events, DateTime time)
+            bool isAuctionAllocation, List<OrderBookEvent> events, DateTime time)
         {
             var price = ToDecimal(priceTicks);
 
-            resting.Fill(time, quantity);
+            void FillOrder(InternalOrder order)
+            {
+                if (isAuctionAllocation)
+                    order.FillFullSize(time, quantity);
+                else
+                    order.Fill(time, quantity);
+            }
+
+            FillOrder(resting);
             var restingSnapshot = resting.ToOrder();
             var restingReplenish = FinishFill(resting, time);
 
-            aggressor.Fill(time, quantity);
+            FillOrder(aggressor);
             var aggressorSnapshot = aggressor.ToOrder();
             var aggressorReplenish = FinishFill(aggressor, time);
 
