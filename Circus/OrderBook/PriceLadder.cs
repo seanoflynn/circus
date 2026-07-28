@@ -3,6 +3,17 @@ using System.Collections.Generic;
 
 namespace Circus.OrderBook
 {
+    // The reading half of PriceLadder, which is all anything outside Matcher is ever handed: market
+    // data, the market-order protection price, and an auction's clearing-price search all only look.
+    // Resting, removing and repricing go through Matcher's own verbs, so the ladders it owns cannot
+    // be written from outside it.
+    internal interface IReadOnlyPriceLadder
+    {
+        bool TryGetBest(out long tick, out InternalOrder? firstOrder);
+
+        IEnumerable<(long Tick, InternalOrder First, int Count)> EnumerateFromBest();
+    }
+
     // Dense, array-backed replacement for SortedDictionary<long, SortedDictionary<long, InternalOrder>>
     // keyed by price tick: the tick is used directly as an array offset (tick - _minTick) for O(1)
     // level access instead of an O(log n) tree lookup, with a cached best-price index so callers
@@ -18,7 +29,7 @@ namespace Circus.OrderBook
     //
     // It grows on demand (like List<T>'s doubling) if an order arrives outside the currently
     // allocated range, so it stays correct with no pre-sizing at all.
-    internal sealed class PriceLadder(bool descending)
+    internal sealed class PriceLadder(bool descending) : IReadOnlyPriceLadder
     {
         private const int InitialRadius = 64;
 
@@ -76,22 +87,6 @@ namespace Circus.OrderBook
             _counts[index]--;
 
             if (_heads[index] == null && index == _bestIndex)
-            {
-                AdvanceBest();
-            }
-        }
-
-        // Removes every order resting at `tick` in one go (used when a stop price level triggers).
-        public void RemoveLevel(long tick)
-        {
-            var index = (int) (tick - _minTick);
-            if (_heads[index] == null)
-                return;
-
-            _heads[index] = null;
-            _tails[index] = null;
-            _counts[index] = 0;
-            if (index == _bestIndex)
             {
                 AdvanceBest();
             }

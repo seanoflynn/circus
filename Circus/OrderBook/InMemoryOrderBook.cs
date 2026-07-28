@@ -183,9 +183,7 @@ namespace Circus.OrderBook
 
             _orders.Add(order.InternalId, order);
             _clientOrderIndex.Add((companyId, clientOrderId), order);
-            var orders = (triggerTicks.HasValue ? _matcher.Stops : _matcher.Working);
-            var newPriceTicks = (triggerTicks ?? priceTicks) ?? throw new Exception("error");
-            orders[side].Add(newPriceTicks, order);
+            _matcher.Rest(order);
 
             List<OrderBookEvent> events = new();
             events.Add(new CreateOrderConfirmed(_security, Now(), companyId, order.ToOrder()));
@@ -347,19 +345,17 @@ namespace Circus.OrderBook
             var isQuantityIncrease = order.MaxVisibleQuantity == null &&
                 (newTotalQuantity != null && newTotalQuantity > order.Quantity);
 
-            var orders = (order.Status == OrderStatus.Hidden ? _matcher.Stops : _matcher.Working);
-
             if (isPriceChange || isQuantityIncrease)
             {
                 _nextSequenceNumber++;
                 sequenceNumber = _nextSequenceNumber;
-                var currentPriceTicks = (order.Status == OrderStatus.Hidden ? order.TriggerPrice : order.Price) ??
-                                   throw new InvalidOperationException("missing price");
                 var updatedPriceTicks =
                     (order.Status == OrderStatus.Hidden ? triggerTicks ?? order.TriggerPrice : priceTicks ?? order.Price) ??
                     throw new InvalidOperationException("missing price");
-                orders[order.Side].Remove(currentPriceTicks, order);
-                orders[order.Side].Add(updatedPriceTicks, order);
+
+                // Called before order.Update() below, so the order still carries the price it
+                // currently rests at - which is what Reprice moves it off.
+                _matcher.Reprice(order, updatedPriceTicks);
             }
 
             // captured before Update() below, which - since sequenceNumber may have just been
@@ -447,17 +443,7 @@ namespace Circus.OrderBook
 
         private void CompleteOrder(InternalOrder order)
         {
-            if (order.Type == OrderType.StopLimit || order.Type == OrderType.StopMarket)
-            {
-                var price = order.TriggerPrice ?? throw new InvalidOperationException("stop order missing stop price");
-                _matcher.Stops[order.Side].Remove(price, order);
-            }
-            else
-            {
-                var price = order.Price ?? throw new InvalidOperationException("limit order missing price");
-                _matcher.Working[order.Side].Remove(price, order);
-            }
-
+            _matcher.Unrest(order);
             FinishOrder(order);
         }
 
@@ -483,16 +469,16 @@ namespace Circus.OrderBook
             if (order.DisplayedQuantity == 0 && order.MaxVisibleQuantity.HasValue)
             {
                 // iceberg peak exhausted with hidden reserve remaining - replenish and requeue to
-                // the back of this price level (PriceLadder.Add always appends to the tail),
+                // the back of this price level (resting always appends to the tail of it),
                 // losing time priority and getting a fresh ExchangeOrderId - matches both CME and
                 // Eurex, and lets a full-order-book feed show the old id leaving the book and a
                 // new one arriving, rather than an in-place modify.
                 var previousExchangeOrderId = order.ExchangeOrderId;
                 var priceTicks = order.Price ?? throw new InvalidOperationException("limit order missing price");
-                _matcher.Working[order.Side].Remove(priceTicks, order);
+                _matcher.Unrest(order);
                 _nextSequenceNumber++;
                 order.Replenish(_nextSequenceNumber, time);
-                _matcher.Working[order.Side].Add(priceTicks, order);
+                _matcher.Rest(order);
 
                 return new UpdateOrderConfirmed(_security, time, order.CompanyId, order.ToOrder(),
                     order.ClientOrderId, previousExchangeOrderId, ToDecimal(priceTicks), 0);
@@ -616,9 +602,9 @@ namespace Circus.OrderBook
         {
             foreach (var order in orders)
             {
-                var triggerPriceTicks = order.TriggerPrice ??
-                    throw new InvalidOperationException("stop order missing stop price");
-                _matcher.Stops[order.Side].Remove(triggerPriceTicks, order);
+                // Lifted out of the stops ladder while it is still typed as a stop; whether it
+                // then converts into the working book or is cancelled outright is decided below.
+                _matcher.Unrest(order);
 
                 if (order.Validity is OrderValidity.ImmediateOrCancel)
                     pendingImmediateOrCancelStops.Add(order);
@@ -633,8 +619,9 @@ namespace Circus.OrderBook
                     order.Cancel(Now());
                     FinishOrder(order);
 
-                    // still Hidden here (never converted to a working limit order), so there's
-                    // no working-book level to remove it from.
+                    // FinishOrder, not CompleteOrder: it left the stops ladder above and never
+                    // reached the working book, so there is nothing left to unrest it from.
+                    // previousPrice null for the same reason - it was never at a working level.
                     events.Add(new CancelOrderConfirmed(_security, Now(), order.CompanyId, order.ToOrder(),
                         previousClientOrderId, OrderCancelledReason.NoOrdersToMatchMarketOrder, null,
                         previousQuantity));
@@ -660,8 +647,8 @@ namespace Circus.OrderBook
                 _nextSequenceNumber++;
                 order.ConvertToLimit(time, _nextSequenceNumber, newPriceTicks);
 
-                var limitPriceTicks = order.Price ?? throw new Exception("missing price");
-                _matcher.Working[order.Side].Add(limitPriceTicks, order);
+                // Now typed as a limit order, so this rests it in the working book.
+                _matcher.Rest(order);
 
                 // previousPrice null - the order was resting in the stops ladder, not the
                 // working book, so this is an arrival, not a move between working-book levels.

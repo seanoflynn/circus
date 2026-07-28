@@ -31,7 +31,7 @@ namespace Circus.OrderBook
 
         // False when the book isn't crossed, which is what makes an uncrossing pass over an
         // uncrossed book a no-op rather than something the caller has to check for first.
-        public bool TryBegin(IReadOnlyDictionary<Side, PriceLadder> working) =>
+        public bool TryBegin(IReadOnlyDictionary<Side, IReadOnlyPriceLadder> working) =>
             TryComputeClearingPrice(working, out _clearingPriceTicks, out _);
 
         // Time priority at the clearing price: the FIFO-earliest order at the level fills first,
@@ -59,8 +59,8 @@ namespace Circus.OrderBook
         //
         // Public and side-effect-free so the book can also publish it as a live indicative price
         // during pre-open, without committing to a print.
-        public bool TryComputeClearingPrice(IReadOnlyDictionary<Side, PriceLadder> working, out long priceTicks,
-            out int quantity)
+        public bool TryComputeClearingPrice(IReadOnlyDictionary<Side, IReadOnlyPriceLadder> working,
+            out long priceTicks, out int quantity)
         {
             priceTicks = 0;
             quantity = 0;

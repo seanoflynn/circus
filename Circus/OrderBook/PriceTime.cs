@@ -14,7 +14,7 @@ namespace Circus.OrderBook
     {
         // Nothing to derive up front - each trade is priced and sized from the two orders at the
         // touch - and whether anything crosses is the matching loop's own question to answer.
-        public bool TryBegin(IReadOnlyDictionary<Side, PriceLadder> working) => true;
+        public bool TryBegin(IReadOnlyDictionary<Side, IReadOnlyPriceLadder> working) => true;
 
         public Allocation? SelectNext(InternalOrder restingHead, InternalOrder aggressor) =>
             new Allocation(restingHead,

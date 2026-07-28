@@ -42,10 +42,10 @@ namespace Circus.Tests.OrderBook
             second = Order(2, Side.Buy, 30, Early);
             third = Order(3, Side.Buy, 10, Early);
 
-            matcher.Working[Side.Buy].Add(Tick, first);
-            matcher.Working[Side.Buy].Add(Tick, second);
-            matcher.Working[Side.Buy].Add(Tick, third);
-            matcher.Working[Side.Sell].Add(Tick, Order(4, Side.Sell, aggressorQuantity, Late));
+            matcher.Rest(first);
+            matcher.Rest(second);
+            matcher.Rest(third);
+            matcher.Rest(Order(4, Side.Sell, aggressorQuantity, Late));
 
             return matcher;
         }
@@ -117,7 +117,7 @@ namespace Circus.Tests.OrderBook
 
         private sealed class SelectsBehindTheHead : IMatchingAlgorithm
         {
-            public bool TryBegin(IReadOnlyDictionary<Side, PriceLadder> working) => true;
+            public bool TryBegin(IReadOnlyDictionary<Side, IReadOnlyPriceLadder> working) => true;
 
             public Allocation? SelectNext(InternalOrder restingHead, InternalOrder aggressor)
             {
@@ -132,7 +132,7 @@ namespace Circus.Tests.OrderBook
 
         private sealed class DeclinesToMatch : IMatchingAlgorithm
         {
-            public bool TryBegin(IReadOnlyDictionary<Side, PriceLadder> working) => true;
+            public bool TryBegin(IReadOnlyDictionary<Side, IReadOnlyPriceLadder> working) => true;
             public Allocation? SelectNext(InternalOrder restingHead, InternalOrder aggressor) => null;
             public bool UsesFullRemainingQuantity => false;
             public bool ChecksTradeRestrictions => false;
@@ -140,7 +140,7 @@ namespace Circus.Tests.OrderBook
 
         private sealed class DeclinesToBegin : IMatchingAlgorithm
         {
-            public bool TryBegin(IReadOnlyDictionary<Side, PriceLadder> working) => false;
+            public bool TryBegin(IReadOnlyDictionary<Side, IReadOnlyPriceLadder> working) => false;
             public Allocation? SelectNext(InternalOrder restingHead, InternalOrder aggressor) =>
                 throw new InvalidOperationException("must not be consulted once TryBegin declines");
             public bool UsesFullRemainingQuantity => false;

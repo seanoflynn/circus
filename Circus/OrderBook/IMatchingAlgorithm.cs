@@ -19,7 +19,7 @@ namespace Circus.OrderBook
         // Prepare for a run against the current working book, deriving whatever run-scoped state
         // this algorithm needs from it - an auction strikes its clearing price here. False means
         // there is nothing for this algorithm to match, so the run yields no outcomes at all.
-        bool TryBegin(IReadOnlyDictionary<Side, PriceLadder> working);
+        bool TryBegin(IReadOnlyDictionary<Side, IReadOnlyPriceLadder> working);
 
         // Picks the counterparty for the next trade. This is the decision that actually separates
         // one matching algorithm from another - price-time takes the head of the level, pro-rata
