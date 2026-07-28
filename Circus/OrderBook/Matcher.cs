@@ -4,10 +4,11 @@ using System.Linq;
 
 namespace Circus.OrderBook
 {
-    // Owns the resting-order state (working + stop ladders) and the pure, state-reading
-    // decision helpers used around Match(). Match's control flow - the loop, event emission,
-    // fills, stop-checking - stays on InMemoryOrderBook for now; this only proves the seam
-    // ahead of moving the loop itself.
+    // Owns the resting-order state (working + stop ladders), decides what should happen against
+    // that state via Run, and hosts the pure, state-reading decision helpers Run and
+    // InMemoryOrderBook both need. Run only ever decides - it never mutates state or emits
+    // events; InMemoryOrderBook.Apply does that, order by order, between calls into Run's
+    // enumerator, so Run always resumes against state Apply has already caught up to.
     internal sealed class Matcher
     {
         // Array-backed, indexed by tick count (price / Security.TickSize) rather than decimal —
@@ -27,8 +28,65 @@ namespace Circus.OrderBook
         public IReadOnlyDictionary<Side, PriceLadder> Working => _working;
         public IReadOnlyDictionary<Side, PriceLadder> Stops => _stops;
 
-        public InternalOrder? BestOrder(Side side) =>
+        private InternalOrder? BestOrder(Side side) =>
             _working[side].TryGetBest(out _, out var order) ? order : null;
+
+        // Decides, one step at a time, what Match should do next against the current book state -
+        // self-match cancellations, trades, and trade-restriction breaches - without mutating
+        // anything or emitting events. checkTradeRestrictionBreach is a pure query (not consulted
+        // during an auction uncrossing pass, same as before) returning the breach action of the
+        // first Trade-scoped restriction that disallows the prospective trade price, if any.
+        // Re-reads the book fresh on every iteration, so the caller must fully apply each yielded
+        // outcome - including any ladder mutation - before asking for the next one.
+        public IEnumerable<MatchOutcome> Run(long? auctionPriceTicks,
+            Func<long, RestrictionBreachAction?> checkTradeRestrictionBreach)
+        {
+            var buy = BestOrder(Side.Buy);
+            var sell = BestOrder(Side.Sell);
+
+            if (buy != null && !buy.Price.HasValue)
+                throw new InvalidOperationException("buy limit order requires price");
+            if (sell != null && !sell.Price.HasValue)
+                throw new InvalidOperationException("sell limit order requires price");
+
+            while (buy != null && sell != null && buy.Price >= sell.Price)
+            {
+                var resting = buy.ModifiedTime < sell.ModifiedTime ? buy : sell;
+                var aggressor = buy == resting ? sell : buy;
+
+                if (IsSelfMatch(resting, aggressor, out var instruction))
+                {
+                    yield return new SelfMatchDetected(resting, aggressor, instruction);
+                    buy = BestOrder(Side.Buy);
+                    sell = BestOrder(Side.Sell);
+                    continue;
+                }
+
+                var quantity = Math.Min(resting.DisplayedQuantity, aggressor.DisplayedQuantity);
+                var priceTicks = auctionPriceTicks ?? resting.Price ??
+                    throw new InvalidOperationException("limit order requires price");
+
+                // Checked against the prospective trade price, not either order's own submitted
+                // limit price - a resting order sitting far from the market doesn't represent any
+                // actual price movement, only an executed trade at an extreme price does. Doesn't
+                // apply to an auction uncrossing pass itself (auctionPriceTicks set) - the auction
+                // print is already the resolution mechanism, not something to interrupt.
+                if (auctionPriceTicks == null)
+                {
+                    var breachAction = checkTradeRestrictionBreach(priceTicks);
+                    if (breachAction.HasValue)
+                    {
+                        yield return new TradeRestrictionBreached(priceTicks, breachAction.Value);
+                        yield break;
+                    }
+                }
+
+                yield return new TradeExecuted(resting, aggressor, priceTicks, quantity);
+
+                buy = BestOrder(Side.Buy);
+                sell = BestOrder(Side.Sell);
+            }
+        }
 
         private static int SumRemaining(InternalOrder? first)
         {
@@ -147,12 +205,12 @@ namespace Circus.OrderBook
         // SelfMatchPreventionId - matches CME/Eurex, where this is a dedicated opt-in id
         // distinct from the firm/company identifier (so unrelated desks under one company
         // aren't blocked from trading each other).
-        public static bool IsSelfMatch(InternalOrder resting, InternalOrder aggressor,
+        private static bool IsSelfMatch(InternalOrder resting, InternalOrder aggressor,
             out SelfMatchPreventionInstruction instruction) =>
             TryGetSelfMatchInstruction(resting, aggressor.SelfMatchPreventionId,
                 aggressor.SelfMatchPreventionInstruction, out instruction);
 
-        public static bool TryGetSelfMatchInstruction(InternalOrder resting, string? incomingSelfMatchPreventionId,
+        private static bool TryGetSelfMatchInstruction(InternalOrder resting, string? incomingSelfMatchPreventionId,
             SelfMatchPreventionInstruction? incomingInstruction, out SelfMatchPreventionInstruction instruction)
         {
             if (incomingSelfMatchPreventionId == null ||

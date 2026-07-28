@@ -509,104 +509,82 @@ namespace Circus.OrderBook
 
             var time = Now();
 
-            var buy = _matcher.BestOrder(Side.Buy);
-            var sell = _matcher.BestOrder(Side.Sell);
+            foreach (var outcome in _matcher.Run(auctionPriceTicks, CheckTradeRestrictionBreach))
+                Apply(outcome, events, time);
+        }
 
-            if (buy != null && !buy.Price.HasValue)
+        // On the first Trade-scoped restriction that disallows priceTicks, returns its OnBreach
+        // consequence (Pause -> PreOpen, Halt -> Closed); a pure query, consulted by Matcher.Run
+        // only outside an auction uncrossing pass.
+        private RestrictionBreachAction? CheckTradeRestrictionBreach(long priceTicks)
+        {
+            foreach (var restriction in _priceRestrictions)
             {
-                throw new InvalidOperationException("buy limit order requires price");
+                if (restriction.Scope == RestrictionScope.Trade && !restriction.Allows(priceTicks))
+                    return restriction.OnBreach;
             }
 
-            if (sell != null && !sell.Price.HasValue)
-            {
-                throw new InvalidOperationException("sell limit order requires price");
-            }
+            return null;
+        }
 
-            while (buy != null && sell != null && buy.Price >= sell.Price)
+        private void Apply(MatchOutcome outcome, List<OrderBookEvent> events, DateTime time)
+        {
+            switch (outcome)
             {
-                var resting = buy.ModifiedTime < sell.ModifiedTime ? buy : sell;
-                var aggressor = buy == resting ? sell : buy;
-
-                if (Matcher.IsSelfMatch(resting, aggressor, out var instruction))
-                {
+                case SelfMatchDetected(var resting, var aggressor, var instruction):
                     if (instruction != SelfMatchPreventionInstruction.CancelAggressor)
                         events.Add(CancelRemainder(resting, OrderCancelledReason.SelfMatchPrevention));
                     if (instruction != SelfMatchPreventionInstruction.CancelResting)
                         events.Add(CancelRemainder(aggressor, OrderCancelledReason.SelfMatchPrevention));
+                    break;
 
-                    buy = _matcher.BestOrder(Side.Buy);
-                    sell = _matcher.BestOrder(Side.Sell);
-                    continue;
-                }
+                case TradeExecuted(var resting, var aggressor, var priceTicks, var quantity):
+                    ApplyTrade(resting, aggressor, priceTicks, quantity, events, time);
+                    break;
 
-                var quantity = Math.Min(resting.DisplayedQuantity, aggressor.DisplayedQuantity);
-                var priceTicks = auctionPriceTicks ?? resting.Price ??
-                    throw new InvalidOperationException("limit order requires price");
-
-                // Checked against the prospective trade price, not either order's own submitted
-                // limit price - a resting order sitting far from the market doesn't represent any
-                // actual price movement, only an executed trade at an extreme price does. Doesn't
-                // apply to an auction uncrossing pass itself (auctionPriceTicks set) - the auction
-                // print is already the resolution mechanism, not something to interrupt.
-                if (auctionPriceTicks == null && BreachesTradeRestriction(priceTicks, events))
-                    return;
-
-                var price = ToDecimal(priceTicks);
-
-                resting.Fill(time, quantity);
-                var restingSnapshot = resting.ToOrder();
-                var restingReplenish = FinishFill(resting, time);
-
-                aggressor.Fill(time, quantity);
-                var aggressorSnapshot = aggressor.ToOrder();
-                var aggressorReplenish = FinishFill(aggressor, time);
-
-                events.Add(new OrdersMatched(_security, time, price, quantity,
-                    new[]
-                    {
-                        new FillOrderConfirmed(_security, time, resting.CompanyId, restingSnapshot, price, quantity,
-                            true),
-                        new FillOrderConfirmed(_security, time, aggressor.CompanyId, aggressorSnapshot, price,
-                            quantity, false)
-                    }
-                ));
-
-                if (restingReplenish != null)
-                    events.Add(restingReplenish);
-                if (aggressorReplenish != null)
-                    events.Add(aggressorReplenish);
-
-                if (_lastTradedPrice != priceTicks)
-                {
-                    _lastTradedPrice = priceTicks;
-                    _auctionReferencePriceTicks = priceTicks;
-                    foreach (var restriction in _priceRestrictions)
-                        restriction.OnTrade(priceTicks, time);
-                    CheckStops(events);
-                }
-
-                buy = _matcher.BestOrder(Side.Buy);
-                sell = _matcher.BestOrder(Side.Sell);
+                case TradeRestrictionBreached(_, var action):
+                    _status = action == RestrictionBreachAction.Halt ? OrderBookStatus.Closed : OrderBookStatus.PreOpen;
+                    events.Add(new StatusChanged(_security, Now(), _status));
+                    break;
             }
         }
 
-        // On the first Trade-scoped restriction that disallows priceTicks, applies its OnBreach
-        // consequence (Pause -> PreOpen, Halt -> Closed) and reports it as a StatusChanged event.
-        private bool BreachesTradeRestriction(long priceTicks, List<OrderBookEvent> events)
+        private void ApplyTrade(InternalOrder resting, InternalOrder aggressor, long priceTicks, int quantity,
+            List<OrderBookEvent> events, DateTime time)
         {
-            foreach (var restriction in _priceRestrictions)
+            var price = ToDecimal(priceTicks);
+
+            resting.Fill(time, quantity);
+            var restingSnapshot = resting.ToOrder();
+            var restingReplenish = FinishFill(resting, time);
+
+            aggressor.Fill(time, quantity);
+            var aggressorSnapshot = aggressor.ToOrder();
+            var aggressorReplenish = FinishFill(aggressor, time);
+
+            events.Add(new OrdersMatched(_security, time, price, quantity,
+                new[]
+                {
+                    new FillOrderConfirmed(_security, time, resting.CompanyId, restingSnapshot, price, quantity,
+                        true),
+                    new FillOrderConfirmed(_security, time, aggressor.CompanyId, aggressorSnapshot, price,
+                        quantity, false)
+                }
+            ));
+
+            if (restingReplenish != null)
+                events.Add(restingReplenish);
+            if (aggressorReplenish != null)
+                events.Add(aggressorReplenish);
+
+            if (_lastTradedPrice != priceTicks)
             {
-                if (restriction.Scope != RestrictionScope.Trade || restriction.Allows(priceTicks))
-                    continue;
-
-                _status = restriction.OnBreach == RestrictionBreachAction.Halt
-                    ? OrderBookStatus.Closed
-                    : OrderBookStatus.PreOpen;
-                events.Add(new StatusChanged(_security, Now(), _status));
-                return true;
+                _lastTradedPrice = priceTicks;
+                _auctionReferencePriceTicks = priceTicks;
+                foreach (var restriction in _priceRestrictions)
+                    restriction.OnTrade(priceTicks, time);
+                CheckStops(events);
             }
-
-            return false;
         }
 
         private void CheckStops(List<OrderBookEvent> events)
