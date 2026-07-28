@@ -26,19 +26,9 @@ namespace Circus.OrderBook
         // A future velocity limit or circuit breaker is a new entry here, not a redesign.
         private readonly IReadOnlyList<IPriceRestriction> _priceRestrictions;
 
-        // Array-backed, indexed by tick count (price / Security.TickSize) rather than decimal —
-        // see InternalOrder and PriceLadder for why.
-        private readonly Dictionary<Side, PriceLadder> _working = new()
-        {
-            {Side.Buy, new PriceLadder(descending: true)},
-            {Side.Sell, new PriceLadder(descending: false)}
-        };
-
-        private readonly Dictionary<Side, PriceLadder> _stops = new()
-        {
-            {Side.Buy, new PriceLadder(descending: false)},
-            {Side.Sell, new PriceLadder(descending: true)}
-        };
+        // Owns the working/stop ladders and the pure decision helpers (auction pricing,
+        // liquidity checks, self-match verdicts) that read them.
+        private readonly Matcher _matcher = new();
 
         // Keyed by InternalId, not ExchangeOrderId - the latter changes across an order's life.
         private readonly Dictionary<long, InternalOrder> _orders = new();
@@ -68,17 +58,9 @@ namespace Circus.OrderBook
 
         public IReadOnlyList<Level> GetLevels(Side side, int maxPrices)
         {
-            return _working[side].EnumerateFromBest().Take(maxPrices)
+            return _matcher.Working[side].EnumerateFromBest().Take(maxPrices)
                 .Select(x => new Level(ToDecimal(x.Tick), SumDisplayed(x.First), x.Count))
                 .ToList();
-        }
-
-        private static int SumRemaining(InternalOrder? first)
-        {
-            var total = 0;
-            for (var order = first; order != null; order = order.LevelNext)
-                total += order.RemainingQuantity;
-            return total;
         }
 
         // Market data reports what's publicly visible - an iceberg's hidden reserve is
@@ -94,7 +76,7 @@ namespace Circus.OrderBook
 
         public bool TryGetIndicativeAuctionPrice(out decimal price, out int quantity)
         {
-            if (!TryComputeAuctionPrice(out var priceTicks, out quantity))
+            if (!_matcher.TryComputeAuctionPrice(_auctionReferencePriceTicks, out var priceTicks, out quantity))
             {
                 price = 0;
                 return false;
@@ -102,70 +84,6 @@ namespace Circus.OrderBook
 
             price = ToDecimal(priceTicks);
             return true;
-        }
-
-        // The call-auction uncrossing price: the price that maximizes executable volume across
-        // the resting book, i.e. min(cumulative bid quantity at/above p, cumulative ask quantity
-        // at/below p). Ties break by (1) minimum surplus - CME's rule, (2) closest to
-        // _auctionReferencePriceTicks, since neither venue's public docs cover a case this granular,
-        // (3) CME's final rule: highest price if the surplus is on the buy side, lowest if on the
-        // sell side. Stops are deliberately not folded into this search (unlike CME's iterative
-        // stop-election loop) - they're picked up afterward by the existing CheckStops() pass,
-        // same as any other trade.
-        private bool TryComputeAuctionPrice(out long priceTicks, out int quantity)
-        {
-            priceTicks = 0;
-            quantity = 0;
-
-            var buyLevels = _working[Side.Buy].EnumerateFromBest()
-                .Select(x => (Tick: x.Tick, Qty: SumRemaining(x.First))).ToList();
-            var sellLevels = _working[Side.Sell].EnumerateFromBest()
-                .Select(x => (Tick: x.Tick, Qty: SumRemaining(x.First))).ToList();
-
-            if (buyLevels.Count == 0 || sellLevels.Count == 0 || buyLevels[0].Tick < sellLevels[0].Tick)
-                return false;
-
-            var candidates = buyLevels.Select(l => l.Tick).Concat(sellLevels.Select(l => l.Tick)).Distinct();
-
-            (long Price, int Executable, long Surplus)? best = null;
-            foreach (var p in candidates)
-            {
-                var cumBid = buyLevels.Where(l => l.Tick >= p).Sum(l => l.Qty);
-                var cumAsk = sellLevels.Where(l => l.Tick <= p).Sum(l => l.Qty);
-                var executable = Math.Min(cumBid, cumAsk);
-                var surplus = cumBid - cumAsk;
-
-                if (best == null || executable > best.Value.Executable ||
-                    (executable == best.Value.Executable &&
-                     IsBetterAuctionPriceTieBreak(p, surplus, best.Value.Price, best.Value.Surplus)))
-                {
-                    best = (p, executable, surplus);
-                }
-            }
-
-            priceTicks = best!.Value.Price;
-            quantity = best.Value.Executable;
-            return quantity > 0;
-        }
-
-        private bool IsBetterAuctionPriceTieBreak(long candidatePrice, long candidateSurplus, long currentPrice,
-            long currentSurplus)
-        {
-            var candidateAbsSurplus = Math.Abs(candidateSurplus);
-            var currentAbsSurplus = Math.Abs(currentSurplus);
-            if (candidateAbsSurplus != currentAbsSurplus)
-                return candidateAbsSurplus < currentAbsSurplus;
-
-            if (_auctionReferencePriceTicks.HasValue)
-            {
-                var candidateDistance = Math.Abs(candidatePrice - _auctionReferencePriceTicks.Value);
-                var currentDistance = Math.Abs(currentPrice - _auctionReferencePriceTicks.Value);
-                if (candidateDistance != currentDistance)
-                    return candidateDistance < currentDistance;
-            }
-
-            // surplus on the buy side (positive) -> prefer the higher price; sell side -> lower
-            return candidateSurplus > 0 ? candidatePrice > currentPrice : candidatePrice < currentPrice;
         }
 
         public IReadOnlyList<OrderBookEvent> Process(OrderBookAction action)
@@ -251,7 +169,7 @@ namespace Circus.OrderBook
             }
 
             if (validity is OrderValidity.ImmediateOrCancel { MinQuantity: int gateMinQty } && !triggerTicks.HasValue &&
-                !HasSufficientLiquidity(side, priceTicks!.Value, gateMinQty, selfMatchPreventionId,
+                !_matcher.HasSufficientLiquidity(side, priceTicks!.Value, gateMinQty, selfMatchPreventionId,
                     selfMatchPreventionInstruction))
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.InsufficientLiquidityForMinQuantity);
             if (validity is OrderValidity.GoodTilDate { Date: var goodTilDate } && goodTilDate < DateOnly.FromDateTime(Now()))
@@ -264,7 +182,7 @@ namespace Circus.OrderBook
 
             _orders.Add(order.InternalId, order);
             _clientOrderIndex.Add((companyId, clientOrderId), order);
-            var orders = (triggerTicks.HasValue ? _stops : _working);
+            var orders = (triggerTicks.HasValue ? _matcher.Stops : _matcher.Working);
             var newPriceTicks = (triggerTicks ?? priceTicks) ?? throw new Exception("error");
             orders[side].Add(newPriceTicks, order);
 
@@ -303,7 +221,7 @@ namespace Circus.OrderBook
         private bool TryGetLimitPrice(Side side, int protectionTicks, out long? priceTicks)
         {
             priceTicks = null;
-            var opposing = _working[side == Side.Buy ? Side.Sell : Side.Buy];
+            var opposing = _matcher.Working[side == Side.Buy ? Side.Sell : Side.Buy];
             if (!opposing.TryGetBest(out var bestTick, out _))
                 return false;
 
@@ -321,46 +239,6 @@ namespace Circus.OrderBook
         // and an established reference.
         private bool AllowsOrderEntry(long priceTicks) =>
             _priceRestrictions.Where(r => r.Scope == RestrictionScope.OrderEntry).All(r => r.Allows(priceTicks));
-
-        // selfMatchPreventionId/selfMatchPreventionInstruction are the incoming order's own
-        // fields. Walks resting orders in the same price/time priority order Match() would
-        // actually consume them in: a self-matched order with CancelResting is simply skipped
-        // (the incoming order keeps going, only the resting order would die), but with
-        // CancelAggressor/CancelBoth the incoming order itself would be cancelled right there,
-        // so nothing beyond that point can ever count - liquidity checking must stop dead,
-        // not just exclude that one order's quantity and keep summing past it.
-        private bool HasSufficientLiquidity(Side side, long priceTicks, int quantity, string? selfMatchPreventionId,
-            SelfMatchPreventionInstruction? selfMatchPreventionInstruction)
-        {
-            var opposing = _working[side == Side.Buy ? Side.Sell : Side.Buy];
-            var total = 0;
-            foreach (var (tick, first, _) in opposing.EnumerateFromBest())
-            {
-                var crosses = side == Side.Buy ? tick <= priceTicks : tick >= priceTicks;
-                if (!crosses)
-                    break;
-
-                for (var restingOrder = first; restingOrder != null; restingOrder = restingOrder.LevelNext)
-                {
-                    if (TryGetSelfMatchInstruction(restingOrder, selfMatchPreventionId,
-                            selfMatchPreventionInstruction, out var instruction))
-                    {
-                        // total < quantity is guaranteed here - otherwise we'd have already
-                        // returned true below before reaching this order
-                        if (instruction != SelfMatchPreventionInstruction.CancelResting)
-                            return false;
-
-                        continue;
-                    }
-
-                    total += restingOrder.RemainingQuantity;
-                    if (total >= quantity)
-                        return true;
-                }
-            }
-
-            return total >= quantity;
-        }
 
         // Only ever called on an order currently resting in the working book (a FAK remainder or
         // a self-match-prevention cancel during Match()) - never a still-Hidden stop order.
@@ -468,7 +346,7 @@ namespace Circus.OrderBook
             var isQuantityIncrease = order.MaxVisibleQuantity == null &&
                 (newTotalQuantity != null && newTotalQuantity > order.Quantity);
 
-            var orders = (order.Status == OrderStatus.Hidden ? _stops : _working);
+            var orders = (order.Status == OrderStatus.Hidden ? _matcher.Stops : _matcher.Working);
 
             if (isPriceChange || isQuantityIncrease)
             {
@@ -571,12 +449,12 @@ namespace Circus.OrderBook
             if (order.Type == OrderType.StopLimit || order.Type == OrderType.StopMarket)
             {
                 var price = order.TriggerPrice ?? throw new InvalidOperationException("stop order missing stop price");
-                _stops[order.Side].Remove(price, order);
+                _matcher.Stops[order.Side].Remove(price, order);
             }
             else
             {
                 var price = order.Price ?? throw new InvalidOperationException("limit order missing price");
-                _working[order.Side].Remove(price, order);
+                _matcher.Working[order.Side].Remove(price, order);
             }
 
             FinishOrder(order);
@@ -610,10 +488,10 @@ namespace Circus.OrderBook
                 // new one arriving, rather than an in-place modify.
                 var previousExchangeOrderId = order.ExchangeOrderId;
                 var priceTicks = order.Price ?? throw new InvalidOperationException("limit order missing price");
-                _working[order.Side].Remove(priceTicks, order);
+                _matcher.Working[order.Side].Remove(priceTicks, order);
                 _nextSequenceNumber++;
                 order.Replenish(_nextSequenceNumber, time);
-                _working[order.Side].Add(priceTicks, order);
+                _matcher.Working[order.Side].Add(priceTicks, order);
 
                 return new UpdateOrderConfirmed(_security, time, order.CompanyId, order.ToOrder(),
                     order.ClientOrderId, previousExchangeOrderId, ToDecimal(priceTicks), 0);
@@ -621,9 +499,6 @@ namespace Circus.OrderBook
 
             return null;
         }
-
-        private InternalOrder? BestOrder(Side side) =>
-            _working[side].TryGetBest(out _, out var order) ? order : null;
 
         private void Match(List<OrderBookEvent> events, long? auctionPriceTicks = null)
         {
@@ -634,8 +509,8 @@ namespace Circus.OrderBook
 
             var time = Now();
 
-            var buy = BestOrder(Side.Buy);
-            var sell = BestOrder(Side.Sell);
+            var buy = _matcher.BestOrder(Side.Buy);
+            var sell = _matcher.BestOrder(Side.Sell);
 
             if (buy != null && !buy.Price.HasValue)
             {
@@ -652,15 +527,15 @@ namespace Circus.OrderBook
                 var resting = buy.ModifiedTime < sell.ModifiedTime ? buy : sell;
                 var aggressor = buy == resting ? sell : buy;
 
-                if (IsSelfMatch(resting, aggressor, out var instruction))
+                if (Matcher.IsSelfMatch(resting, aggressor, out var instruction))
                 {
                     if (instruction != SelfMatchPreventionInstruction.CancelAggressor)
                         events.Add(CancelRemainder(resting, OrderCancelledReason.SelfMatchPrevention));
                     if (instruction != SelfMatchPreventionInstruction.CancelResting)
                         events.Add(CancelRemainder(aggressor, OrderCancelledReason.SelfMatchPrevention));
 
-                    buy = BestOrder(Side.Buy);
-                    sell = BestOrder(Side.Sell);
+                    buy = _matcher.BestOrder(Side.Buy);
+                    sell = _matcher.BestOrder(Side.Sell);
                     continue;
                 }
 
@@ -710,8 +585,8 @@ namespace Circus.OrderBook
                     CheckStops(events);
                 }
 
-                buy = BestOrder(Side.Buy);
-                sell = BestOrder(Side.Sell);
+                buy = _matcher.BestOrder(Side.Buy);
+                sell = _matcher.BestOrder(Side.Sell);
             }
         }
 
@@ -734,47 +609,23 @@ namespace Circus.OrderBook
             return false;
         }
 
-        // Two orders are a prevented self-match only if both carry the same non-null
-        // SelfMatchPreventionId - matches CME/Eurex, where this is a dedicated opt-in id
-        // distinct from the firm/company identifier (so unrelated desks under one company
-        // aren't blocked from trading each other).
-        private static bool IsSelfMatch(InternalOrder resting, InternalOrder aggressor,
-            out SelfMatchPreventionInstruction instruction) =>
-            TryGetSelfMatchInstruction(resting, aggressor.SelfMatchPreventionId,
-                aggressor.SelfMatchPreventionInstruction, out instruction);
-
-        private static bool TryGetSelfMatchInstruction(InternalOrder resting, string? incomingSelfMatchPreventionId,
-            SelfMatchPreventionInstruction? incomingInstruction, out SelfMatchPreventionInstruction instruction)
-        {
-            if (incomingSelfMatchPreventionId == null ||
-                resting.SelfMatchPreventionId != incomingSelfMatchPreventionId)
-            {
-                instruction = default;
-                return false;
-            }
-
-            instruction = incomingInstruction ?? resting.SelfMatchPreventionInstruction ??
-                SelfMatchPreventionInstruction.CancelResting;
-            return true;
-        }
-
         private void CheckStops(List<OrderBookEvent> events)
         {
             var time = Now();
             var triggered = new SortedDictionary<long, InternalOrder>();
 
-            while (_stops[Side.Buy].TryGetBest(out var buyTick, out var buyFirst) && buyTick <= _lastTradedPrice)
+            while (_matcher.Stops[Side.Buy].TryGetBest(out var buyTick, out var buyFirst) && buyTick <= _lastTradedPrice)
             {
                 for (var order = buyFirst; order != null; order = order.LevelNext)
                     triggered.Add(order.SequenceNumber, order);
-                _stops[Side.Buy].RemoveLevel(buyTick);
+                _matcher.Stops[Side.Buy].RemoveLevel(buyTick);
             }
 
-            while (_stops[Side.Sell].TryGetBest(out var sellTick, out var sellFirst) && sellTick >= _lastTradedPrice)
+            while (_matcher.Stops[Side.Sell].TryGetBest(out var sellTick, out var sellFirst) && sellTick >= _lastTradedPrice)
             {
                 for (var order = sellFirst; order != null; order = order.LevelNext)
                     triggered.Add(order.SequenceNumber, order);
-                _stops[Side.Sell].RemoveLevel(sellTick);
+                _matcher.Stops[Side.Sell].RemoveLevel(sellTick);
             }
 
             if (triggered.Any())
@@ -814,7 +665,7 @@ namespace Circus.OrderBook
                 }
 
                 if (order.Validity is OrderValidity.ImmediateOrCancel { MinQuantity: int stopMinQty } &&
-                    !HasSufficientLiquidity(order.Side, newPriceTicks!.Value, stopMinQty,
+                    !_matcher.HasSufficientLiquidity(order.Side, newPriceTicks!.Value, stopMinQty,
                         order.SelfMatchPreventionId, order.SelfMatchPreventionInstruction))
                 {
                     var previousClientOrderId = order.ClientOrderId;
@@ -833,7 +684,7 @@ namespace Circus.OrderBook
                 order.ConvertToLimit(time, _nextSequenceNumber, newPriceTicks);
 
                 var limitPriceTicks = order.Price ?? throw new Exception("missing price");
-                _working[order.Side].Add(limitPriceTicks, order);
+                _matcher.Working[order.Side].Add(limitPriceTicks, order);
 
                 // previousPrice null - the order was resting in the stops ladder, not the
                 // working book, so this is an arrival, not a move between working-book levels.
@@ -876,7 +727,7 @@ namespace Circus.OrderBook
 
             // Runs whether the prior status was the real start-of-day PreOpen or PreOpen
             // re-entered mid-session for a volatility pause - same uncrossing either way.
-            if (TryComputeAuctionPrice(out var auctionPriceTicks, out _))
+            if (_matcher.TryComputeAuctionPrice(_auctionReferencePriceTicks, out var auctionPriceTicks, out _))
                 Match(events, auctionPriceTicks);
 
             Match(events);
