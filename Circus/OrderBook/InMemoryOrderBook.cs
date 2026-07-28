@@ -22,20 +22,36 @@ namespace Circus.OrderBook
         // self-match verdicts) that read them.
         private readonly Matcher _matcher = new();
 
-        // The algorithm governing each trading phase. PreOpen quotes an indicative price but never
-        // trades; Open trades continuously; and the transition between them commits PreOpen's own
-        // auction as the opening print, so what opening prints is what pre-open was quoting a
-        // moment earlier - one instance, one reference anchor, nothing to keep in sync.
+        // What each phase permits and which algorithm governs it - see TradingPhase. Nothing
+        // outside this table names a status: the rest of the book reads the current phase and acts
+        // on what it says, so adding a phase is adding a row here, and a security could eventually
+        // be handed a table of its own without anything else moving.
         //
-        // Closed has no entry: nothing matches or quotes with the book shut. Built here with
-        // defaults, shaped so a security could eventually supply its own set - a pro-rata variant
-        // of continuous trading, say - without anything else moving.
-        private readonly IReadOnlyDictionary<OrderBookStatus, IMatchingAlgorithm> _algorithms =
-            new Dictionary<OrderBookStatus, IMatchingAlgorithm>
+        // PreOpen accumulates orders and quotes what they would clear at without trading any of
+        // them; leaving it commits that same auction instance as the opening print, so what opens
+        // is what was being quoted a moment earlier, on one reference anchor with nothing to keep
+        // in sync.
+        private readonly IReadOnlyDictionary<OrderBookStatus, TradingPhase> _phases =
+            new Dictionary<OrderBookStatus, TradingPhase>
             {
-                {OrderBookStatus.PreOpen, new Auction()},
-                {OrderBookStatus.Open, new PriceTime()}
+                {
+                    OrderBookStatus.PreOpen,
+                    new TradingPhase(new Auction(), AcceptsOrderActions: true, AcceptsMarketOrders: false,
+                        MatchesContinuously: false, StartsSession: true, ExpiresDayOrders: false)
+                },
+                {
+                    OrderBookStatus.Open,
+                    new TradingPhase(new PriceTime(), AcceptsOrderActions: true, AcceptsMarketOrders: true,
+                        MatchesContinuously: true, StartsSession: false, ExpiresDayOrders: false)
+                },
+                {
+                    OrderBookStatus.Closed,
+                    new TradingPhase(null, AcceptsOrderActions: false, AcceptsMarketOrders: false,
+                        MatchesContinuously: false, StartsSession: false, ExpiresDayOrders: true)
+                }
             };
+
+        private TradingPhase CurrentPhase => _phases[_status];
 
         // Keyed by InternalId, not ExchangeOrderId - the latter changes across an order's life.
         private readonly Dictionary<long, InternalOrder> _orders = new();
@@ -91,10 +107,8 @@ namespace Circus.OrderBook
             price = 0;
             quantity = 0;
 
-            if (!_algorithms.TryGetValue(_status, out var algorithm))
-                return false;
-
-            if (!algorithm.TryQuoteIndicative(_matcher.Working, out var priceTicks, out quantity))
+            var algorithm = CurrentPhase.Algorithm;
+            if (algorithm == null || !algorithm.TryQuoteIndicative(_matcher.Working, out var priceTicks, out quantity))
                 return false;
 
             price = ToDecimal(priceTicks);
@@ -133,9 +147,9 @@ namespace Circus.OrderBook
             var selfMatchPreventionInstruction = selfMatchPrevention?.Instruction;
             var status = triggerPrice.HasValue ? OrderStatus.Hidden : OrderStatus.Working;
 
-            if (_status == OrderBookStatus.Closed)
+            if (!CurrentPhase.AcceptsOrderActions)
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.MarketClosed);
-            if (type == OrderType.Market && _status == OrderBookStatus.PreOpen)
+            if (type == OrderType.Market && !CurrentPhase.AcceptsMarketOrders)
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.MarketPreOpen);
             if (string.IsNullOrEmpty(clientOrderId))
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.ClientOrderIdRequired);
@@ -269,7 +283,7 @@ namespace Circus.OrderBook
         private List<OrderBookEvent> UpdateOrder(string companyId, string clientOrderId, string previousClientOrderId,
             int? newTotalQuantity = null, decimal? price = null, decimal? triggerPrice = null)
         {
-            if (_status == OrderBookStatus.Closed)
+            if (!CurrentPhase.AcceptsOrderActions)
                 return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.MarketClosed);
             if (string.IsNullOrEmpty(clientOrderId))
                 return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.ClientOrderIdRequired);
@@ -387,7 +401,7 @@ namespace Circus.OrderBook
 
         private List<OrderBookEvent> CancelOrder(string companyId, string clientOrderId, string previousClientOrderId)
         {
-            if (_status == OrderBookStatus.Closed)
+            if (!CurrentPhase.AcceptsOrderActions)
                 return RejectCancel(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.MarketClosed);
             if (string.IsNullOrEmpty(clientOrderId))
                 return RejectCancel(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.ClientOrderIdRequired);
@@ -501,20 +515,21 @@ namespace Circus.OrderBook
             return null;
         }
 
-        // Continuous matching, under the algorithm governing the open phase; the opening print
-        // passes PreOpen's auction instead. The status guard stays explicit rather than falling
-        // out of the phase lookup: pre-open has a governing algorithm and it is an auction, so a
-        // Match that ran during pre-open would print trades at the indicative price rather than
-        // merely quoting it. That phases other than Open do not match continuously is a fact about
-        // the book, and it should be one visible line.
+        // Matching under the current phase's algorithm, or under one supplied by the caller - a
+        // departing phase's auction, committed as it leaves. Either way this is the single gate on
+        // whether trading can happen at all right now, which is why the print of an exiting
+        // auction goes through it too: a phase that accumulated orders but is being left for one
+        // that does not trade abandons them rather than crossing them.
         private void Match(List<OrderBookEvent> events, IMatchingAlgorithm? algorithm = null)
         {
-            if (_status != OrderBookStatus.Open)
+            var phase = CurrentPhase;
+            if (!phase.MatchesContinuously)
             {
                 return;
             }
 
-            var continuous = _algorithms[OrderBookStatus.Open];
+            var continuous = phase.Algorithm ??
+                throw new InvalidOperationException("a phase that matches continuously needs an algorithm");
             var time = Now();
             var pendingImmediateOrCancelStops = new List<InternalOrder>();
 
@@ -611,8 +626,8 @@ namespace Circus.OrderBook
             if (_lastTradedPrice != priceTicks)
             {
                 _lastTradedPrice = priceTicks;
-                foreach (var algorithm in _algorithms.Values)
-                    algorithm.OnTrade(priceTicks);
+                foreach (var phase in _phases.Values)
+                    phase.Algorithm?.OnTrade(priceTicks);
                 foreach (var restriction in _priceRestrictions)
                     restriction.OnTrade(priceTicks, time);
             }
@@ -682,50 +697,43 @@ namespace Circus.OrderBook
         {
             if (referencePrice.HasValue && TryConvertToTicks(referencePrice, out var referenceTicks))
             {
-                foreach (var algorithm in _algorithms.Values)
-                    algorithm.OnSessionChange(referenceTicks);
+                foreach (var phase in _phases.Values)
+                    phase.Algorithm?.OnSessionChange(referenceTicks);
                 foreach (var restriction in _priceRestrictions)
                     restriction.OnSessionChange(referenceTicks);
             }
 
-            return status switch
+            if (!_phases.ContainsKey(status))
+                throw new ArgumentOutOfRangeException(nameof(status), status, "no phase configured for this status");
+
+            var departing = CurrentPhase;
+            _status = status;
+            var arriving = CurrentPhase;
+
+            if (arriving.StartsSession)
             {
-                OrderBookStatus.PreOpen => PreOpenMarket(),
-                OrderBookStatus.Open => OpenMarket(),
-                OrderBookStatus.Closed => CloseMarket(),
-                _ => throw new ArgumentOutOfRangeException(nameof(status), status, null)
-            };
-        }
+                // TODO: need better system for multiple sessions per day
+                var date = Now();
+                _nextSequenceNumber = ((date.Year * 10000) + (date.Month * 100) + date.Day) * 10000000000L;
+            }
 
-        private List<OrderBookEvent> PreOpenMarket()
-        {
-            // TODO: need better system for multiple sessions per day
-            var date = Now();
-            _nextSequenceNumber = ((date.Year * 10000) + (date.Month * 100) + date.Day) * 10000000000L;
-            _status = OrderBookStatus.PreOpen;
-            return new List<OrderBookEvent> {new StatusChanged(_security, Now(), _status)};
-        }
-
-        private List<OrderBookEvent> OpenMarket()
-        {
-            _status = OrderBookStatus.Open;
             var events = new List<OrderBookEvent> {new StatusChanged(_security, Now(), _status)};
 
-            // Commits the auction pre-open was quoting. Runs whether the prior status was the real
-            // start-of-day PreOpen or PreOpen re-entered mid-session for a volatility pause - same
-            // uncrossing either way, and a no-op when the book isn't crossed, since the auction
-            // declines to begin.
-            Match(events, _algorithms[OrderBookStatus.PreOpen]);
+            // A phase that was quoting rather than trading has been accumulating orders for a
+            // print, and this is where that print happens - so the opening print is pre-open's own
+            // auction rather than anything the open phase owns, and a second auction phase would
+            // print on the way out of itself with nothing here to change. Match declines it
+            // outright if the phase just entered does not trade, which is what makes leaving
+            // pre-open for a close abandon the auction instead of crossing it.
+            if (departing.PrintsOnExit)
+                Match(events, departing.Algorithm);
 
+            // Then trading continues under whatever governs the phase just entered.
             Match(events);
-            return events;
-        }
 
-        private List<OrderBookEvent> CloseMarket()
-        {
-            _status = OrderBookStatus.Closed;
-            var events = new List<OrderBookEvent> {new StatusChanged(_security, Now(), _status)};
-            events.AddRange(ExpireOrders());
+            if (arriving.ExpiresDayOrders)
+                events.AddRange(ExpireOrders());
+
             return events;
         }
 

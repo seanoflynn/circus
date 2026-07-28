@@ -255,6 +255,29 @@ namespace Circus.Tests.OrderBook
         }
 
         [Test]
+        public void ClosingFromPreOpen_AbandonsTheAuction_WithoutPrinting()
+        {
+            // arrange - a crossed book in pre-open, quoting a price it would clear at
+            var security = new Security("GCZ6", SecurityType.Future, 10, 10);
+            var book = new InMemoryOrderBook(security, TimeProvider);
+            book.UpdateStatus(OrderBookStatus.PreOpen);
+            book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 10, 150);
+            book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 10, 100);
+            Assert.IsTrue(book.TryGetIndicativeAuctionPrice(out _, out _));
+
+            // act - closing rather than opening. Pre-open is a phase that prints on the way out,
+            // but the phase being entered doesn't trade, so the orders it accumulated are
+            // abandoned rather than crossed.
+            var events = book.UpdateStatus(OrderBookStatus.Closed);
+
+            // assert
+            Assert.IsEmpty(events.OfType<OrdersMatched>().ToList(),
+                "the auction must not print into a phase that doesn't trade");
+            Assert.AreEqual(2, events.OfType<ExpireOrderConfirmed>().ToList().Count);
+            Assert.AreEqual(OrderBookStatus.Closed, book.Status);
+        }
+
+        [Test]
         public void TryGetIndicativeAuctionPrice_WhileOpen_Declines()
         {
             // arrange - continuous trading is governed by price-time, which has no single price it
