@@ -45,6 +45,31 @@ namespace Circus.Tests.OrderBook
         }
 
         [Test]
+        public void BothBandsConfigured_EachRestrictionGetsItsOwnThreshold()
+        {
+            // arrange - the entry band wide (1000) and the volatility band narrow (5). Each
+            // restriction is handed only its own width, so the wiring in the book's constructor is
+            // now the only place these two could be crossed over. A wide entry band must not
+            // reject, and a narrow volatility band must still pause on the resulting trade.
+            var security = new Security("GCZ6", SecurityType.Future, 10, 10, PriceBandTicks: 1000,
+                VolatilityAuctionBandTicks: 5);
+            var book = new InMemoryOrderBook(security, TimeProvider);
+            book.UpdateStatus(OrderBookStatus.Open, 100);
+
+            // act - 200 is far outside the narrow volatility band but well inside the wide entry
+            // band, so both orders are accepted and it is the trade between them that pauses
+            var resting = book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 200);
+            var crossing = book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 200);
+
+            // assert
+            Assert.IsInstanceOf<CreateOrderConfirmed>(resting[0],
+                "entry band is 1000 wide - this order is nowhere near it");
+            Assert.IsInstanceOf<CreateOrderConfirmed>(crossing[0]);
+            Assert.AreEqual(OrderBookStatus.PreOpen, book.Status,
+                "the 5-tick volatility band should have paused the book on the trade");
+        }
+
+        [Test]
         public void NoReferencePriceSeeded_NoTradeYet_BandInactive_Accepted()
         {
             // arrange - band is configured, but there's no anchor to check against yet

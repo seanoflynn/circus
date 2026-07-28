@@ -9,7 +9,7 @@ namespace Circus.Tests.OrderBook
         [Test]
         public void Scope_IsOrderEntry_OnBreach_IsReject()
         {
-            var restriction = new OrderPriceRestriction(new Security("GCZ6", SecurityType.Future, 10, 10));
+            var restriction = new OrderPriceRestriction(null);
 
             Assert.AreEqual(RestrictionScope.OrderEntry, restriction.Scope);
             Assert.AreEqual(RestrictionBreachAction.Reject, restriction.OnBreach);
@@ -18,7 +18,7 @@ namespace Circus.Tests.OrderBook
         [Test]
         public void NoBandConfigured_AlwaysAllows()
         {
-            var restriction = new OrderPriceRestriction(new Security("GCZ6", SecurityType.Future, 10, 10));
+            var restriction = new OrderPriceRestriction(null);
             restriction.OnSessionChange(100);
 
             Assert.IsTrue(restriction.Allows(1_000_000));
@@ -27,8 +27,7 @@ namespace Circus.Tests.OrderBook
         [Test]
         public void BandConfigured_NoReferencePriceYet_AlwaysAllows()
         {
-            var security = new Security("GCZ6", SecurityType.Future, 10, 10, PriceBandTicks: 5);
-            var restriction = new OrderPriceRestriction(security);
+            var restriction = new OrderPriceRestriction(5);
 
             Assert.IsTrue(restriction.Allows(1_000_000));
         }
@@ -36,8 +35,7 @@ namespace Circus.Tests.OrderBook
         [Test]
         public void WithinBand_Allowed_AtEdge_Allowed_BeyondEdge_Disallowed()
         {
-            var security = new Security("GCZ6", SecurityType.Future, 10, 10, PriceBandTicks: 5);
-            var restriction = new OrderPriceRestriction(security);
+            var restriction = new OrderPriceRestriction(5);
             restriction.OnSessionChange(100);
 
             Assert.IsTrue(restriction.Allows(100));
@@ -50,8 +48,7 @@ namespace Circus.Tests.OrderBook
         [Test]
         public void OnSessionChange_Null_DoesNotClearExistingReference()
         {
-            var security = new Security("GCZ6", SecurityType.Future, 10, 10, PriceBandTicks: 5);
-            var restriction = new OrderPriceRestriction(security);
+            var restriction = new OrderPriceRestriction(5);
             restriction.OnSessionChange(100);
             restriction.OnSessionChange(null);
 
@@ -62,8 +59,7 @@ namespace Circus.Tests.OrderBook
         [Test]
         public void OnTrade_MovesReferenceToLastTrade()
         {
-            var security = new Security("GCZ6", SecurityType.Future, 10, 10, PriceBandTicks: 5);
-            var restriction = new OrderPriceRestriction(security);
+            var restriction = new OrderPriceRestriction(5);
             restriction.OnSessionChange(100);
 
             restriction.OnTrade(200, default);

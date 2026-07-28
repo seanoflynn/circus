@@ -46,8 +46,8 @@ namespace Circus.OrderBook
             _timeProvider = timeProvider;
             _priceRestrictions = new IPriceRestriction[]
             {
-                new OrderPriceRestriction(security),
-                new DailyPriceBandLimit(security)
+                new OrderPriceRestriction(security.PriceBandTicks),
+                new DailyPriceBandLimit(security.VolatilityAuctionBandTicks)
             };
         }
 

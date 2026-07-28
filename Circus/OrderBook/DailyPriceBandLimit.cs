@@ -11,20 +11,21 @@ namespace Circus.OrderBook
     // future circuit breaker's larger, market-wide halt. Keeps its own anchor.
     internal sealed class DailyPriceBandLimit : IPriceRestriction
     {
-        private readonly Security _security;
+        private readonly int? _bandTicks;
         private long? _referencePriceTicks;
 
-        internal DailyPriceBandLimit(Security security)
+        // The band width only - see OrderPriceRestriction for why the Security itself stays out.
+        internal DailyPriceBandLimit(int? bandTicks)
         {
-            _security = security;
+            _bandTicks = bandTicks;
         }
 
         public RestrictionScope Scope => RestrictionScope.Trade;
         public RestrictionBreachAction OnBreach => RestrictionBreachAction.Pause;
 
         public bool Allows(long priceTicks) =>
-            !_security.VolatilityAuctionBandTicks.HasValue || !_referencePriceTicks.HasValue ||
-            Math.Abs(priceTicks - _referencePriceTicks.Value) <= _security.VolatilityAuctionBandTicks.Value;
+            !_bandTicks.HasValue || !_referencePriceTicks.HasValue ||
+            Math.Abs(priceTicks - _referencePriceTicks.Value) <= _bandTicks.Value;
 
         public void OnTrade(long priceTicks, DateTime time) => _referencePriceTicks = priceTicks;
 
