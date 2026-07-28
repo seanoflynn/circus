@@ -36,14 +36,17 @@ namespace Circus.OrderBook
         // without mutating anything or emitting events. algorithm supplies the pricing/sizing
         // policy (see IMatchingAlgorithm.cs); everything else here - the crossing condition,
         // self-match detection, stop-triggering - is identical regardless of which algorithm is
-        // active. checkTradeRestrictionBreach is a pure query (consulted only when
+        // active. afterStopTrigger is the algorithm the remainder of this run switches to once a
+        // stop fires (see below) - the security's continuous algorithm, which for a run that was
+        // already continuous is simply the same instance again.
+        // checkTradeRestrictionBreach is a pure query (consulted only when
         // algorithm.ChecksTradeRestrictions) returning the breach action of the first Trade-scoped
         // restriction that disallows the prospective trade price, if any. Re-reads the book fresh
         // on every iteration, so the caller must fully apply each yielded outcome - including any
         // ladder mutation - before asking for the next one; a converted stop landing in Working is
         // exactly what lets this same loop pick it up and keep matching, with no separate
         // recursive pass needed.
-        public IEnumerable<MatchOutcome> Run(IMatchingAlgorithm algorithm,
+        public IEnumerable<MatchOutcome> Run(IMatchingAlgorithm algorithm, IMatchingAlgorithm afterStopTrigger,
             Func<long, RestrictionBreachAction?> checkTradeRestrictionBreach)
         {
             var buy = BestOrder(Side.Buy);
@@ -91,7 +94,7 @@ namespace Circus.OrderBook
                     // Once a stop fires mid-sweep, everything after it prices continuously - an
                     // auction print is the resolution mechanism for the book as it stood at open,
                     // not for orders that have just newly arrived because of it.
-                    algorithm = ContinuousMatch.Instance;
+                    algorithm = afterStopTrigger;
                 }
 
                 buy = BestOrder(Side.Buy);

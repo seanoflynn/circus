@@ -30,6 +30,12 @@ namespace Circus.OrderBook
         // liquidity checks, self-match verdicts) that read them.
         private readonly Matcher _matcher = new();
 
+        // The algorithm continuous trading runs under, and the one an interrupted auction print
+        // hands the rest of its sweep to. Held as an instance rather than reached for statically
+        // so a security can eventually supply its own (a pro-rata variant, say) alongside the
+        // auction algorithms its pre-open and opening phases use.
+        private readonly IMatchingAlgorithm _continuous = new PriceTime();
+
         // Keyed by InternalId, not ExchangeOrderId - the latter changes across an order's life.
         private readonly Dictionary<long, InternalOrder> _orders = new();
         private readonly Dictionary<long, InternalOrder> _completedOrders = new();
@@ -500,7 +506,8 @@ namespace Circus.OrderBook
             return null;
         }
 
-        private void Match(List<OrderBookEvent> events, long? auctionPriceTicks = null)
+        // algorithm defaults to continuous trading; the opening print passes an Auction instead.
+        private void Match(List<OrderBookEvent> events, IMatchingAlgorithm? algorithm = null)
         {
             if (_status != OrderBookStatus.Open)
             {
@@ -509,11 +516,8 @@ namespace Circus.OrderBook
 
             var time = Now();
             var pendingImmediateOrCancelStops = new List<InternalOrder>();
-            IMatchingAlgorithm algorithm = auctionPriceTicks.HasValue
-                ? new Uncross(auctionPriceTicks.Value)
-                : ContinuousMatch.Instance;
 
-            foreach (var outcome in _matcher.Run(algorithm, CheckTradeRestrictionBreach))
+            foreach (var outcome in _matcher.Run(algorithm ?? _continuous, _continuous, CheckTradeRestrictionBreach))
                 Apply(outcome, events, time, pendingImmediateOrCancelStops);
 
             // Deferred until the whole sweep is done, not checked right after each stop's own
@@ -706,7 +710,7 @@ namespace Circus.OrderBook
             // Runs whether the prior status was the real start-of-day PreOpen or PreOpen
             // re-entered mid-session for a volatility pause - same uncrossing either way.
             if (_matcher.TryComputeAuctionPrice(_auctionReferencePriceTicks, out var auctionPriceTicks, out _))
-                Match(events, auctionPriceTicks);
+                Match(events, new Auction(auctionPriceTicks));
 
             Match(events);
             return events;
