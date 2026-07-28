@@ -11,11 +11,18 @@ namespace Circus.OrderBook
     // active and stays owned by Matcher. Only the decisions below vary.
     //
     // Implementations are instances rather than shared singletons, so a security can eventually
-    // carry its own configured set: a dry-run auction publishing an indicative price during
-    // pre-open, a committing auction for the opening print, price-time (or a pro-rata variant of
-    // it) once continuous trading starts.
+    // carry its own configured set - the auction governing pre-open and the opening print, and
+    // price-time (or a pro-rata variant of it) governing continuous trading.
     internal interface IMatchingAlgorithm
     {
+        // What this algorithm would print against the current book if it ran right now, without
+        // committing to any of it. An auction answers with its clearing price and the volume that
+        // would cross there, which is what pre-open publishes as an indicative quote; continuous
+        // trading has no single indicative print to give - the touch is already public - and
+        // declines. Side-effect-free, so asking is not the same as beginning.
+        bool TryQuoteIndicative(IReadOnlyDictionary<Side, IReadOnlyPriceLadder> working,
+            out long priceTicks, out int quantity);
+
         // Prepare for a run against the current working book, deriving whatever run-scoped state
         // this algorithm needs from it - an auction strikes its clearing price here. False means
         // there is nothing for this algorithm to match, so the run yields no outcomes at all.
@@ -46,5 +53,13 @@ namespace Circus.OrderBook
         // Whether a prospective trade price is checked against Trade-scoped price restrictions
         // (a volatility band pausing the book, say) before it executes.
         bool ChecksTradeRestrictions { get; }
+
+        // Anchor maintenance, mirroring IPriceRestriction.OnTrade / OnSessionChange. An algorithm
+        // that keys off a reference price - the auction's tie-break does - keeps it current here
+        // rather than reading one the book holds on its behalf. The book fans both across every
+        // algorithm it governs a phase with, so an algorithm with no anchor simply ignores them.
+        void OnTrade(long priceTicks);
+
+        void OnSessionChange(long? referencePriceTicks);
     }
 }

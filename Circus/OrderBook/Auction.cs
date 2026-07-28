@@ -29,10 +29,15 @@ namespace Circus.OrderBook
 
         public void OnSessionChange(long? referencePriceTicks) => _referencePriceTicks = referencePriceTicks;
 
-        // False when the book isn't crossed, which is what makes an uncrossing pass over an
-        // uncrossed book a no-op rather than something the caller has to check for first.
+        // Strikes the price this print will clear at and holds it for the run. False when the book
+        // isn't crossed, which is what makes an uncrossing pass over an uncrossed book a no-op
+        // rather than something the caller has to check for first.
+        //
+        // The price committed to here is exactly the one TryQuoteIndicative was publishing a
+        // moment earlier - quoting and printing are the same computation, differing only in
+        // whether the caller then runs the algorithm or merely asked it a question.
         public bool TryBegin(IReadOnlyDictionary<Side, IReadOnlyPriceLadder> working) =>
-            TryComputeClearingPrice(working, out _clearingPriceTicks, out _);
+            TryQuoteIndicative(working, out _clearingPriceTicks, out _);
 
         // Time priority at the clearing price: the FIFO-earliest order at the level fills first,
         // same order the continuous algorithm would take them in - what differs is the price they
@@ -57,9 +62,9 @@ namespace Circus.OrderBook
         // they're picked up afterward by Matcher.Run's own stop-triggering check, same as any
         // other trade.
         //
-        // Public and side-effect-free so the book can also publish it as a live indicative price
-        // during pre-open, without committing to a print.
-        public bool TryComputeClearingPrice(IReadOnlyDictionary<Side, IReadOnlyPriceLadder> working,
+        // Side-effect-free, which is what lets pre-open publish it as a live indicative quote
+        // without committing to a print.
+        public bool TryQuoteIndicative(IReadOnlyDictionary<Side, IReadOnlyPriceLadder> working,
             out long priceTicks, out int quantity)
         {
             priceTicks = 0;

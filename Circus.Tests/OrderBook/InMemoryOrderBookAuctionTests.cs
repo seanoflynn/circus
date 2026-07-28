@@ -226,6 +226,58 @@ namespace Circus.Tests.OrderBook
         }
 
         [Test]
+        public void PreOpen_CrossedBook_QuotesButNeverTrades()
+        {
+            // arrange - pre-open is governed by an auction, so the one thing that must never
+            // happen is that governance turning into execution: a crossed book during pre-open is
+            // quoted, not printed. Orders sit untouched until the open.
+            var security = new Security("GCZ6", SecurityType.Future, 10, 10);
+            var book = new InMemoryOrderBook(security, TimeProvider);
+            book.UpdateStatus(OrderBookStatus.PreOpen);
+
+            // act - deeply crossed: the bid is well through the offer
+            var buy = book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 10, 150);
+            var sell = book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 10, 100);
+
+            // assert - a confirmation each, and nothing else
+            Assert.AreEqual(1, buy.Count);
+            Assert.IsInstanceOf<CreateOrderConfirmed>(buy[0]);
+            Assert.AreEqual(1, sell.Count);
+            Assert.IsInstanceOf<CreateOrderConfirmed>(sell[0]);
+
+            // the auction is quoting the whole time, it just isn't acting on it
+            Assert.IsTrue(book.TryGetIndicativeAuctionPrice(out _, out var indicativeQuantity));
+            Assert.AreEqual(10, indicativeQuantity);
+
+            // and both orders are still resting in full
+            Assert.AreEqual(10, book.GetLevels(Side.Buy, 10)[0].Quantity);
+            Assert.AreEqual(10, book.GetLevels(Side.Sell, 10)[0].Quantity);
+        }
+
+        [Test]
+        public void TryGetIndicativeAuctionPrice_WhileOpen_Declines()
+        {
+            // arrange - continuous trading is governed by price-time, which has no single price it
+            // would print at, so there is no indicative auction price to report while open. This
+            // is what IOrderBook has always documented the method to mean.
+            var security = new Security("GCZ6", SecurityType.Future, 10, 10);
+            var book = new InMemoryOrderBook(security, TimeProvider);
+            book.UpdateStatus(OrderBookStatus.Open);
+            book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 10, 100);
+
+            // act + assert
+            Assert.IsFalse(book.TryGetIndicativeAuctionPrice(out _, out _));
+
+            // ...and it comes back the moment a volatility pause returns the book to PreOpen
+            book.UpdateStatus(OrderBookStatus.PreOpen);
+            book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 10, 100);
+
+            Assert.IsTrue(book.TryGetIndicativeAuctionPrice(out var price, out var quantity));
+            Assert.AreEqual(100, price);
+            Assert.AreEqual(10, quantity);
+        }
+
+        [Test]
         public void TryGetIndicativeAuctionPrice_ReflectsLiveStateDuringPreOpen()
         {
             // arrange

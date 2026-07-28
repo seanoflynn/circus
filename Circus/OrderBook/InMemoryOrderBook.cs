@@ -22,13 +22,20 @@ namespace Circus.OrderBook
         // self-match verdicts) that read them.
         private readonly Matcher _matcher = new();
 
-        // The algorithms this book matches under: one for continuous trading - also what an
-        // interrupted auction print hands the rest of its sweep to - and one for the auction
-        // print itself, which owns its own clearing-price computation and reference anchor.
-        // Held as instances rather than reached for statically so a security can eventually
-        // supply its own set, differing by phase.
-        private readonly IMatchingAlgorithm _continuous = new PriceTime();
-        private readonly Auction _auction = new();
+        // The algorithm governing each trading phase. PreOpen quotes an indicative price but never
+        // trades; Open trades continuously; and the transition between them commits PreOpen's own
+        // auction as the opening print, so what opening prints is what pre-open was quoting a
+        // moment earlier - one instance, one reference anchor, nothing to keep in sync.
+        //
+        // Closed has no entry: nothing matches or quotes with the book shut. Built here with
+        // defaults, shaped so a security could eventually supply its own set - a pro-rata variant
+        // of continuous trading, say - without anything else moving.
+        private readonly IReadOnlyDictionary<OrderBookStatus, IMatchingAlgorithm> _algorithms =
+            new Dictionary<OrderBookStatus, IMatchingAlgorithm>
+            {
+                {OrderBookStatus.PreOpen, new Auction()},
+                {OrderBookStatus.Open, new PriceTime()}
+            };
 
         // Keyed by InternalId, not ExchangeOrderId - the latter changes across an order's life.
         private readonly Dictionary<long, InternalOrder> _orders = new();
@@ -65,7 +72,7 @@ namespace Circus.OrderBook
 
         // Market data reports what's publicly visible - an iceberg's hidden reserve is
         // deliberately excluded here even though Matcher.HasSufficientLiquidity and
-        // Auction.TryComputeClearingPrice still count it in full for liquidity/price-discovery
+        // Auction.TryQuoteIndicative still count it in full for liquidity/price-discovery
         // purposes.
         private static int SumDisplayed(InternalOrder? first)
         {
@@ -75,13 +82,20 @@ namespace Circus.OrderBook
             return total;
         }
 
+        // Answered by whichever algorithm governs the current phase, so this reports a price
+        // exactly when there is an auction to report one for: during PreOpen, whether that is the
+        // start-of-day session or a mid-session volatility pause. Continuous trading declines,
+        // which is what the interface has always documented this to mean.
         public bool TryGetIndicativeAuctionPrice(out decimal price, out int quantity)
         {
-            if (!_auction.TryComputeClearingPrice(_matcher.Working, out var priceTicks, out quantity))
-            {
-                price = 0;
+            price = 0;
+            quantity = 0;
+
+            if (!_algorithms.TryGetValue(_status, out var algorithm))
                 return false;
-            }
+
+            if (!algorithm.TryQuoteIndicative(_matcher.Working, out var priceTicks, out quantity))
+                return false;
 
             price = ToDecimal(priceTicks);
             return true;
@@ -487,7 +501,12 @@ namespace Circus.OrderBook
             return null;
         }
 
-        // algorithm defaults to continuous trading; the opening print passes an Auction instead.
+        // Continuous matching, under the algorithm governing the open phase; the opening print
+        // passes PreOpen's auction instead. The status guard stays explicit rather than falling
+        // out of the phase lookup: pre-open has a governing algorithm and it is an auction, so a
+        // Match that ran during pre-open would print trades at the indicative price rather than
+        // merely quoting it. That phases other than Open do not match continuously is a fact about
+        // the book, and it should be one visible line.
         private void Match(List<OrderBookEvent> events, IMatchingAlgorithm? algorithm = null)
         {
             if (_status != OrderBookStatus.Open)
@@ -495,10 +514,11 @@ namespace Circus.OrderBook
                 return;
             }
 
+            var continuous = _algorithms[OrderBookStatus.Open];
             var time = Now();
             var pendingImmediateOrCancelStops = new List<InternalOrder>();
 
-            foreach (var outcome in _matcher.Run(algorithm ?? _continuous, _continuous, CheckTradeRestrictionBreach))
+            foreach (var outcome in _matcher.Run(algorithm ?? continuous, continuous, CheckTradeRestrictionBreach))
                 Apply(outcome, events, time, pendingImmediateOrCancelStops);
 
             // Deferred until the whole sweep is done, not checked right after each stop's own
@@ -591,7 +611,8 @@ namespace Circus.OrderBook
             if (_lastTradedPrice != priceTicks)
             {
                 _lastTradedPrice = priceTicks;
-                _auction.OnTrade(priceTicks);
+                foreach (var algorithm in _algorithms.Values)
+                    algorithm.OnTrade(priceTicks);
                 foreach (var restriction in _priceRestrictions)
                     restriction.OnTrade(priceTicks, time);
             }
@@ -661,7 +682,8 @@ namespace Circus.OrderBook
         {
             if (referencePrice.HasValue && TryConvertToTicks(referencePrice, out var referenceTicks))
             {
-                _auction.OnSessionChange(referenceTicks);
+                foreach (var algorithm in _algorithms.Values)
+                    algorithm.OnSessionChange(referenceTicks);
                 foreach (var restriction in _priceRestrictions)
                     restriction.OnSessionChange(referenceTicks);
             }
@@ -689,10 +711,11 @@ namespace Circus.OrderBook
             _status = OrderBookStatus.Open;
             var events = new List<OrderBookEvent> {new StatusChanged(_security, Now(), _status)};
 
-            // Runs whether the prior status was the real start-of-day PreOpen or PreOpen
-            // re-entered mid-session for a volatility pause - same uncrossing either way, and a
-            // no-op when the book isn't crossed, since the auction declines to begin.
-            Match(events, _auction);
+            // Commits the auction pre-open was quoting. Runs whether the prior status was the real
+            // start-of-day PreOpen or PreOpen re-entered mid-session for a volatility pause - same
+            // uncrossing either way, and a no-op when the book isn't crossed, since the auction
+            // declines to begin.
+            Match(events, _algorithms[OrderBookStatus.PreOpen]);
 
             Match(events);
             return events;
