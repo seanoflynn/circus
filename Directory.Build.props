@@ -1,0 +1,38 @@
+<Project>
+
+    <!--
+        Settings shared by every project in the repository. MSBuild imports this automatically
+        before each .csproj, so anything here can still be overridden by an individual project.
+    -->
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <!--
+        Circus is the only project that ships to NuGet, and it opts back in. Defaulting to false
+        means a new project has to ask to be packed rather than being packed by accident - which is
+        what would happen to Circus.Examples today.
+    -->
+    <PropertyGroup>
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
+
+    <!-- Package metadata belonging to the repository rather than to any one package. -->
+    <PropertyGroup>
+        <Authors>seanoflynn</Authors>
+        <Copyright>Copyright 2021</Copyright>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageProjectUrl>https://github.com/seanoflynn/circus</PackageProjectUrl>
+    </PropertyGroup>
+
+    <!--
+        Deterministic paths in the symbols Circus already publishes. Only on CI, so a local build
+        keeps the absolute paths a debugger wants.
+    -->
+    <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
+        <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    </PropertyGroup>
+
+</Project>

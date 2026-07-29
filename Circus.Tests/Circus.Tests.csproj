@@ -1,9 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-    <PropertyGroup>
-        <TargetFramework>net10.0</TargetFramework>
+    <!-- TargetFramework and IsPackable=false come from Directory.Build.props. -->
 
-        <IsPackable>false</IsPackable>
+    <PropertyGroup>
+        <!--
+            The one project that does not inherit Nullable=enable. It has never been built with
+            nullable analysis on, and the `events[0] as SomeEvent` + Assert.IsNotNull pattern used
+            throughout the assertions is exactly what it flags. Turning it on is a change worth
+            making on its own, with the resulting diagnostics in front of you.
+        -->
+        <Nullable>disable</Nullable>
     </PropertyGroup>
 
     <ItemGroup>
