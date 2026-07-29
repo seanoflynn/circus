@@ -85,4 +85,15 @@ namespace Circus.OrderBook
     // no such price and so publishes none.
     public record IndicativePriceChanged(Security Security, DateTime Time, decimal? Price, int Quantity)
         : OrderBookEvent(Security, Time);
+
+    // The market has reached a daily price limit and cannot trade through it, or has come back
+    // inside one. Side is which way it is stuck: Buy for limit up, where buyers cannot push higher,
+    // Sell for limit down. Null with a null Price releases it, and is what a print inside the
+    // limits emits.
+    //
+    // Not a status change - a limit-locked market is open, quoting, and trading at the limit. That
+    // is the whole difference between a limit and a circuit breaker, so it gets an event of its own
+    // rather than a status that would claim otherwise. Emitted only on a change.
+    public record LimitStateChanged(Security Security, DateTime Time, Side? Side, decimal? Price)
+        : OrderBookEvent(Security, Time);
 }

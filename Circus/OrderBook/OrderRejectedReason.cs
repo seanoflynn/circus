@@ -35,6 +35,11 @@ namespace Circus.OrderBook
         // stop elected this far from its trigger would rest where the band would never have
         // accepted it directly. Appended rather than filed with the other TriggerPrice reasons, so
         // that no existing member's numeric value moves.
-        TriggerPriceTooFarFromPrice
+        TriggerPriceTooFarFromPrice,
+
+        // Beyond the session's ceiling or floor. Distinct from PriceOutsideBands because the two
+        // mean different things to whoever sent the order: a band moves with the market and will
+        // very likely accept the same price shortly, a daily limit stands for the session.
+        BeyondDailyPriceLimit
     }
 }

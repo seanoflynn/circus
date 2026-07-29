@@ -41,8 +41,8 @@ Safety features
 - [x] Banding
 - [x] Volatility interruptions (dynamic, static and extended ranges)
 - [x] Velocity logic (too far, too fast over a rolling window)
-- [ ] Daily price limits (static, session-long limit up/down)
-- [ ] Circuit breakers
+- [x] Daily price limits (static, session-long limit up/down)
+- [x] Circuit breakers (levelled, widest breached level wins)
 - [ ] Stop price logic
 - [x] Self-match prevention
 

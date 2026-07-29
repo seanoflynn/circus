@@ -226,6 +226,7 @@ namespace Circus.Tests.OrderBook
 
             public RestrictionScope Scope => RestrictionScope.Trade;
             public RestrictionBreachAction OnBreach => _action;
+            public OrderRejectedReason EntryRejectionReason => OrderRejectedReason.PriceOutsideBands;
             public TimeSpan? ResumeAfter => _resumeAfter;
             public bool Allows(long priceTicks, DateTime time) => false;
             public bool AllowsStopSpread(long spreadTicks) => true;

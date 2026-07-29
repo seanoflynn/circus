@@ -23,6 +23,9 @@ namespace Circus.OrderBook
         public RestrictionScope Scope => RestrictionScope.Trade;
         public RestrictionBreachAction OnBreach => RestrictionBreachAction.Pause;
 
+        // Trade-scoped only, so this is never asked.
+        public OrderRejectedReason EntryRejectionReason => OrderRejectedReason.PriceOutsideBands;
+
         public TimeSpan? ResumeAfter => _resumeAfter;
 
         // Inactive until a reference exists - nothing but a status change can supply one.

@@ -19,6 +19,10 @@ namespace Circus.OrderBook
         private DateTime? _resumeAt;
         private OrderBookStatus _resumeTo;
 
+        // Which way a daily limit currently has the market stuck, so the state is published on the
+        // change rather than on every sweep it turns away. Null is a market free to trade.
+        private Side? _limitState;
+
         // The indicative quote as last published, so only moves in it are emitted.
         private (long PriceTicks, int Quantity)? _indicativeQuote;
 
@@ -107,6 +111,8 @@ namespace Circus.OrderBook
                     // window, and the two configs exist to say which is meant, not to behave apart.
                     VelocityLimit limit => new VolatilityBandRestriction(limit.RangeTicks, limit.PauseFor,
                         limit.Window),
+                    DailyPriceLimit limit => new DailyPriceLimitRestriction(limit.Width),
+                    CircuitBreaker breaker => new CircuitBreakerRestriction(breaker.Width, breaker.HaltFor),
                     _ => throw new ArgumentException($"Unknown price restriction {config.GetType().Name}")
                 }).ToList();
 
@@ -256,8 +262,8 @@ namespace Circus.OrderBook
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.TriggerPriceMustBeGreaterThanLastTradedPrice);
             if (triggerTicks != null && side == Side.Sell && triggerTicks >= _lastTradedPrice)
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.TriggerPriceMustBeLessThanLastTradedPrice);
-            if (priceTicks.HasValue && !AllowsOrderEntry(priceTicks.Value))
-                return RejectCreate(companyId, clientOrderId, OrderRejectedReason.PriceOutsideBands);
+            if (priceTicks.HasValue && FindOrderEntryRefusal(priceTicks.Value) is { } entryRefusal)
+                return RejectCreate(companyId, clientOrderId, entryRefusal);
             if (validity is OrderValidity.ImmediateOrCancel { MinQuantity: int minQty } && (minQty < 1 || minQty > quantity))
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.MinQuantityOutOfRange);
             if (maxVisibleQuantity.HasValue && (maxVisibleQuantity < 1 || maxVisibleQuantity > quantity))
@@ -340,15 +346,27 @@ namespace Circus.OrderBook
         // Client-supplied resting limit prices only. Trigger prices are governed by the
         // TriggerPriceMustBe... checks above, and Market/MarketLimit prices by
         // MarketOrderProtectionTicks.
-        private bool AllowsOrderEntry(long priceTicks) =>
-            _priceRestrictions.Where(r => r.Scope == RestrictionScope.OrderEntry)
-                .All(r => r.Allows(priceTicks, Now()));
+        // Null when every entry-scoped restriction allows the price, otherwise the rejection the
+        // first refusing one asks for - a band and a daily limit turn an order away for reasons
+        // that read differently to whoever sent it.
+        private OrderRejectedReason? FindOrderEntryRefusal(long priceTicks)
+        {
+            var time = Now();
+            foreach (var restriction in _priceRestrictions)
+            {
+                if (restriction.Scope.HasFlag(RestrictionScope.OrderEntry) &&
+                    !restriction.Allows(priceTicks, time))
+                    return restriction.EntryRejectionReason;
+            }
+
+            return null;
+        }
 
         // A stop elected far from its trigger would rest at a price the band would never have
         // accepted directly, so CME bounds the gap by the same band. Checked on the pair rather
         // than on either price, and only where a band exists to bound it.
         private bool AllowsStopSpread(long triggerTicks, long priceTicks) =>
-            _priceRestrictions.Where(r => r.Scope == RestrictionScope.OrderEntry)
+            _priceRestrictions.Where(r => r.Scope.HasFlag(RestrictionScope.OrderEntry))
                 .All(r => r.AllowsStopSpread(Math.Abs(priceTicks - triggerTicks)));
 
         // Only ever called on an order currently resting in the working book (a FAK remainder or
@@ -385,8 +403,8 @@ namespace Circus.OrderBook
                 return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.InvalidPriceIncrement);
             if (!TryConvertToTicks(triggerPrice, out var triggerTicks))
                 return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.InvalidPriceIncrement);
-            if (priceTicks.HasValue && !AllowsOrderEntry(priceTicks.Value))
-                return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.PriceOutsideBands);
+            if (priceTicks.HasValue && FindOrderEntryRefusal(priceTicks.Value) is { } entryRefusal)
+                return RejectUpdate(companyId, clientOrderId, previousClientOrderId, entryRefusal);
             if (!_clientOrderIndex.TryGetValue((companyId, previousClientOrderId), out var order) ||
                 order.ClientOrderId != previousClientOrderId)
                 return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.OrderNotInBook);
@@ -637,14 +655,30 @@ namespace Circus.OrderBook
 
             foreach (var restriction in _priceRestrictions)
             {
-                if (restriction.Scope != RestrictionScope.Trade || restriction.Allows(priceTicks, time))
+                if (!restriction.Scope.HasFlag(RestrictionScope.Trade) || restriction.Allows(priceTicks, time))
                     continue;
 
-                if (worst == null || Severity(restriction.OnBreach) > Severity(worst.Value.Action))
-                    worst = new RestrictionBreach(restriction.OnBreach, restriction.ResumeAfter);
+                var breach = new RestrictionBreach(restriction.OnBreach, restriction.ResumeAfter);
+                if (worst == null || IsMoreSevere(breach, worst.Value))
+                    worst = breach;
             }
 
             return worst;
+        }
+
+        // Consequence first, then how long it lasts - a price through a circuit breaker's widest
+        // level is through its narrower ones too, and the market should be halted for as long as
+        // the level it actually reached says rather than the one it passed on the way. Never
+        // resuming outranks any duration, which is what the level that ends a trading day is.
+        private static bool IsMoreSevere(RestrictionBreach candidate, RestrictionBreach current)
+        {
+            if (Severity(candidate.Action) != Severity(current.Action))
+                return Severity(candidate.Action) > Severity(current.Action);
+
+            if (!candidate.ResumeAfter.HasValue || !current.ResumeAfter.HasValue)
+                return !candidate.ResumeAfter.HasValue && current.ResumeAfter.HasValue;
+
+            return candidate.ResumeAfter.Value > current.ResumeAfter.Value;
         }
 
         // Whether a restriction refuses to let the interruption the book is in end at the price it
@@ -669,7 +703,7 @@ namespace Circus.OrderBook
             {
                 // First refusal rather than the severest: every restriction refusing here is asking
                 // for the same thing, so there is nothing to rank.
-                if (restriction.Scope == RestrictionScope.Trade &&
+                if (restriction.Scope.HasFlag(RestrictionScope.Trade) &&
                     !restriction.AllowsResumption(priceTicks, time))
                     return new RestrictionBreach(restriction.OnBreach, restriction.ResumeAfter);
             }
@@ -681,8 +715,12 @@ namespace Circus.OrderBook
         // change. Reject never reaches here - it is an order-entry consequence.
         private static int Severity(RestrictionBreachAction action) => action switch
         {
-            RestrictionBreachAction.Halt => 2,
-            RestrictionBreachAction.Pause => 1,
+            RestrictionBreachAction.Halt => 3,
+            RestrictionBreachAction.Pause => 2,
+
+            // Below both: a limit-locked market is still open and still trading, at the limit. It
+            // is the mildest thing that can stop a sweep, not a form of interruption.
+            RestrictionBreachAction.Block => 1,
             _ => 0
         };
 
@@ -700,6 +738,13 @@ namespace Circus.OrderBook
 
                 case TradeExecuted(var resting, var aggressor, var priceTicks, var quantity, var usesFullRemainingQuantity):
                     ApplyTrade(resting, aggressor, priceTicks, quantity, usesFullRemainingQuantity, events, time);
+                    break;
+
+                // A limit stops the sweep and nothing else: the market is open, quoting, and can
+                // trade at the limit and back inside it. Only the status is spared - the run has
+                // already ended, since Matcher.Run stops on any breach.
+                case TradeRestrictionBreached(var blockedTicks, {Action: RestrictionBreachAction.Block}):
+                    TakeLimitStateChange(blockedTicks, events);
                     break;
 
                 // Assigned directly rather than routed through UpdateStatus: this runs inside the
@@ -721,6 +766,39 @@ namespace Circus.OrderBook
                     TriggerStops(orders, time, events, pendingImmediateOrCancelStops);
                     break;
             }
+        }
+
+        // Which way the market is stuck, and only when that changes - a limit-locked book refuses
+        // every sweep that follows, and saying so once is enough. Direction comes from where the
+        // blocked price sits against the last one that traded; with nothing traded yet there is
+        // nothing to compare it to, and the price alone says where the limit is.
+        private void TakeLimitStateChange(long blockedTicks, List<OrderBookEvent> events)
+        {
+            var side = _lastTradedPrice switch
+            {
+                null => (Side?) null,
+                var last when blockedTicks > last => Side.Buy,
+                var last when blockedTicks < last => Side.Sell,
+                _ => _limitState
+            };
+
+            if (_limitState == side)
+                return;
+
+            _limitState = side;
+            events.Add(new LimitStateChanged(_security, Now(), side, ToDecimal(blockedTicks)));
+        }
+
+        // A print means the market is trading again, wherever it is trading. Releasing on any trade
+        // rather than on one strictly inside the limits is deliberate: trading at the limit is the
+        // market working, not the market stuck.
+        private void ReleaseLimitState(List<OrderBookEvent> events)
+        {
+            if (_limitState == null)
+                return;
+
+            _limitState = null;
+            events.Add(new LimitStateChanged(_security, Now(), null, null));
         }
 
         private void ApplyTrade(InternalOrder resting, InternalOrder aggressor, long priceTicks, int quantity,
@@ -760,6 +838,8 @@ namespace Circus.OrderBook
                 events.Add(restingReplenish);
             if (aggressorReplenish != null)
                 events.Add(aggressorReplenish);
+
+            ReleaseLimitState(events);
 
             if (_lastTradedPrice != priceTicks)
             {
