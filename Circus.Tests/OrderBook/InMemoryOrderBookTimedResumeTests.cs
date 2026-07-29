@@ -228,8 +228,10 @@ namespace Circus.Tests.OrderBook
             public RestrictionBreachAction OnBreach => _action;
             public TimeSpan? ResumeAfter => _resumeAfter;
             public bool Allows(long priceTicks, DateTime time) => false;
+            public bool AllowsStopSpread(long spreadTicks) => true;
             public void OnTrade(long priceTicks, DateTime time) { }
             public void OnSessionChange(long? referencePriceTicks) { }
+            public void OnIndicativePrice(long? priceTicks) { }
         }
     }
 }

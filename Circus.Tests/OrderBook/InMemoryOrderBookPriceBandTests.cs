@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Circus.OrderBook;
 using Circus.TimeProviders;
 using NUnit.Framework;
@@ -163,6 +164,135 @@ namespace Circus.Tests.OrderBook
             var buyLevels = book.GetLevels(Side.Buy, 10);
             Assert.AreEqual(1, buyLevels.Count);
             Assert.AreEqual(100, buyLevels[0].Price);
+        }
+
+        // A band of 5 ticks on a tick size of 10 is 50 either side of wherever the reference is.
+        private static Security BandedSecurity() =>
+            new("GCZ6", SecurityType.Future, 10, 10,
+                PriceRestrictions: new PriceRestrictionConfig[] {new OrderPriceBand(5)});
+
+        [Test]
+        public void PreOpen_ReferenceMovesFromTheSettlementPriceToTheIndicativePrice()
+        {
+            // arrange - settled at 100, so the band starts out [50, 150]
+            var book = new LevelTrackingOrderBook(BandedSecurity(), TimeProvider);
+            book.UpdateStatus(OrderBookStatus.PreOpen, 100);
+
+            // assert - 200 is outside the band while the settlement price is still the reference
+            var beforeCross = book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 200);
+            Assert.AreEqual(OrderRejectedReason.PriceOutsideBands, (beforeCross[0] as CreateOrderRejected)?.Reason);
+
+            // act - the book crosses at 150, so an indicative price exists and takes over as the
+            // reference, moving the band to [100, 200]
+            book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Buy, 10, 150);
+            var crossing = book.CreateLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Sell, 10, 150);
+            Assert.AreEqual(150, crossing.OfType<IndicativePriceChanged>().Last().Price);
+
+            // assert - the same price that was rejected a moment ago is now inside the band
+            var afterCross = book.CreateLimitOrder(CompanyId4, OrderId4, new OrderValidity.Day(), Side.Buy, 5, 200);
+            Assert.IsInstanceOf<CreateOrderConfirmed>(afterCross[0]);
+
+            // ...and 90, which the old band allowed, is now outside it
+            var belowNewBand = book.CreateLimitOrder(CompanyId4, "Order5", new OrderValidity.Day(), Side.Buy, 5, 90);
+            Assert.AreEqual(OrderRejectedReason.PriceOutsideBands, (belowNewBand[0] as CreateOrderRejected)?.Reason);
+        }
+
+        [Test]
+        public void ContinuousTrading_ReferenceReturnsToTheLastTrade_OnceTheQuoteIsWithdrawn()
+        {
+            // arrange - open on an auction that prints at 150, which withdraws the quote
+            var book = new LevelTrackingOrderBook(BandedSecurity(), TimeProvider);
+            book.UpdateStatus(OrderBookStatus.PreOpen, 100);
+            book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 10, 150);
+            book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 10, 150);
+            book.UpdateStatus(OrderBookStatus.Open);
+
+            // act - continuous trading prints at 190, which the band [100, 200] allows
+            book.CreateLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Buy, 5, 190);
+            book.CreateLimitOrder(CompanyId4, OrderId4, new OrderValidity.Day(), Side.Sell, 5, 190);
+
+            // assert - the band tracks the last trade, so it is now [140, 240]. Were the withdrawn
+            // indicative price of 150 still the reference, 240 would be well outside it.
+            var atNewEdge = book.CreateLimitOrder(CompanyId1, "Order5", new OrderValidity.Day(), Side.Buy, 5, 240);
+            Assert.IsInstanceOf<CreateOrderConfirmed>(atNewEdge[0]);
+
+            var belowNewBand = book.CreateLimitOrder(CompanyId1, "Order6", new OrderValidity.Day(), Side.Buy, 5, 130);
+            Assert.AreEqual(OrderRejectedReason.PriceOutsideBands, (belowNewBand[0] as CreateOrderRejected)?.Reason);
+        }
+
+        // Trades at 100 to give stop orders a last traded price, then re-seeds the reference at 200
+        // so the band sits somewhere the last traded price does not. Without that separation the
+        // spread rule cannot be isolated: with the band centred on the last trade, a trigger on the
+        // far side of it can never be more than a band away from a limit price still inside it.
+        private LevelTrackingOrderBook StopSpreadBook(Security security)
+        {
+            var book = new LevelTrackingOrderBook(security, TimeProvider);
+            book.UpdateStatus(OrderBookStatus.Open, 100);
+            book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100);
+            book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 5, 100);
+            book.UpdateStatus(OrderBookStatus.Open, 200);
+            return book;
+        }
+
+        [Test]
+        public void StopLimit_TriggerAndPriceWithinABandOfEachOther_Accepted()
+        {
+            // arrange - band [150, 250] around the re-seeded reference of 200
+            var book = StopSpreadBook(BandedSecurity());
+
+            // act - trigger 160 and limit 210 are 50 apart, exactly the band width
+            var events = book.CreateStopLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(),
+                Side.Buy, 5, 210, 160);
+
+            // assert
+            Assert.IsInstanceOf<CreateOrderConfirmed>(events[0]);
+        }
+
+        [Test]
+        public void StopLimit_TriggerAndPriceFurtherApartThanTheBand_Rejected()
+        {
+            // arrange
+            var book = StopSpreadBook(BandedSecurity());
+
+            // act - trigger 160 and limit 250 are 90 apart, beyond the band
+            var events = book.CreateStopLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(),
+                Side.Buy, 5, 250, 160);
+
+            // assert - and note the limit price of 250 sits exactly on the band's own edge, so the
+            // entry band alone would have accepted this order. Only the spread rule catches it.
+            var rejected = events[0] as CreateOrderRejected;
+            Assert.IsNotNull(rejected);
+            Assert.AreEqual(OrderRejectedReason.TriggerPriceTooFarFromPrice, rejected.Reason);
+        }
+
+        [Test]
+        public void UpdateOrder_RepricingAStopBeyondTheBandFromItsTrigger_Rejected()
+        {
+            // arrange - an accepted stop, trigger 160 and limit 210
+            var book = StopSpreadBook(BandedSecurity());
+            book.CreateStopLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Buy, 5, 210, 160);
+
+            // act - repricing to 250 leaves the limit inside the band but 90 from the trigger
+            var events = book.UpdateOrder(CompanyId3, OrderId4, OrderId3, price: 250);
+
+            // assert
+            var rejected = events[0] as UpdateOrderRejected;
+            Assert.IsNotNull(rejected);
+            Assert.AreEqual(OrderRejectedReason.TriggerPriceTooFarFromPrice, rejected.Reason);
+        }
+
+        [Test]
+        public void NoBandConfigured_StopSpreadUnbounded()
+        {
+            // arrange - nothing to bound the gap with
+            var book = StopSpreadBook(new Security("GCZ6", SecurityType.Future, 10, 10));
+
+            // act
+            var events = book.CreateStopLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(),
+                Side.Buy, 5, 1000, 160);
+
+            // assert
+            Assert.IsInstanceOf<CreateOrderConfirmed>(events[0]);
         }
     }
 }

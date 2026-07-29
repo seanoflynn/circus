@@ -54,6 +54,28 @@ namespace Circus.Tests.OrderBook
         }
 
         [Test]
+        public void IndicativePrice_Ignored()
+        {
+            // volatility is measured against prices that actually traded, not one an auction is
+            // only quoting - the entry band is the restriction that follows the indicative price
+            var restriction = new VolatilityBandRestriction(5);
+            restriction.OnSessionChange(100);
+
+            restriction.OnIndicativePrice(300);
+
+            Assert.IsTrue(restriction.Allows(105, default));
+            Assert.IsFalse(restriction.Allows(300, default));
+        }
+
+        [Test]
+        public void StopSpread_Unconstrained_NotAnEntryRestriction()
+        {
+            var restriction = new VolatilityBandRestriction(5);
+
+            Assert.IsTrue(restriction.AllowsStopSpread(1_000_000));
+        }
+
+        [Test]
         public void OnTrade_MovesReferenceToLastTrade()
         {
             var restriction = new VolatilityBandRestriction(5);

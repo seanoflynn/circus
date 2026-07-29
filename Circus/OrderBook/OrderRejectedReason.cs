@@ -29,6 +29,12 @@ namespace Circus.OrderBook
         PriceOutsideBands,
         MinQuantityOutOfRange,
         InsufficientLiquidityForMinQuantity,
-        MaxVisibleQuantityOutOfRange
+        MaxVisibleQuantityOutOfRange,
+
+        // The trigger and limit prices are on the right sides of each other but too far apart: a
+        // stop elected this far from its trigger would rest where the band would never have
+        // accepted it directly. Appended rather than filed with the other TriggerPrice reasons, so
+        // that no existing member's numeric value moves.
+        TriggerPriceTooFarFromPrice
     }
 }

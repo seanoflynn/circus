@@ -38,9 +38,16 @@ namespace Circus.OrderBook
         // movement over a rolling window has to know how much of its history is still in scope.
         bool Allows(long priceTicks, DateTime time);
 
+        // How far apart a stop order's trigger and limit prices may be. Separate from Allows
+        // because it measures a width rather than a distance from a reference, and CME governs it
+        // with the same band that governs entry prices. Only consulted for Scope == OrderEntry.
+        bool AllowsStopSpread(long spreadTicks);
+
         // Maintain this restriction's own anchor. OnTrade fires on every print; OnSessionChange
-        // fires when an explicit reference price (settlement-style) is supplied at a status change.
+        // fires when an explicit reference price (settlement-style) is supplied at a status change;
+        // OnIndicativePrice fires when the auction quote moves, with null when it is withdrawn.
         void OnTrade(long priceTicks, DateTime time);
         void OnSessionChange(long? referencePriceTicks);
+        void OnIndicativePrice(long? priceTicks);
     }
 }

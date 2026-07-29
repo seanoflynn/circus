@@ -196,6 +196,14 @@ namespace Circus.OrderBook
                 return null;
 
             _indicativeQuote = quote;
+
+            // An anchor for anything banding against the auction price, withdrawn along with the
+            // quote. Reaching restrictions here rather than at order entry means an order is judged
+            // against the quote as it stood before that order - which is the only thing it could be
+            // judged against, since the quote cannot account for an order that has not arrived.
+            foreach (var restriction in _priceRestrictions)
+                restriction.OnIndicativePrice(quote?.PriceTicks);
+
             return new IndicativePriceChanged(_security, Now(),
                 quote.HasValue ? (decimal?) ToDecimal(quote.Value.PriceTicks) : null, quote?.Quantity ?? 0);
         }
@@ -232,6 +240,9 @@ namespace Circus.OrderBook
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.TriggerPriceMustBeLessThanPrice);
             if (triggerTicks != null && priceTicks != null && side == Side.Sell && priceTicks > triggerTicks)
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.TriggerPriceMustBeGreaterThanPrice);
+            if (triggerTicks != null && priceTicks != null &&
+                !AllowsStopSpread(triggerTicks.Value, priceTicks.Value))
+                return RejectCreate(companyId, clientOrderId, OrderRejectedReason.TriggerPriceTooFarFromPrice);
             if (triggerTicks != null && !_lastTradedPrice.HasValue)
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.NoLastTradedPrice);
             if (triggerTicks != null && side == Side.Buy && triggerTicks <= _lastTradedPrice)
@@ -326,6 +337,13 @@ namespace Circus.OrderBook
             _priceRestrictions.Where(r => r.Scope == RestrictionScope.OrderEntry)
                 .All(r => r.Allows(priceTicks, Now()));
 
+        // A stop elected far from its trigger would rest at a price the band would never have
+        // accepted directly, so CME bounds the gap by the same band. Checked on the pair rather
+        // than on either price, and only where a band exists to bound it.
+        private bool AllowsStopSpread(long triggerTicks, long priceTicks) =>
+            _priceRestrictions.Where(r => r.Scope == RestrictionScope.OrderEntry)
+                .All(r => r.AllowsStopSpread(Math.Abs(priceTicks - triggerTicks)));
+
         // Only ever called on an order currently resting in the working book (a FAK remainder or
         // a self-match-prevention cancel during Match()) - never a still-Hidden stop order.
         private OrderBookEvent CancelRemainder(InternalOrder order, OrderCancelledReason reason)
@@ -388,6 +406,10 @@ namespace Circus.OrderBook
                 if (newTriggerTicks != null && newPriceTicks != null && order.Side == Side.Sell && newPriceTicks > newTriggerTicks)
                     return RejectUpdate(companyId, clientOrderId, previousClientOrderId,
                         OrderRejectedReason.TriggerPriceMustBeGreaterThanPrice, order.ExchangeOrderId);
+                if (newTriggerTicks != null && newPriceTicks != null &&
+                    !AllowsStopSpread(newTriggerTicks.Value, newPriceTicks.Value))
+                    return RejectUpdate(companyId, clientOrderId, previousClientOrderId,
+                        OrderRejectedReason.TriggerPriceTooFarFromPrice, order.ExchangeOrderId);
 
                 if (triggerTicks != null && order.Side == Side.Buy && triggerTicks <= _lastTradedPrice)
                     return RejectUpdate(companyId, clientOrderId, previousClientOrderId,
