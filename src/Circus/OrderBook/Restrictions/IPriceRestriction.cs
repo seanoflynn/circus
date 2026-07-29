@@ -2,6 +2,11 @@ using Circus.OrderBook.Events;
 
 namespace Circus.OrderBook.Restrictions;
 
+// The enforcement half of price restrictions. The declarations these are built from are
+// PriceRestrictionConfig and its subtypes, which live beside Security because they describe an
+// instrument rather than the book; each adapter here is named for the config it enforces.
+// InMemoryOrderBook.Adapt is what turns one into the other.
+
 // Flags, because a daily price limit is both: it refuses an order priced beyond the limit and
 // refuses to print through it. Everything else governs one or the other.
 [Flags]
