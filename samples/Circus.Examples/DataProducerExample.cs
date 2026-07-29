@@ -1,8 +1,8 @@
-using Circus.DataProducers;
+using Circus.MarketData;
 using Circus.OrderBook;
 using Circus.OrderBook.Actions;
 using Circus.OrderBook.Events;
-using Circus.TimeProviders;
+using Circus.Time;
 
 namespace Circus.Examples;
 
@@ -10,7 +10,7 @@ public class MarketDataProducerExample
 {
     public static void Run()
     {
-        var time = new UtcTimeProvider();
+        var time = new SystemClock();
 
         var sec1 = new Security("GCZ6", SecurityType.Future, 10, 10);
         var sec2 = new Security("SIZ6", SecurityType.Future, 10, 10);

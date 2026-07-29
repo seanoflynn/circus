@@ -1,10 +1,10 @@
-namespace Circus.TimeProviders;
+namespace Circus.Time;
 
-public class TestTimeProvider : ITimeProvider
+public class ManualClock : IClock
 {
     private DateTime _time;
 
-    public TestTimeProvider(DateTime now)
+    public ManualClock(DateTime now)
     {
         _time = now;
     }

@@ -2,14 +2,14 @@ using Circus.OrderBook.Actions;
 using Circus.OrderBook.Events;
 using Circus.OrderBook.Matching;
 using Circus.OrderBook.Restrictions;
-using Circus.TimeProviders;
+using Circus.Time;
 
 namespace Circus.OrderBook;
 
 public class InMemoryOrderBook : IOrderBook
 {
     private readonly Security _security;
-    private readonly ITimeProvider _timeProvider;
+    private readonly IClock _clock;
 
     private OrderBookStatus _status = OrderBookStatus.Closed;
     private long _nextSequenceNumber;
@@ -90,8 +90,8 @@ public class InMemoryOrderBook : IOrderBook
 
     private const int MaxClientOrderIdLength = 20;
 
-    public InMemoryOrderBook(Security security, ITimeProvider timeProvider)
-        : this(security, timeProvider, Adapt(security.PriceRestrictions))
+    public InMemoryOrderBook(Security security, IClock clock)
+        : this(security, clock, Adapt(security.PriceRestrictions))
     {
     }
 
@@ -120,15 +120,15 @@ public class InMemoryOrderBook : IOrderBook
     // Restrictions supplied outright rather than derived from the security. Internal because it
     // is a seam, not an API: it exists so combinations a Security cannot yet describe - two
     // trade-scoped restrictions disagreeing about severity, say - can still be exercised.
-    internal InMemoryOrderBook(Security security, ITimeProvider timeProvider,
+    internal InMemoryOrderBook(Security security, IClock clock,
         IReadOnlyList<IPriceRestriction> priceRestrictions)
     {
         _security = security;
-        _timeProvider = timeProvider;
+        _clock = clock;
         _priceRestrictions = priceRestrictions;
     }
 
-    private DateTime Now() => _timeProvider.GetCurrentTime();
+    private DateTime Now() => _clock.GetCurrentTime();
 
     public Security Security => _security;
     public OrderBookStatus Status => _status;

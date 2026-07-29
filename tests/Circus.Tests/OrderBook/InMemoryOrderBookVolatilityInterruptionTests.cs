@@ -1,7 +1,7 @@
 using Circus.OrderBook;
 using Circus.OrderBook.Actions;
 using Circus.OrderBook.Events;
-using Circus.TimeProviders;
+using Circus.Time;
 using NUnit.Framework;
 
 namespace Circus.Tests.OrderBook;
@@ -21,12 +21,12 @@ public class InMemoryOrderBookVolatilityInterruptionTests
     private static readonly string OrderId1 = "Order1";
     private static readonly string OrderId2 = "Order2";
 
-    private TestTimeProvider TimeProvider;
+    private ManualClock Clock;
 
     [SetUp]
     public void SetUp()
     {
-        TimeProvider = new TestTimeProvider(Now1);
+        Clock = new ManualClock(Now1);
     }
 
     // Ordinary range 5 ticks, extended range 8, pausing for two minutes. On a tick size of 10
@@ -43,7 +43,7 @@ public class InMemoryOrderBookVolatilityInterruptionTests
     {
         // arrange - referenced at 100, then a trade at 200 breaches the ordinary range and
         // pauses the book, leaving the two orders crossed and unfilled
-        var book = new InMemoryOrderBook(ExtendingSecurity(), TimeProvider);
+        var book = new InMemoryOrderBook(ExtendingSecurity(), Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 200);
         book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 200);
@@ -51,7 +51,7 @@ public class InMemoryOrderBookVolatilityInterruptionTests
 
         // act - the pause runs out, but the auction would still print at 200, which is 100 from
         // the reference and so outside the extended range of 80
-        TimeProvider.SetCurrentTime(Now1 + PauseFor);
+        Clock.SetCurrentTime(Now1 + PauseFor);
         var events = book.AdvanceTime();
 
         // assert - the interruption keeps running rather than resolving out there
@@ -67,12 +67,12 @@ public class InMemoryOrderBookVolatilityInterruptionTests
     public void InterruptionEnds_OnceItWouldPrintInsideTheExtendedRange()
     {
         // arrange - as above, paused with a would-be print at 200
-        var book = new InMemoryOrderBook(ExtendingSecurity(), TimeProvider);
+        var book = new InMemoryOrderBook(ExtendingSecurity(), Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 200);
         book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 200);
 
-        TimeProvider.SetCurrentTime(Now1 + PauseFor);
+        Clock.SetCurrentTime(Now1 + PauseFor);
         book.AdvanceTime();
         Assert.AreEqual(OrderBookStatus.Paused, book.Status, "extended once");
 
@@ -84,7 +84,7 @@ public class InMemoryOrderBookVolatilityInterruptionTests
         book.CreateLimitOrder(CompanyId1, "Order3", new OrderValidity.Day(), Side.Sell, 5, 180);
         book.CreateLimitOrder(CompanyId2, "Order4", new OrderValidity.Day(), Side.Buy, 5, 180);
 
-        TimeProvider.SetCurrentTime(Now1 + PauseFor + PauseFor);
+        Clock.SetCurrentTime(Now1 + PauseFor + PauseFor);
         var events = book.AdvanceTime();
 
         // assert - the interruption resolves, printing at a price the ordinary range would
@@ -107,7 +107,7 @@ public class InMemoryOrderBookVolatilityInterruptionTests
                 new VolatilityBand(3),
                 new StaticPriceRange(5)
             });
-        var book = new InMemoryOrderBook(security, TimeProvider);
+        var book = new InMemoryOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
 
         // act + assert - 120 is 2 ticks from the reference, inside both

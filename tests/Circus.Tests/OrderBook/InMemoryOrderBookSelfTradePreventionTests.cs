@@ -1,7 +1,7 @@
 using Circus.OrderBook;
 using Circus.OrderBook.Actions;
 using Circus.OrderBook.Events;
-using Circus.TimeProviders;
+using Circus.Time;
 using NUnit.Framework;
 
 namespace Circus.Tests.OrderBook;
@@ -25,14 +25,14 @@ public class InMemoryOrderBookSelfTradePreventionTests
     private static readonly string Smp1 = "Smp1";
     private static readonly string Smp2 = "Smp2";
 
-    private static TestTimeProvider TimeProvider;
+    private static ManualClock Clock;
     private static LevelTrackingOrderBook Book;
 
     [SetUp]
     public void SetUp()
     {
-        TimeProvider = new TestTimeProvider(Now1);
-        Book = new LevelTrackingOrderBook(Sec, TimeProvider);
+        Clock = new ManualClock(Now1);
+        Book = new LevelTrackingOrderBook(Sec, Clock);
     }
 
     [Test]
@@ -41,9 +41,9 @@ public class InMemoryOrderBookSelfTradePreventionTests
         // arrange
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 100, selfMatchPreventionId: Smp1);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
         Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 5, 100);
-        TimeProvider.SetCurrentTime(Now3);
+        Clock.SetCurrentTime(Now3);
 
         // act - same SMP id as the first (older) resting sell, so that one is prevented and
         // the aggressor should fall through to the second (different company) resting sell
@@ -84,7 +84,7 @@ public class InMemoryOrderBookSelfTradePreventionTests
         // arrange
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 100, selfMatchPreventionId: Smp1);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act
         var events = Book.CreateLimitOrder(CompanyId1, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 100, selfMatchPreventionId: Smp1, selfMatchPreventionInstruction: SelfMatchPreventionInstruction.CancelAggressor);
@@ -115,7 +115,7 @@ public class InMemoryOrderBookSelfTradePreventionTests
         // arrange
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 100, selfMatchPreventionId: Smp1);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act
         var events = Book.CreateLimitOrder(CompanyId1, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 100, selfMatchPreventionId: Smp1, selfMatchPreventionInstruction: SelfMatchPreventionInstruction.CancelBoth);
@@ -147,7 +147,7 @@ public class InMemoryOrderBookSelfTradePreventionTests
         // sides, but different SMP ids, so it should NOT be prevented
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 100, selfMatchPreventionId: Smp1);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act
         var events = Book.CreateLimitOrder(CompanyId1, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 100, selfMatchPreventionId: Smp2);
@@ -171,7 +171,7 @@ public class InMemoryOrderBookSelfTradePreventionTests
         // not automatic for same-company orders
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 100);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act
         var events = Book.CreateLimitOrder(CompanyId1, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 100);
@@ -192,7 +192,7 @@ public class InMemoryOrderBookSelfTradePreventionTests
         // arrange
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 100, selfMatchPreventionId: Smp1);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act - neither side specifies an instruction
         var events = Book.CreateLimitOrder(CompanyId1, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 100, selfMatchPreventionId: Smp1);
@@ -220,7 +220,7 @@ public class InMemoryOrderBookSelfTradePreventionTests
         // the resting order's instruction should govern
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 100, selfMatchPreventionId: Smp1, selfMatchPreventionInstruction: SelfMatchPreventionInstruction.CancelBoth);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act
         var events = Book.CreateLimitOrder(CompanyId1, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 100, selfMatchPreventionId: Smp1);
@@ -241,7 +241,7 @@ public class InMemoryOrderBookSelfTradePreventionTests
         // must be excluded from the upfront liquidity check rather than partially filled
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 100, selfMatchPreventionId: Smp1);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act
         var events = Book.CreateLimitOrder(CompanyId1, OrderId2, new OrderValidity.ImmediateOrCancel { MinQuantity = 5 }, Side.Buy, 5, 100, selfMatchPreventionId: Smp1);
@@ -269,9 +269,9 @@ public class InMemoryOrderBookSelfTradePreventionTests
         // order, so the incoming order should keep going and see the liquidity behind it.
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 2, 100, selfMatchPreventionId: Smp1);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
         Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 5, 100);
-        TimeProvider.SetCurrentTime(Now3);
+        Clock.SetCurrentTime(Now3);
 
         // act
         var events = Book.CreateLimitOrder(CompanyId1, OrderId3, new OrderValidity.ImmediateOrCancel { MinQuantity = 5 }, Side.Buy, 5, 100, selfMatchPreventionId: Smp1, selfMatchPreventionInstruction: SelfMatchPreventionInstruction.CancelResting);
@@ -305,9 +305,9 @@ public class InMemoryOrderBookSelfTradePreventionTests
         // quantity and keep counting past it.
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 2, 100, selfMatchPreventionId: Smp1);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
         Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 10, 100);
-        TimeProvider.SetCurrentTime(Now3);
+        Clock.SetCurrentTime(Now3);
 
         // act
         var events = Book.CreateLimitOrder(CompanyId1, OrderId3, new OrderValidity.ImmediateOrCancel { MinQuantity = 5 }, Side.Buy, 5, 100, selfMatchPreventionId: Smp1, selfMatchPreventionInstruction: SelfMatchPreventionInstruction.CancelAggressor);
@@ -339,9 +339,9 @@ public class InMemoryOrderBookSelfTradePreventionTests
         // second price level at all, no matter how much liquidity is sitting there.
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 2, 100, selfMatchPreventionId: Smp1);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
         Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 20, 110);
-        TimeProvider.SetCurrentTime(Now3);
+        Clock.SetCurrentTime(Now3);
 
         // act
         var events = Book.CreateLimitOrder(CompanyId1, OrderId3, new OrderValidity.ImmediateOrCancel { MinQuantity = 5 }, Side.Buy, 5, 110, selfMatchPreventionId: Smp1, selfMatchPreventionInstruction: SelfMatchPreventionInstruction.CancelAggressor);

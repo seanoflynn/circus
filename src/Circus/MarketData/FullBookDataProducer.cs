@@ -1,7 +1,7 @@
 using Circus.OrderBook;
 using Circus.OrderBook.Events;
 
-namespace Circus.DataProducers;
+namespace Circus.MarketData;
 
 // Full order-by-order (L3) view of the working book, derived purely from the
 // OrderConfirmedEvent stream - no IOrderBook access, no snapshotting. A consumer replays the

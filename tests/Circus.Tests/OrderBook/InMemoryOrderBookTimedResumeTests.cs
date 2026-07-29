@@ -2,7 +2,7 @@ using Circus.OrderBook;
 using Circus.OrderBook.Actions;
 using Circus.OrderBook.Events;
 using Circus.OrderBook.Restrictions;
-using Circus.TimeProviders;
+using Circus.Time;
 using NUnit.Framework;
 
 namespace Circus.Tests.OrderBook;
@@ -22,12 +22,12 @@ public class InMemoryOrderBookTimedResumeTests
     private static readonly string OrderId2 = "Order2";
     private static readonly string OrderId3 = "Order3";
 
-    private TestTimeProvider TimeProvider;
+    private ManualClock Clock;
 
     [SetUp]
     public void SetUp()
     {
-        TimeProvider = new TestTimeProvider(Now1);
+        Clock = new ManualClock(Now1);
     }
 
     // A 5-tick volatility band on a reference of 100, so a trade at 200 breaches it.
@@ -35,7 +35,7 @@ public class InMemoryOrderBookTimedResumeTests
     {
         var security = new Security("GCZ6", SecurityType.Future, 10, 10,
             PriceRestrictions: new PriceRestrictionConfig[] {new VolatilityBand(5, duration)});
-        var book = new InMemoryOrderBook(security, TimeProvider);
+        var book = new InMemoryOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
         return book;
     }
@@ -57,7 +57,7 @@ public class InMemoryOrderBookTimedResumeTests
         Assert.AreEqual(OrderBookStatus.Paused, book.Status);
 
         // act
-        TimeProvider.SetCurrentTime(Now1 + PauseFor);
+        Clock.SetCurrentTime(Now1 + PauseFor);
         var events = book.AdvanceTime();
 
         // assert
@@ -75,7 +75,7 @@ public class InMemoryOrderBookTimedResumeTests
         Breach(book);
 
         // act - one second short
-        TimeProvider.SetCurrentTime(Now1 + PauseFor - TimeSpan.FromSeconds(1));
+        Clock.SetCurrentTime(Now1 + PauseFor - TimeSpan.FromSeconds(1));
         var events = book.AdvanceTime();
 
         // assert
@@ -91,7 +91,7 @@ public class InMemoryOrderBookTimedResumeTests
         Breach(book);
 
         // act - however long passes
-        TimeProvider.SetCurrentTime(Now1.AddDays(1));
+        Clock.SetCurrentTime(Now1.AddDays(1));
         var events = book.AdvanceTime();
 
         // assert
@@ -107,7 +107,7 @@ public class InMemoryOrderBookTimedResumeTests
         Breach(book);
 
         // act
-        TimeProvider.SetCurrentTime(Now1 + PauseFor);
+        Clock.SetCurrentTime(Now1 + PauseFor);
         var events = book.AdvanceTime();
 
         // assert - the pause resolves into one uncrossing print rather than resuming mid-sweep
@@ -124,7 +124,7 @@ public class InMemoryOrderBookTimedResumeTests
         Breach(book);
 
         // act
-        TimeProvider.SetCurrentTime(Now1 + PauseFor);
+        Clock.SetCurrentTime(Now1 + PauseFor);
         var events = book.CreateLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Buy, 5, 90);
 
         // assert - resumed first, so the order arrived into an open book
@@ -143,7 +143,7 @@ public class InMemoryOrderBookTimedResumeTests
         book.CloseTrading();
 
         // act - the deadline the pause had set comes and goes
-        TimeProvider.SetCurrentTime(Now1 + PauseFor);
+        Clock.SetCurrentTime(Now1 + PauseFor);
         var events = book.AdvanceTime();
 
         // assert - a closed book must not spring back open
@@ -158,7 +158,7 @@ public class InMemoryOrderBookTimedResumeTests
         var book = PausingBook(PauseFor);
 
         // act
-        TimeProvider.SetCurrentTime(Now1.AddDays(1));
+        Clock.SetCurrentTime(Now1.AddDays(1));
         var events = book.AdvanceTime();
 
         // assert
@@ -197,7 +197,7 @@ public class InMemoryOrderBookTimedResumeTests
             : new IPriceRestriction[] {pausing, halting};
 
         var security = new Security("GCZ6", SecurityType.Future, 10, 10);
-        var book = new InMemoryOrderBook(security, TimeProvider, restrictions);
+        var book = new InMemoryOrderBook(security, Clock, restrictions);
         book.UpdateStatus(OrderBookStatus.Open);
 
         // act
@@ -209,7 +209,7 @@ public class InMemoryOrderBookTimedResumeTests
 
         // and the halting restriction's own (absent) duration is the one that applies, so
         // nothing resumes when the pausing restriction's would have elapsed
-        TimeProvider.SetCurrentTime(Now1 + PauseFor);
+        Clock.SetCurrentTime(Now1 + PauseFor);
         book.AdvanceTime();
         Assert.AreEqual(OrderBookStatus.Halted, book.Status);
     }

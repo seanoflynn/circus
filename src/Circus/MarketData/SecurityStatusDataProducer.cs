@@ -1,7 +1,7 @@
 using Circus.OrderBook;
 using Circus.OrderBook.Events;
 
-namespace Circus.DataProducers;
+namespace Circus.MarketData;
 
 // What state an instrument is in, as one thing - CME's Security Status message, Eurex's
 // instrument state. The book publishes the parts separately because they are separate: a status

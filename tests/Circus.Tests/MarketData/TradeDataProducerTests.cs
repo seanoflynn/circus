@@ -1,10 +1,10 @@
-using Circus.DataProducers;
+using Circus.MarketData;
 using Circus.OrderBook;
 using Circus.OrderBook.Actions;
-using Circus.TimeProviders;
+using Circus.Time;
 using NUnit.Framework;
 
-namespace Circus.Tests.DataProducers;
+namespace Circus.Tests.MarketData;
 
 public class TradeDataProducerTests
 {
@@ -14,10 +14,10 @@ public class TradeDataProducerTests
         // arrange
         var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
         var now = new DateTime(2000, 1, 1, 12, 0, 0);
-        var timeProvider = new TestTimeProvider(now);
+        var clock = new ManualClock(now);
         var producer = new TradeDataProducer();
 
-        var book = new InMemoryOrderBook(sec, timeProvider);
+        var book = new InMemoryOrderBook(sec, clock);
         book.UpdateStatus(OrderBookStatus.Open);
         book.CreateLimitOrder("Company1", "Order1", new OrderValidity.Day(), Side.Buy, 3, 100);
         var bookEvents =

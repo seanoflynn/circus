@@ -1,4 +1,4 @@
-namespace Circus.SessionProviders;
+namespace Circus.Sessions;
 
 // One session's boundaries as times of day. A day's schedule is an ordered, non-overlapping
 // list of these - a single continuous session for most products, two or more for one that

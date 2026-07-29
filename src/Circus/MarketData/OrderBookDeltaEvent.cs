@@ -1,4 +1,4 @@
-namespace Circus.DataProducers;
+namespace Circus.MarketData;
 
 // ExchangeOrderId only - never CompanyId/ClientOrderId, which identify the originating
 // client and must not be broadcast on a public depth feed.

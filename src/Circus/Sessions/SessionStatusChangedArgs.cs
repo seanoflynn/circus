@@ -1,6 +1,6 @@
 using Circus.OrderBook;
 
-namespace Circus.SessionProviders;
+namespace Circus.Sessions;
 
 // EndsTradingDay is meaningful only when Status is Closed: false for a session closing with
 // another still to come the same day, so a consumer can forward it to the book and leave Day

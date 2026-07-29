@@ -1,6 +1,6 @@
 using Circus.OrderBook;
 
-namespace Circus.SessionProviders;
+namespace Circus.Sessions;
 
 // Drives an order book's status off a clock, given a day's schedule. Update() is pushed the
 // current time and fires whatever boundaries have been passed since it was last called, so a

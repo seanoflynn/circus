@@ -1,7 +1,7 @@
 using Circus.OrderBook;
 using Circus.OrderBook.Actions;
 using Circus.OrderBook.Events;
-using Circus.TimeProviders;
+using Circus.Time;
 using NUnit.Framework;
 
 namespace Circus.Tests.OrderBook;
@@ -18,12 +18,12 @@ public class InMemoryOrderBookVelocityLogicTests
     private static readonly string CompanyId1 = "Company1";
     private static readonly string CompanyId2 = "Company2";
 
-    private TestTimeProvider TimeProvider;
+    private ManualClock Clock;
 
     [SetUp]
     public void SetUp()
     {
-        TimeProvider = new TestTimeProvider(Now1);
+        Clock = new ManualClock(Now1);
     }
 
     // 5 ticks on a tick size of 10, so 50 of price movement inside ten seconds is too fast.
@@ -34,7 +34,7 @@ public class InMemoryOrderBookVelocityLogicTests
                 {
                     new VelocityLimit(5, Window, pauseFor)
                 }),
-            TimeProvider);
+            Clock);
 
     [Test]
     public void StepsArrivingTooQuickly_TripTheLimit()
@@ -48,13 +48,13 @@ public class InMemoryOrderBookVelocityLogicTests
         Assert.AreEqual(OrderBookStatus.Open, book.Status);
 
         // two seconds later, 40 from the first trade and inside the range
-        TimeProvider.SetCurrentTime(Now1.AddSeconds(2));
+        Clock.SetCurrentTime(Now1.AddSeconds(2));
         Trade(book, 2, 140);
         Assert.AreEqual(OrderBookStatus.Open, book.Status);
 
         // two seconds later again. This step is only 40 from the last trade, but the trade at
         // 100 is still inside the window and 80 away, which is what the limit is watching for
-        TimeProvider.SetCurrentTime(Now1.AddSeconds(4));
+        Clock.SetCurrentTime(Now1.AddSeconds(4));
         Trade(book, 3, 180);
         Assert.AreEqual(OrderBookStatus.Paused, book.Status);
     }
@@ -69,10 +69,10 @@ public class InMemoryOrderBookVelocityLogicTests
         // act
         Trade(book, 1, 100);
 
-        TimeProvider.SetCurrentTime(Now1.AddSeconds(20));
+        Clock.SetCurrentTime(Now1.AddSeconds(20));
         Trade(book, 2, 140);
 
-        TimeProvider.SetCurrentTime(Now1.AddSeconds(40));
+        Clock.SetCurrentTime(Now1.AddSeconds(40));
         Trade(book, 3, 180);
 
         // assert - by the third print the first has long left the window, so nothing measures
@@ -91,14 +91,14 @@ public class InMemoryOrderBookVelocityLogicTests
                 new VolatilityBand(20),
                 new VelocityLimit(5, Window)
             });
-        var book = new InMemoryOrderBook(security, TimeProvider);
+        var book = new InMemoryOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open);
 
         // act
         Trade(book, 1, 100);
-        TimeProvider.SetCurrentTime(Now1.AddSeconds(2));
+        Clock.SetCurrentTime(Now1.AddSeconds(2));
         Trade(book, 2, 140);
-        TimeProvider.SetCurrentTime(Now1.AddSeconds(4));
+        Clock.SetCurrentTime(Now1.AddSeconds(4));
         Trade(book, 3, 180);
 
         // assert - every step was 40, well inside the band's 200, so the band never had an
@@ -115,14 +115,14 @@ public class InMemoryOrderBookVelocityLogicTests
         book.UpdateStatus(OrderBookStatus.Open);
 
         Trade(book, 1, 100);
-        TimeProvider.SetCurrentTime(Now1.AddSeconds(2));
+        Clock.SetCurrentTime(Now1.AddSeconds(2));
         Trade(book, 2, 140);
-        TimeProvider.SetCurrentTime(Now1.AddSeconds(4));
+        Clock.SetCurrentTime(Now1.AddSeconds(4));
         Trade(book, 3, 180);
         Assert.AreEqual(OrderBookStatus.Paused, book.Status);
 
         // act - the orders that tripped it are still crossed, so ending the pause prints them
-        TimeProvider.SetCurrentTime(Now1.AddSeconds(4) + pauseFor);
+        Clock.SetCurrentTime(Now1.AddSeconds(4) + pauseFor);
         var events = book.AdvanceTime();
 
         // assert

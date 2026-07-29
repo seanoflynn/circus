@@ -1,11 +1,11 @@
-using Circus.DataProducers;
+using Circus.MarketData;
 using Circus.OrderBook;
 using Circus.OrderBook.Actions;
 using Circus.OrderBook.Events;
-using Circus.TimeProviders;
+using Circus.Time;
 using NUnit.Framework;
 
-namespace Circus.Tests.DataProducers;
+namespace Circus.Tests.MarketData;
 
 // LevelDataProducer maintains its own state purely from the OrderConfirmedEvent stream, so
 // every test must route every book action through the same producer instance, in order -
@@ -36,14 +36,14 @@ public class LevelDataProducerTests
     private static readonly string OrderId5 = "Order5";
     private static readonly string OrderId6 = "Order6";
 
-    private static TestTimeProvider TimeProvider;
+    private static ManualClock Clock;
     private static IOrderBook Book;
 
     [SetUp]
     public void SetUp()
     {
-        TimeProvider = new TestTimeProvider(Now1);
-        Book = new InMemoryOrderBook(Sec, TimeProvider);
+        Clock = new ManualClock(Now1);
+        Book = new InMemoryOrderBook(Sec, Clock);
     }
 
     private static LevelsDataEvent Publish(LevelDataProducer producer, IReadOnlyList<OrderBookEvent> bookEvents)
@@ -289,7 +289,7 @@ public class LevelDataProducerTests
         // quantity, so this trades 45, far more than the order was ever showing
         Publish(producer, Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 100, 100,
             maxVisibleQuantity: 10));
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
         Publish(producer, Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 45, 100));
 
         var level = Publish(producer, Book.UpdateStatus(OrderBookStatus.Open));
@@ -310,21 +310,21 @@ public class LevelDataProducerTests
         Publish(producer, Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 500));
         Publish(producer, Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 3, 500));
 
-        TimeProvider.SetCurrentTime(Now3);
+        Clock.SetCurrentTime(Now3);
         Publish(producer, Book.CreateLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Sell, 5, 520));
 
         // still-Hidden stop order: must not appear in the working-book levels yet
-        TimeProvider.SetCurrentTime(Now4);
+        Clock.SetCurrentTime(Now4);
         var afterStopCreate = Publish(producer,
             Book.CreateStopLimitOrder(CompanyId4, OrderId4, new OrderValidity.Day(), Side.Buy, 5, 530, 510));
         Assert.IsFalse(afterStopCreate.Bids.Count > 0 && afterStopCreate.Bids[0].Price == 530);
 
-        TimeProvider.SetCurrentTime(Now5);
+        Clock.SetCurrentTime(Now5);
         Publish(producer, Book.CreateLimitOrder(CompanyId5, OrderId5, new OrderValidity.Day(), Side.Sell, 2, 510));
 
         // act - trade at the trigger price, converting the stop into a working limit order
         // that immediately matches the resting 520 offer
-        TimeProvider.SetCurrentTime(Now6);
+        Clock.SetCurrentTime(Now6);
         var level = Publish(producer,
             Book.CreateLimitOrder(CompanyId6, OrderId6, new OrderValidity.Day(), Side.Buy, 2, 510));
 
