@@ -20,11 +20,9 @@ namespace Circus.Tests.OrderBook
 
         private static readonly string CompanyId1 = "Company1";
         private static readonly string CompanyId2 = "Company2";
-        private static readonly string CompanyId3 = "Company3";
 
         private static readonly string OrderId1 = "Order1";
         private static readonly string OrderId2 = "Order2";
-        private static readonly string OrderId3 = "Order3";
         private static readonly string CancelId1 = "Cancel1";
 
         private TestTimeProvider TimeProvider;
