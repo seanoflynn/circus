@@ -77,10 +77,11 @@ namespace Circus.OrderBook
         // working book be picked up by this same loop rather than a recursive pass.
         //
         // afterStopTrigger takes over once a stop fires, and is assumed already prepared.
-        // checkTradeRestrictionBreach reports the first Trade-scoped restriction to disallow a
-        // prospective price, and is consulted only when the algorithm asks for it.
+        // checkTradeRestrictionBreach reports the severest consequence among the Trade-scoped
+        // restrictions disallowing a prospective price, and is consulted only when the algorithm
+        // asks for it.
         public IEnumerable<MatchOutcome> Run(IMatchingAlgorithm algorithm, IMatchingAlgorithm afterStopTrigger,
-            Func<long, RestrictionBreachAction?> checkTradeRestrictionBreach)
+            Func<long, RestrictionBreach?> checkTradeRestrictionBreach)
         {
             if (!algorithm.TryBegin(_workingView))
                 yield break;
@@ -117,10 +118,10 @@ namespace Circus.OrderBook
 
                 if (algorithm.ChecksTradeRestrictions)
                 {
-                    var breachAction = checkTradeRestrictionBreach(priceTicks);
-                    if (breachAction.HasValue)
+                    var breach = checkTradeRestrictionBreach(priceTicks);
+                    if (breach.HasValue)
                     {
-                        yield return new TradeRestrictionBreached(priceTicks, breachAction.Value);
+                        yield return new TradeRestrictionBreached(priceTicks, breach.Value);
                         yield break;
                     }
                 }

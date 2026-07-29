@@ -19,7 +19,11 @@ namespace Circus.OrderBook
         public RestrictionScope Scope => RestrictionScope.OrderEntry;
         public RestrictionBreachAction OnBreach => RestrictionBreachAction.Reject;
 
-        public bool Allows(long priceTicks) =>
+        // A rejection interrupts nothing, so there is nothing to resume from.
+        public TimeSpan? ResumeAfter => null;
+
+        // Anchored on a single reference rather than a window, so the time is not consulted.
+        public bool Allows(long priceTicks, DateTime time) =>
             !_bandTicks.HasValue || !_referencePriceTicks.HasValue ||
             Math.Abs(priceTicks - _referencePriceTicks.Value) <= _bandTicks.Value;
 

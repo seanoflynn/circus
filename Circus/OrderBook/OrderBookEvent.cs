@@ -5,7 +5,9 @@ namespace Circus.OrderBook
 {
     public record OrderBookEvent(Security Security, DateTime Time);
 
-    public record StatusChanged(Security Security, DateTime Time, OrderBookStatus Status)
+    // Reason defaults to Requested, which is what every externally driven transition is.
+    public record StatusChanged(Security Security, DateTime Time, OrderBookStatus Status,
+            StatusChangeReason Reason = StatusChangeReason.Requested)
         : OrderBookEvent(Security, Time);
 
     public record OrderEvent(Security Security, DateTime Time, string CompanyId, string ClientOrderId,
