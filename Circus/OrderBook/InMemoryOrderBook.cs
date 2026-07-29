@@ -759,7 +759,8 @@ namespace Circus.OrderBook
                         ? OrderBookStatus.Halted
                         : OrderBookStatus.Paused;
                     _resumeAt = breach.ResumeAfter.HasValue ? Now() + breach.ResumeAfter.Value : null;
-                    events.Add(new StatusChanged(_security, Now(), _status, StatusChangeReason.PriceRestriction));
+                    events.Add(new StatusChanged(_security, Now(), _status, StatusChangeReason.PriceRestriction,
+                        _resumeAt));
                     break;
 
                 case StopsTriggered(var orders):
@@ -933,7 +934,7 @@ namespace Circus.OrderBook
                 // interruption is still running and why, which is the same thing a fresh one says.
                 _resumeAt = extension.Value.ResumeAfter.HasValue ? Now() + extension.Value.ResumeAfter.Value : null;
                 return new List<OrderBookEvent>
-                    {new StatusChanged(_security, Now(), _status, StatusChangeReason.PriceRestriction)};
+                    {new StatusChanged(_security, Now(), _status, StatusChangeReason.PriceRestriction, _resumeAt)};
             }
 
             // Any transition supersedes a pending one, so a session closing over a running pause
@@ -958,7 +959,9 @@ namespace Circus.OrderBook
                 _nextSequenceNumber = Math.Max(_nextSequenceNumber, seed);
             }
 
-            var events = new List<OrderBookEvent> {new StatusChanged(_security, Now(), _status, reason)};
+            // _resumeAt was cleared above, so this reports nothing pending - which is what an
+            // explicit transition means, having just superseded whatever was.
+            var events = new List<OrderBookEvent> {new StatusChanged(_security, Now(), _status, reason, _resumeAt)};
 
             // A quoting phase has been accumulating orders for a print, and leaving it is where
             // that print happens - so a second auction phase would need nothing changed here.

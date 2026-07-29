@@ -18,53 +18,48 @@ namespace Circus.Examples
             IOrderBook book1 = new InMemoryOrderBook(sec1, time);
             IOrderBook book2 = new InMemoryOrderBook(sec2, time);
 
-            // LevelDataProducer maintains its own per-book state, so each book needs its own
-            // instances (one per data tier) rather than sharing a single producer across books.
-            var tradeDataProducer1 = new TradeDataProducer();
-            var bboDataProducer1 = new LevelDataProducer(1);
-            var top10DataProducer1 = new LevelDataProducer(10);
-            var fullBookDataProducer1 = new FullBookDataProducer();
-            var indicativeDataProducer1 = new IndicativePriceDataProducer();
-
-            var tradeDataProducer2 = new TradeDataProducer();
-            var bboDataProducer2 = new LevelDataProducer(1);
-            var top10DataProducer2 = new LevelDataProducer(10);
-            var fullBookDataProducer2 = new FullBookDataProducer();
-            var indicativeDataProducer2 = new IndicativePriceDataProducer();
-
-            void Publish(IOrderBook book, IReadOnlyList<OrderBookEvent> events, TradeDataProducer tradeDataProducer,
-                LevelDataProducer bboDataProducer, LevelDataProducer top10DataProducer,
-                FullBookDataProducer fullBookDataProducer, IndicativePriceDataProducer indicativeDataProducer)
-            {
-                Print(tradeDataProducer.Process(book, events));
-                Print(bboDataProducer.Process(book, events));
-                Print(top10DataProducer.Process(book, events));
-                Print(fullBookDataProducer.Process(book, events));
-                Print(indicativeDataProducer.Process(book, events));
-            }
+            var feed1 = new BookFeed();
+            var feed2 = new BookFeed();
 
             // book1 opens on an auction: orders accumulate in pre-open with the indicative quote
             // tracking them, and the print happens on the way out - the same orders as book2, which
             // opens first and trades them continuously.
-            Publish(book1, book1.UpdateStatus(OrderBookStatus.PreOpen), tradeDataProducer1, bboDataProducer1,
-                top10DataProducer1, fullBookDataProducer1, indicativeDataProducer1);
-            Publish(book1, book1.CreateLimitOrder("Buyer", "Order1", new OrderValidity.Day(), Side.Buy, 3, 100),
-                tradeDataProducer1, bboDataProducer1, top10DataProducer1, fullBookDataProducer1,
-                indicativeDataProducer1);
-            Publish(book1, book1.CreateLimitOrder("Seller", "Order2", new OrderValidity.Day(), Side.Sell, 5, 100),
-                tradeDataProducer1, bboDataProducer1, top10DataProducer1, fullBookDataProducer1,
-                indicativeDataProducer1);
-            Publish(book1, book1.UpdateStatus(OrderBookStatus.Open), tradeDataProducer1, bboDataProducer1,
-                top10DataProducer1, fullBookDataProducer1, indicativeDataProducer1);
+            feed1.Publish(book1, book1.UpdateStatus(OrderBookStatus.PreOpen));
+            feed1.Publish(book1,
+                book1.CreateLimitOrder("Buyer", "Order1", new OrderValidity.Day(), Side.Buy, 3, 100));
+            feed1.Publish(book1,
+                book1.CreateLimitOrder("Seller", "Order2", new OrderValidity.Day(), Side.Sell, 5, 100));
+            feed1.Publish(book1, book1.UpdateStatus(OrderBookStatus.Open));
 
-            Publish(book2, book2.UpdateStatus(OrderBookStatus.Open), tradeDataProducer2, bboDataProducer2,
-                top10DataProducer2, fullBookDataProducer2, indicativeDataProducer2);
-            Publish(book2, book2.CreateLimitOrder("Buyer", "Order1", new OrderValidity.Day(), Side.Buy, 3, 100),
-                tradeDataProducer2, bboDataProducer2, top10DataProducer2, fullBookDataProducer2,
-                indicativeDataProducer2);
-            Publish(book2, book2.CreateLimitOrder("Seller", "Order2", new OrderValidity.Day(), Side.Sell, 5, 100),
-                tradeDataProducer2, bboDataProducer2, top10DataProducer2, fullBookDataProducer2,
-                indicativeDataProducer2);
+            feed2.Publish(book2, book2.UpdateStatus(OrderBookStatus.Open));
+            feed2.Publish(book2,
+                book2.CreateLimitOrder("Buyer", "Order1", new OrderValidity.Day(), Side.Buy, 3, 100));
+            feed2.Publish(book2,
+                book2.CreateLimitOrder("Seller", "Order2", new OrderValidity.Day(), Side.Sell, 5, 100));
+        }
+
+        // One set of producers per book. The level and status producers each build their own view
+        // of a single book out of its event stream alone, so a set cannot be shared across two -
+        // and there is no way to resync one that missed an event, which is why they are created
+        // before the book they follow processes anything.
+        private sealed class BookFeed
+        {
+            private readonly TradeDataProducer _trades = new();
+            private readonly LevelDataProducer _bbo = new(1);
+            private readonly LevelDataProducer _top10 = new(10);
+            private readonly FullBookDataProducer _fullBook = new();
+            private readonly IndicativePriceDataProducer _indicative = new();
+            private readonly SecurityStatusDataProducer _status = new();
+
+            public void Publish(IOrderBook book, IReadOnlyList<OrderBookEvent> events)
+            {
+                Print(_trades.Process(book, events));
+                Print(_bbo.Process(book, events));
+                Print(_top10.Process(book, events));
+                Print(_fullBook.Process(book, events));
+                Print(_indicative.Process(book, events));
+                Print(_status.Process(book, events));
+            }
         }
 
         private static void Print(IEnumerable<TradedDataEvent> events)
@@ -93,6 +88,14 @@ namespace Circus.Examples
         }
 
         private static void Print(IEnumerable<OrderBookDeltaEvent> events)
+        {
+            foreach (var @event in events)
+            {
+                Console.WriteLine(@event);
+            }
+        }
+
+        private static void Print(IEnumerable<SecurityStatusDataEvent> events)
         {
             foreach (var @event in events)
             {
