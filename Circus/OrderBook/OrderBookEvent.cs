@@ -43,8 +43,13 @@ namespace Circus.OrderBook
             decimal? PreviousPrice, int PreviousQuantity)
         : OrderConfirmedEvent(Security, Time, CompanyId, Order);
 
+    // Quantity is what traded; PreviousDisplayedQuantity is the order's DisplayedQuantity before
+    // it did. The two differ whenever an auction sizes a fill off full remaining quantity - an
+    // iceberg can trade more than it was showing, and comes out of it displaying a fresh peak
+    // rather than what is left of the old one. A level aggregate must move by the change in
+    // displayed size, not by the traded quantity.
     public record FillOrderConfirmed(Security Security, DateTime Time, string CompanyId, Order Order, decimal Price,
-            int Quantity, bool IsResting)
+            int Quantity, int PreviousDisplayedQuantity, bool IsResting)
         : OrderConfirmedEvent(Security, Time, CompanyId, Order);
 
     public record OrderRejectedEvent(Security Security, DateTime Time, string CompanyId, string ClientOrderId,
@@ -68,5 +73,14 @@ namespace Circus.OrderBook
 
     public record OrdersMatched(Security Security, DateTime Time, decimal Price, int Quantity,
             IList<FillOrderConfirmed> Fills)
+        : OrderBookEvent(Security, Time);
+
+    // The price and quantity the current phase would print if it ended right now - an auction's
+    // indicative quote, published as it moves rather than answered on request, so a consumer's
+    // view of it follows from the event stream alone. Emitted only on a change, which makes a
+    // null Price (with Quantity 0) the withdrawal of a quote previously published: the book has
+    // stopped crossing, or the phase quoting it has ended. A phase that trades continuously has
+    // no such price and so publishes none.
+    public record IndicativePriceChanged(Security Security, DateTime Time, decimal? Price, int Quantity)
         : OrderBookEvent(Security, Time);
 }

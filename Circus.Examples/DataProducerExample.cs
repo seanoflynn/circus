@@ -24,35 +24,47 @@ namespace Circus.Examples
             var bboDataProducer1 = new LevelDataProducer(1);
             var top10DataProducer1 = new LevelDataProducer(10);
             var fullBookDataProducer1 = new FullBookDataProducer();
+            var indicativeDataProducer1 = new IndicativePriceDataProducer();
 
             var tradeDataProducer2 = new TradeDataProducer();
             var bboDataProducer2 = new LevelDataProducer(1);
             var top10DataProducer2 = new LevelDataProducer(10);
             var fullBookDataProducer2 = new FullBookDataProducer();
+            var indicativeDataProducer2 = new IndicativePriceDataProducer();
 
             void Publish(IOrderBook book, IReadOnlyList<OrderBookEvent> events, TradeDataProducer tradeDataProducer,
                 LevelDataProducer bboDataProducer, LevelDataProducer top10DataProducer,
-                FullBookDataProducer fullBookDataProducer)
+                FullBookDataProducer fullBookDataProducer, IndicativePriceDataProducer indicativeDataProducer)
             {
                 Print(tradeDataProducer.Process(book, events));
                 Print(bboDataProducer.Process(book, events));
                 Print(top10DataProducer.Process(book, events));
                 Print(fullBookDataProducer.Process(book, events));
+                Print(indicativeDataProducer.Process(book, events));
             }
 
-            Publish(book1, book1.UpdateStatus(OrderBookStatus.Open), tradeDataProducer1, bboDataProducer1,
-                top10DataProducer1, fullBookDataProducer1);
+            // book1 opens on an auction: orders accumulate in pre-open with the indicative quote
+            // tracking them, and the print happens on the way out - the same orders as book2, which
+            // opens first and trades them continuously.
+            Publish(book1, book1.UpdateStatus(OrderBookStatus.PreOpen), tradeDataProducer1, bboDataProducer1,
+                top10DataProducer1, fullBookDataProducer1, indicativeDataProducer1);
             Publish(book1, book1.CreateLimitOrder("Buyer", "Order1", new OrderValidity.Day(), Side.Buy, 3, 100),
-                tradeDataProducer1, bboDataProducer1, top10DataProducer1, fullBookDataProducer1);
+                tradeDataProducer1, bboDataProducer1, top10DataProducer1, fullBookDataProducer1,
+                indicativeDataProducer1);
             Publish(book1, book1.CreateLimitOrder("Seller", "Order2", new OrderValidity.Day(), Side.Sell, 5, 100),
-                tradeDataProducer1, bboDataProducer1, top10DataProducer1, fullBookDataProducer1);
+                tradeDataProducer1, bboDataProducer1, top10DataProducer1, fullBookDataProducer1,
+                indicativeDataProducer1);
+            Publish(book1, book1.UpdateStatus(OrderBookStatus.Open), tradeDataProducer1, bboDataProducer1,
+                top10DataProducer1, fullBookDataProducer1, indicativeDataProducer1);
 
             Publish(book2, book2.UpdateStatus(OrderBookStatus.Open), tradeDataProducer2, bboDataProducer2,
-                top10DataProducer2, fullBookDataProducer2);
+                top10DataProducer2, fullBookDataProducer2, indicativeDataProducer2);
             Publish(book2, book2.CreateLimitOrder("Buyer", "Order1", new OrderValidity.Day(), Side.Buy, 3, 100),
-                tradeDataProducer2, bboDataProducer2, top10DataProducer2, fullBookDataProducer2);
+                tradeDataProducer2, bboDataProducer2, top10DataProducer2, fullBookDataProducer2,
+                indicativeDataProducer2);
             Publish(book2, book2.CreateLimitOrder("Seller", "Order2", new OrderValidity.Day(), Side.Sell, 5, 100),
-                tradeDataProducer2, bboDataProducer2, top10DataProducer2, fullBookDataProducer2);
+                tradeDataProducer2, bboDataProducer2, top10DataProducer2, fullBookDataProducer2,
+                indicativeDataProducer2);
         }
 
         private static void Print(IEnumerable<TradedDataEvent> events)
@@ -69,6 +81,14 @@ namespace Circus.Examples
             {
                 Console.WriteLine(
                     $"LevelsDataEvent {{ Bids = [{string.Join(", ", @event.Bids)}], Offers = [{string.Join(", ", @event.Offers)}] }}");
+            }
+        }
+
+        private static void Print(IEnumerable<IndicativePriceDataEvent> events)
+        {
+            foreach (var @event in events)
+            {
+                Console.WriteLine(@event);
             }
         }
 

@@ -26,13 +26,13 @@ namespace Circus.Tests.OrderBook
         private static readonly string OrderId1B = "Order1b";
 
         private static TestTimeProvider TimeProvider;
-        private static IOrderBook Book;
+        private static LevelTrackingOrderBook Book;
 
         [SetUp]
         public void SetUp()
         {
             TimeProvider = new TestTimeProvider(Now1);
-            Book = new InMemoryOrderBook(Sec, TimeProvider);
+            Book = new LevelTrackingOrderBook(Sec, TimeProvider);
         }
 
         [TestCase(0)]
@@ -54,7 +54,7 @@ namespace Circus.Tests.OrderBook
         }
 
         [Test]
-        public void GetLevels_ReportsDisplayedPeak_NotTrueRemainingSize()
+        public void Levels_ReportDisplayedPeak_NotTrueRemainingSize()
         {
             // arrange
             Book.UpdateStatus(OrderBookStatus.Open);
@@ -163,8 +163,8 @@ namespace Circus.Tests.OrderBook
                 maxVisibleQuantity: 3);
             TimeProvider.SetCurrentTime(Now2);
 
-            // act - requires the full 15 to fill immediately or nothing does; GetLevels would only
-            // show 3, but the true available liquidity (20) is what the gate actually checks
+            // act - requires the full 15 to fill immediately or nothing does; the published level
+            // only shows 3, but the true available liquidity (20) is what the gate actually checks
             var events = Book.CreateLimitOrder(CompanyId2, OrderId2,
                 new OrderValidity.ImmediateOrCancel { MinQuantity = 15 }, Side.Buy, 15, 100);
 

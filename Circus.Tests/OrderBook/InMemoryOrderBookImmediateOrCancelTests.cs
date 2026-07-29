@@ -36,13 +36,13 @@ namespace Circus.Tests.OrderBook
         private static readonly string OrderId6 = "Order6";
 
         private static TestTimeProvider TimeProvider;
-        private static IOrderBook Book;
+        private static LevelTrackingOrderBook Book;
 
         [SetUp]
         public void SetUp()
         {
             TimeProvider = new TestTimeProvider(Now1);
-            Book = new InMemoryOrderBook(Sec, TimeProvider);
+            Book = new LevelTrackingOrderBook(Sec, TimeProvider);
         }
 
         // ----- no MinQuantity (classic IOC/FillAndKill behavior) -----
@@ -145,7 +145,7 @@ namespace Circus.Tests.OrderBook
         {
             // arrange
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10, 20);
-            var book = new InMemoryOrderBook(sec, TimeProvider);
+            var book = new LevelTrackingOrderBook(sec, TimeProvider);
             book.UpdateStatus(OrderBookStatus.Open);
             book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 2, 500);
             TimeProvider.SetCurrentTime(Now2);

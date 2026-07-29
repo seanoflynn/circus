@@ -7,10 +7,10 @@ using NUnit.Framework;
 
 namespace Circus.Tests.DataProducers
 {
-    // LevelDataProducer maintains its own state purely from the OrderConfirmedEvent stream (it
-    // no longer queries IOrderBook.GetLevels), so every test must route every book action
-    // through the same producer instance, in order - never feed it only the final action's
-    // events after driving earlier actions directly through the book.
+    // LevelDataProducer maintains its own state purely from the OrderConfirmedEvent stream, so
+    // every test must route every book action through the same producer instance, in order -
+    // never feed it only the final action's events after driving earlier actions directly
+    // through the book.
     public class LevelDataProducerTests
     {
         private static readonly Security Sec = new("GCZ6", SecurityType.Future, 10, 10);
@@ -277,6 +277,29 @@ namespace Circus.Tests.DataProducers
             Assert.AreEqual(1, level.Offers.Count);
             Assert.AreEqual(110, level.Offers[0].Price);
             Assert.AreEqual(5, level.Offers[0].Quantity, "still only the displayed peak after moving levels");
+        }
+
+        [Test]
+        public void AuctionPrint_TradesThroughIcebergPeak_LevelShowsTheRefreshedPeak()
+        {
+            var producer = new LevelDataProducer(2);
+            Publish(producer, Book.UpdateStatus(OrderBookStatus.PreOpen));
+
+            // total 100, only 10 displayed - but an auction sizes its print off full remaining
+            // quantity, so this trades 45, far more than the order was ever showing
+            Publish(producer, Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 100, 100,
+                maxVisibleQuantity: 10));
+            TimeProvider.SetCurrentTime(Now2);
+            Publish(producer, Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 45, 100));
+
+            var level = Publish(producer, Book.UpdateStatus(OrderBookStatus.Open));
+
+            Assert.IsEmpty(level.Offers);
+            Assert.AreEqual(1, level.Bids.Count);
+            Assert.AreEqual(100, level.Bids[0].Price);
+            Assert.AreEqual(10, level.Bids[0].Quantity,
+                "a fresh peak, not the traded quantity taken off the peak it was showing");
+            Assert.AreEqual(1, level.Bids[0].Count);
         }
 
         [Test]

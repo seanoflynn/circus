@@ -65,7 +65,10 @@ namespace Circus.Tests.OrderBook
 
             // assert
             Assert.IsNotNull(events);
-            Assert.AreEqual(2, events.Count);
+            Assert.AreEqual(3, events.Count);
+            var withdrawn = events[2] as IndicativePriceChanged;
+            Assert.IsNotNull(withdrawn);
+            Assert.IsNull(withdrawn.Price, "the auction it was quoting has printed");
             var matched = events[1] as OrdersMatched;
             Assert.IsNotNull(matched);
             Assert.AreEqual(Sec, matched.Security);

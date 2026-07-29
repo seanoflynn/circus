@@ -48,7 +48,7 @@ namespace Circus.Tests.OrderBook
             // sells fully fill (also price improvement - they get 120, not their own lower limit),
             // and the 120 buy (the marginal order) only partially fills for the 1 unit left over
             var security = new Security("GCZ6", SecurityType.Future, 10, 10);
-            var book = new InMemoryOrderBook(security, TimeProvider);
+            var book = new LevelTrackingOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.PreOpen);
 
             book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 140);
@@ -63,17 +63,15 @@ namespace Circus.Tests.OrderBook
 
             // assert - every fill in this batch prints at the single auction price of 120
             Assert.IsInstanceOf<StatusChanged>(events[0]);
-            for (var i = 1; i < events.Count; i++)
-            {
-                var matched = events[i] as OrdersMatched;
-                Assert.IsNotNull(matched);
+            var matches = events.OfType<OrdersMatched>().ToList();
+            Assert.IsNotEmpty(matches);
+            foreach (var matched in matches)
                 Assert.AreEqual(120, matched.Price);
-            }
 
-            var totalQuantity = 0;
-            for (var i = 1; i < events.Count; i++)
-                totalQuantity += ((OrdersMatched) events[i]).Quantity;
-            Assert.AreEqual(11, totalQuantity);
+            Assert.AreEqual(11, matches.Sum(m => m.Quantity));
+
+            // the auction it was quoting is over, so the quote is withdrawn
+            Assert.IsNull(events.OfType<IndicativePriceChanged>().Last().Price);
 
             // the marginal buy order (120) is left resting, partially filled
             var buyLevels = book.GetLevels(Side.Buy, 10);
@@ -99,7 +97,7 @@ namespace Circus.Tests.OrderBook
             // before the later order gets anything - it must not lose its place in the queue just
             // because its displayed peak needs replenishing mid-print.
             var security = new Security("GCZ6", SecurityType.Future, 10, 10);
-            var book = new InMemoryOrderBook(security, TimeProvider);
+            var book = new LevelTrackingOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.PreOpen);
 
             book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 100, 100,
@@ -132,7 +130,7 @@ namespace Circus.Tests.OrderBook
             // than the 10-unit peak must not leave DisplayedQuantity negative or stale - it should
             // come out re-derived to a fresh full peak, the same as if it had just been entered.
             var security = new Security("GCZ6", SecurityType.Future, 10, 10);
-            var book = new InMemoryOrderBook(security, TimeProvider);
+            var book = new LevelTrackingOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.PreOpen);
 
             book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 100, 100,
@@ -161,7 +159,7 @@ namespace Circus.Tests.OrderBook
             // arrange - 120 and 130 tie for max executable volume (10 each), with the surplus on
             // the sell side at both - CME's rule picks the lowest of the tied prices in that case
             var security = new Security("GCZ6", SecurityType.Future, 10, 10);
-            var book = new InMemoryOrderBook(security, TimeProvider);
+            var book = new LevelTrackingOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.PreOpen);
 
             book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 140);
@@ -186,7 +184,7 @@ namespace Circus.Tests.OrderBook
             // arrange - same tie as above (120 vs 130), but with a reference price seeded at 130
             // (must be tick-aligned to TickSize 10) - that should win over the default rule
             var security = new Security("GCZ6", SecurityType.Future, 10, 10);
-            var book = new InMemoryOrderBook(security, TimeProvider);
+            var book = new LevelTrackingOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.PreOpen, 130);
 
             book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 140);
@@ -210,7 +208,7 @@ namespace Circus.Tests.OrderBook
         {
             // arrange
             var security = new Security("GCZ6", SecurityType.Future, 10, 10);
-            var book = new InMemoryOrderBook(security, TimeProvider);
+            var book = new LevelTrackingOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.PreOpen);
             book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100);
 
@@ -232,22 +230,24 @@ namespace Circus.Tests.OrderBook
             // happen is that governance turning into execution: a crossed book during pre-open is
             // quoted, not printed. Orders sit untouched until the open.
             var security = new Security("GCZ6", SecurityType.Future, 10, 10);
-            var book = new InMemoryOrderBook(security, TimeProvider);
+            var book = new LevelTrackingOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.PreOpen);
 
             // act - deeply crossed: the bid is well through the offer
             var buy = book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 10, 150);
             var sell = book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 10, 100);
 
-            // assert - a confirmation each, and nothing else
-            Assert.AreEqual(1, buy.Count);
+            // assert - a confirmation each, and no trade
+            Assert.AreEqual(1, buy.Count, "nothing crosses yet, so not even a quote");
             Assert.IsInstanceOf<CreateOrderConfirmed>(buy[0]);
-            Assert.AreEqual(1, sell.Count);
+            Assert.AreEqual(2, sell.Count);
             Assert.IsInstanceOf<CreateOrderConfirmed>(sell[0]);
 
             // the auction is quoting the whole time, it just isn't acting on it
-            Assert.IsTrue(book.TryGetIndicativeAuctionPrice(out _, out var indicativeQuantity));
-            Assert.AreEqual(10, indicativeQuantity);
+            var quote = sell[1] as IndicativePriceChanged;
+            Assert.IsNotNull(quote);
+            Assert.AreEqual(100, quote.Price);
+            Assert.AreEqual(10, quote.Quantity);
 
             // and both orders are still resting in full
             Assert.AreEqual(10, book.GetLevels(Side.Buy, 10)[0].Quantity);
@@ -259,11 +259,11 @@ namespace Circus.Tests.OrderBook
         {
             // arrange - a crossed book in pre-open, quoting a price it would clear at
             var security = new Security("GCZ6", SecurityType.Future, 10, 10);
-            var book = new InMemoryOrderBook(security, TimeProvider);
+            var book = new LevelTrackingOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.PreOpen);
             book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 10, 150);
-            book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 10, 100);
-            Assert.IsTrue(book.TryGetIndicativeAuctionPrice(out _, out _));
+            var quoting = book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 10, 100);
+            Assert.IsNotEmpty(quoting.OfType<IndicativePriceChanged>().ToList());
 
             // act - closing rather than opening. Pre-open is a phase that prints on the way out,
             // but the phase being entered doesn't trade, so the orders it accumulated are
@@ -275,55 +275,83 @@ namespace Circus.Tests.OrderBook
                 "the auction must not print into a phase that doesn't trade");
             Assert.AreEqual(2, events.OfType<ExpireOrderConfirmed>().ToList().Count);
             Assert.AreEqual(OrderBookStatus.Closed, book.Status);
+
+            // the quote goes with it - a closed book is not still quoting one
+            var quote = events.OfType<IndicativePriceChanged>().Last();
+            Assert.IsNull(quote.Price);
+            Assert.AreEqual(0, quote.Quantity);
         }
 
         [Test]
-        public void TryGetIndicativeAuctionPrice_WhileOpen_Declines()
+        public void IndicativePrice_NotQuotedWhileOpen()
         {
             // arrange - continuous trading is governed by price-time, which has no single price it
-            // would print at, so there is no indicative auction price to report while open. This
-            // is what IOrderBook has always documented the method to mean.
+            // would print at, so there is no indicative auction price to publish while open
             var security = new Security("GCZ6", SecurityType.Future, 10, 10);
-            var book = new InMemoryOrderBook(security, TimeProvider);
+            var book = new LevelTrackingOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.Open);
-            book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 10, 100);
 
-            // act + assert
-            Assert.IsFalse(book.TryGetIndicativeAuctionPrice(out _, out _));
+            // act + assert - a resting order, then one that crosses it and trades: neither quotes
+            var resting = book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 10, 100);
+            var crossing = book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 4, 100);
+
+            Assert.IsEmpty(resting.OfType<IndicativePriceChanged>().ToList());
+            Assert.IsInstanceOf<OrdersMatched>(crossing[^1]);
+            Assert.IsEmpty(crossing.OfType<IndicativePriceChanged>().ToList());
 
             // ...and it comes back the moment a volatility pause returns the book to PreOpen
             book.UpdateStatus(OrderBookStatus.PreOpen);
-            book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 10, 100);
+            var paused = book.CreateLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Sell, 10, 100);
 
-            Assert.IsTrue(book.TryGetIndicativeAuctionPrice(out var price, out var quantity));
-            Assert.AreEqual(100, price);
-            Assert.AreEqual(10, quantity);
+            var quote = paused.OfType<IndicativePriceChanged>().Last();
+            Assert.AreEqual(100, quote.Price);
+            Assert.AreEqual(6, quote.Quantity, "what is left of the buy after the trade above");
         }
 
         [Test]
-        public void TryGetIndicativeAuctionPrice_ReflectsLiveStateDuringPreOpen()
+        public void IndicativePrice_PublishedAsThePreOpenBookMoves()
         {
             // arrange
             var security = new Security("GCZ6", SecurityType.Future, 10, 10);
-            var book = new InMemoryOrderBook(security, TimeProvider);
-            book.UpdateStatus(OrderBookStatus.PreOpen);
+            var book = new LevelTrackingOrderBook(security, TimeProvider);
+            var preOpen = book.UpdateStatus(OrderBookStatus.PreOpen);
 
-            // assert - nothing resting yet
-            Assert.IsFalse(book.TryGetIndicativeAuctionPrice(out _, out _));
+            // assert - nothing resting yet, so nothing to quote
+            Assert.IsEmpty(preOpen.OfType<IndicativePriceChanged>().ToList());
 
             // act - one-sided book, still no cross
-            book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 10, 100);
-            Assert.IsFalse(book.TryGetIndicativeAuctionPrice(out _, out _));
+            var oneSided = book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 10, 100);
+            Assert.IsEmpty(oneSided.OfType<IndicativePriceChanged>().ToList());
 
             // act - a crossing sell arrives
-            book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 10, 100);
-            Assert.IsTrue(book.TryGetIndicativeAuctionPrice(out var price, out var quantity));
-            Assert.AreEqual(100, price);
-            Assert.AreEqual(10, quantity);
+            var crossed = book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 10, 100);
+            var quote = crossed.OfType<IndicativePriceChanged>().Last();
+            Assert.AreEqual(100, quote.Price);
+            Assert.AreEqual(10, quote.Quantity);
 
-            // act - cancelling the crossing sell removes the cross again
-            book.CancelOrder(CompanyId2, CancelId1, OrderId2);
-            Assert.IsFalse(book.TryGetIndicativeAuctionPrice(out _, out _));
+            // act - more sell liquidity at the same price. The buy side still caps what could
+            // clear, so the quote hasn't moved and nothing is published for it
+            var deeperSell = book.CreateLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Sell, 5, 100);
+            Assert.IsEmpty(deeperSell.OfType<IndicativePriceChanged>().ToList());
+
+            // act - the buy side catching up does move it
+            var deeperBuy = book.CreateLimitOrder(CompanyId4, OrderId4, new OrderValidity.Day(), Side.Buy, 5, 100);
+            var requoted = deeperBuy.OfType<IndicativePriceChanged>().Last();
+            Assert.AreEqual(100, requoted.Price);
+            Assert.AreEqual(15, requoted.Quantity);
+
+            // act - cancelling every sell removes the cross again, withdrawing the quote
+            var thinner = book.CancelOrder(CompanyId3, CancelId1, OrderId3);
+            Assert.AreEqual(10, thinner.OfType<IndicativePriceChanged>().Last().Quantity);
+
+            var uncrossed = book.CancelOrder(CompanyId2, CancelId1, OrderId2);
+            var withdrawn = uncrossed.OfType<IndicativePriceChanged>().Last();
+            Assert.IsNull(withdrawn.Price);
+            Assert.AreEqual(0, withdrawn.Quantity);
+
+            // and nothing more is published while there is still nothing to quote
+            var stillNothing = book.CancelOrder(CompanyId1, CancelId1, OrderId1);
+            Assert.IsEmpty(stillNothing.OfType<IndicativePriceChanged>().ToList());
         }
 
         [Test]
@@ -334,7 +362,7 @@ namespace Circus.Tests.OrderBook
             // pause the book. This order doesn't cross anything (isolated at 200, nothing on the
             // opposing side), so it must not trigger a pause just for being entered.
             var security = new Security("GCZ6", SecurityType.Future, 10, 10, VolatilityAuctionBandTicks: 5);
-            var book = new InMemoryOrderBook(security, TimeProvider);
+            var book = new LevelTrackingOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.Open, 100);
 
             // act
@@ -353,7 +381,7 @@ namespace Circus.Tests.OrderBook
             // sell stop (trigger 90) is added, plus a resting sell at 200 that hasn't crossed
             // anything yet (so hasn't paused anything, per the test above)
             var security = new Security("GCZ6", SecurityType.Future, 10, 10, VolatilityAuctionBandTicks: 5);
-            var book = new InMemoryOrderBook(security, TimeProvider);
+            var book = new LevelTrackingOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.Open);
             book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100);
             book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 5, 100);
@@ -368,10 +396,17 @@ namespace Circus.Tests.OrderBook
             var events = book.CreateLimitOrder(CompanyId5, OrderId5, new OrderValidity.Day(), Side.Buy, 10, 200);
 
             // assert
-            Assert.AreEqual(2, events.Count);
+            Assert.AreEqual(3, events.Count);
             Assert.IsInstanceOf<CreateOrderConfirmed>(events[0]);
             Assert.AreEqual(OrderBookStatus.PreOpen, ((StatusChanged) events[1]).Status);
             Assert.AreEqual(OrderBookStatus.PreOpen, book.Status);
+
+            // the pause is an auction, and it quotes the crossed book it inherited rather than
+            // printing it
+            var paused = events[2] as IndicativePriceChanged;
+            Assert.IsNotNull(paused);
+            Assert.AreEqual(200, paused.Price);
+            Assert.AreEqual(10, paused.Quantity);
 
             var sellLevels = book.GetLevels(Side.Sell, 10);
             Assert.AreEqual(1, sellLevels.Count);
@@ -401,7 +436,7 @@ namespace Circus.Tests.OrderBook
             // arrange - #23's hard-reject band still works exactly as before when
             // VolatilityAuctionBandTicks isn't set
             var security = new Security("GCZ6", SecurityType.Future, 10, 10, PriceBandTicks: 5);
-            var book = new InMemoryOrderBook(security, TimeProvider);
+            var book = new LevelTrackingOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.Open, 100);
 
             // act
