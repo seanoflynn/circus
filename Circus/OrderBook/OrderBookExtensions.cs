@@ -102,20 +102,21 @@ namespace Circus.OrderBook
             decimal? referencePrice = null) =>
             book.Process(new OpenTrading { Security = book.Security, ReferencePrice = referencePrice });
 
-        public static IReadOnlyList<OrderBookEvent> CloseTrading(this IOrderBook book) =>
-            book.Process(new CloseTrading { Security = book.Security });
+        public static IReadOnlyList<OrderBookEvent> CloseTrading(this IOrderBook book, bool endsTradingDay = true) =>
+            book.Process(new CloseTrading { Security = book.Security, EndsTradingDay = endsTradingDay });
 
         // Bridge for callers that only know the target status at runtime (e.g. a session/schedule
         // provider driving the book off a clock) and so can't pick PreOpenTrading/OpenTrading/
         // CloseTrading directly. ReferencePrice is ignored when closing - CloseTrading has no such
-        // property, since a reference price is meaningless once the book stops accepting orders.
+        // property, since a reference price is meaningless once the book stops accepting orders -
+        // and endsTradingDay is ignored for the two opening statuses, which end nothing.
         public static IReadOnlyList<OrderBookEvent> UpdateStatus(this IOrderBook book, OrderBookStatus status,
-            decimal? referencePrice = null) =>
+            decimal? referencePrice = null, bool endsTradingDay = true) =>
             status switch
             {
                 OrderBookStatus.PreOpen => book.PreOpenTrading(referencePrice),
                 OrderBookStatus.Open => book.OpenTrading(referencePrice),
-                OrderBookStatus.Closed => book.CloseTrading(),
+                OrderBookStatus.Closed => book.CloseTrading(endsTradingDay),
                 _ => throw new ArgumentOutOfRangeException(nameof(status), status, null)
             };
     }
