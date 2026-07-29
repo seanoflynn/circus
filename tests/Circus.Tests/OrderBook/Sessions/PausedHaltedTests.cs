@@ -4,13 +4,13 @@ using Circus.OrderBook.Events;
 using Circus.Time;
 using NUnit.Framework;
 
-namespace Circus.Tests.OrderBook;
+namespace Circus.Tests.OrderBook.Sessions;
 
 // Paused and Halted are both interruptions within a session, so neither may behave like the
 // start of one (PreOpen) or the end of one (Closed). What separates the two from each other is
 // price discovery: a pause keeps quoting and resolves into a print, a halt publishes nothing.
 [TestFixture]
-public class InMemoryOrderBookPausedHaltedTests
+public class PausedHaltedTests
 {
     private static readonly Security Sec = new("GCZ6", SecurityType.Future, 10, 10);
 

@@ -5,11 +5,11 @@ using Circus.OrderBook.Restrictions;
 using Circus.Time;
 using NUnit.Framework;
 
-namespace Circus.Tests.OrderBook;
+namespace Circus.Tests.OrderBook.Sessions;
 
 // An interruption that ends on its own, and the reason a consumer reads off the status change.
 [TestFixture]
-public class InMemoryOrderBookTimedResumeTests
+public class TimedResumeTests
 {
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
     private static readonly TimeSpan PauseFor = TimeSpan.FromMinutes(2);

@@ -4,7 +4,7 @@ using Circus.OrderBook.Actions;
 using Circus.OrderBook.Events;
 using Circus.Time;
 
-namespace Circus.Tests.OrderBook;
+namespace Circus.Tests.Helpers;
 
 // An InMemoryOrderBook plus the level view a subscriber would keep beside it. The book
 // answers no questions about its own levels, so a test that needs to know where orders ended

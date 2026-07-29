@@ -4,13 +4,13 @@ using Circus.OrderBook.Events;
 using Circus.Time;
 using NUnit.Framework;
 
-namespace Circus.Tests.OrderBook;
+namespace Circus.Tests.OrderBook.Restrictions;
 
 // A daily limit is the one restriction that neither rejects nor interrupts. The market stays
 // open, keeps quoting, trades at the limit and can trade back inside - so almost every
 // assertion here is that the book is still Open while refusing to go further.
 [TestFixture]
-public class InMemoryOrderBookDailyLimitTests
+public class DailyLimitTests
 {
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
 

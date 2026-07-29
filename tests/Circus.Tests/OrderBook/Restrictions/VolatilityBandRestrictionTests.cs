@@ -1,7 +1,7 @@
 using Circus.OrderBook.Restrictions;
 using NUnit.Framework;
 
-namespace Circus.Tests.OrderBook;
+namespace Circus.Tests.OrderBook.Restrictions;
 
 [TestFixture]
 public class VolatilityBandRestrictionTests

@@ -1,13 +1,14 @@
 using Circus.OrderBook;
 using Circus.OrderBook.Actions;
 using Circus.OrderBook.Events;
+using Circus.Tests.Helpers;
 using Circus.Time;
 using NUnit.Framework;
 
-namespace Circus.Tests.OrderBook;
+namespace Circus.Tests.OrderBook.Restrictions;
 
 [TestFixture]
-public class InMemoryOrderBookPriceBandTests
+public class PriceBandTests
 {
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
 

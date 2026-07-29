@@ -4,13 +4,13 @@ using Circus.OrderBook.Events;
 using Circus.Time;
 using NUnit.Framework;
 
-namespace Circus.Tests.OrderBook;
+namespace Circus.Tests.OrderBook.Restrictions;
 
 // What a velocity limit catches that a range around the last trade does not: a run of steps
 // each unremarkable next to the one before it, arriving too quickly. The same steps spread out
 // are ordinary trading, so every test here turns on timing rather than on price.
 [TestFixture]
-public class InMemoryOrderBookVelocityLogicTests
+public class VelocityLogicTests
 {
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
     private static readonly TimeSpan Window = TimeSpan.FromSeconds(10);

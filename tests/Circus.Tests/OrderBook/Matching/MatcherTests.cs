@@ -1,7 +1,7 @@
 using Circus.OrderBook.Matching;
 using NUnit.Framework;
 
-namespace Circus.Tests.OrderBook;
+namespace Circus.Tests.OrderBook.Matching;
 
 // Drives Matcher directly rather than through InMemoryOrderBook, which is the only way to run
 // it against a matching algorithm the book doesn't itself construct. Covers the seam

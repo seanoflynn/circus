@@ -23,7 +23,7 @@
     <!-- Package metadata belonging to the repository rather than to any one package. -->
     <PropertyGroup>
         <Authors>seanoflynn</Authors>
-        <Copyright>Copyright 2021</Copyright>
+        <Copyright>Copyright 2021-2026</Copyright>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <PackageProjectUrl>https://github.com/seanoflynn/circus</PackageProjectUrl>
     </PropertyGroup>

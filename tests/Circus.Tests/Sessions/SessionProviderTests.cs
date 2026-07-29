@@ -2,7 +2,7 @@ using Circus.OrderBook;
 using Circus.Sessions;
 using NUnit.Framework;
 
-namespace Circus.Tests;
+namespace Circus.Tests.Sessions;
 
 [TestFixture]
 public class SessionProviderTests

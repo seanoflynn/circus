@@ -1,10 +1,11 @@
 using Circus.OrderBook;
 using Circus.OrderBook.Actions;
 using Circus.OrderBook.Events;
+using Circus.Tests.Helpers;
 using Circus.Time;
 using NUnit.Framework;
 
-namespace Circus.Tests.OrderBook;
+namespace Circus.Tests.OrderBook.Orders;
 
 // ImmediateOrCancel unifies what were previously two separate validities: MinQuantity unset
 // behaves like classic IOC/FillAndKill (fills what's available, cancels the rest, no minimum
@@ -12,7 +13,7 @@ namespace Circus.Tests.OrderBook;
 // whole order fills or nothing does); MinQuantity anywhere in between requires at least that
 // much to fill immediately or nothing fills at all.
 [TestFixture]
-public class InMemoryOrderBookImmediateOrCancelTests
+public class ImmediateOrCancelTests
 {
     private static readonly Security Sec = new("GCZ6", SecurityType.Future, 10, 10);
 

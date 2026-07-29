@@ -1,13 +1,14 @@
 using Circus.OrderBook;
 using Circus.OrderBook.Actions;
 using Circus.OrderBook.Events;
+using Circus.Tests.Helpers;
 using Circus.Time;
 using NUnit.Framework;
 
-namespace Circus.Tests.OrderBook;
+namespace Circus.Tests.OrderBook.Orders;
 
 [TestFixture]
-public class InMemoryOrderBookIcebergTests
+public class IcebergTests
 {
     private static readonly Security Sec = new("GCZ6", SecurityType.Future, 10, 10);
 

@@ -4,13 +4,13 @@ using Circus.OrderBook.Events;
 using Circus.Time;
 using NUnit.Framework;
 
-namespace Circus.Tests.OrderBook;
+namespace Circus.Tests.OrderBook.Restrictions;
 
 // The two things a volatility interruption does beyond pausing: it can refuse to end at a price
 // still too far out, and a range anchored on the session catches drift that one following the
 // market never sees.
 [TestFixture]
-public class InMemoryOrderBookVolatilityInterruptionTests
+public class VolatilityInterruptionTests
 {
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
     private static readonly TimeSpan PauseFor = TimeSpan.FromMinutes(2);

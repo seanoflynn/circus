@@ -4,13 +4,13 @@ using Circus.OrderBook.Events;
 using Circus.Time;
 using NUnit.Framework;
 
-namespace Circus.Tests.OrderBook;
+namespace Circus.Tests.OrderBook.Restrictions;
 
 // Circuit breakers stop trading rather than capping it, and are configured in levels. What
 // matters beyond the halt itself is that a price through several levels is served by the one it
 // actually reached rather than by whichever it passed first.
 [TestFixture]
-public class InMemoryOrderBookCircuitBreakerTests
+public class CircuitBreakerTests
 {
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
     private static readonly TimeSpan HaltFor = TimeSpan.FromMinutes(15);
