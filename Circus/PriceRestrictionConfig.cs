@@ -46,4 +46,29 @@ namespace Circus
     // range around the last trade, which is the other config.
     public sealed record VelocityLimit(int RangeTicks, TimeSpan Window, TimeSpan? PauseFor = null)
         : PriceRestrictionConfig;
+
+    // How wide a limit is. Every restriction above measures in ticks because it tracks a market
+    // that has already moved; the ones below are set against a settlement price before the day
+    // starts, and CME states those as percentages - 7, 13 and 20 percent for equity index. Resolved
+    // to ticks the moment a reference exists, since a percentage of nothing is not a width.
+    public abstract record PriceLimitWidth
+    {
+        public sealed record Ticks(int Count) : PriceLimitWidth;
+
+        public sealed record Percent(decimal Value) : PriceLimitWidth;
+    }
+
+    // A session-long ceiling and floor. Trading continues at the limit price but nothing prints
+    // through it and no order may be entered beyond it - CME's limit-lock, which is not a halt: the
+    // market stays open, quotes, and can trade back inside.
+    public sealed record DailyPriceLimit(PriceLimitWidth Width) : PriceRestrictionConfig;
+
+    // A threshold that stops trading outright rather than capping it. Several are ordinarily
+    // configured together - CME's equity index breakers halt at 7 and 13 percent and end the day at
+    // 20 - and the widest one breached is the one served, so a price through all three halts for
+    // however long the 20 percent level says rather than the 7 percent level.
+    //
+    // HaltFor null never resumes on its own, which is what the level that ends a trading day wants:
+    // whoever drives the book closes it.
+    public sealed record CircuitBreaker(PriceLimitWidth Width, TimeSpan? HaltFor = null) : PriceRestrictionConfig;
 }

@@ -27,6 +27,8 @@ namespace Circus.OrderBook
         public RestrictionScope Scope => RestrictionScope.OrderEntry;
         public RestrictionBreachAction OnBreach => RestrictionBreachAction.Reject;
 
+        public OrderRejectedReason EntryRejectionReason => OrderRejectedReason.PriceOutsideBands;
+
         // A rejection interrupts nothing, so there is nothing to resume from.
         public TimeSpan? ResumeAfter => null;
 

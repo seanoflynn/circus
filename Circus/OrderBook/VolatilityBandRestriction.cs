@@ -38,6 +38,9 @@ namespace Circus.OrderBook
         public RestrictionScope Scope => RestrictionScope.Trade;
         public RestrictionBreachAction OnBreach => RestrictionBreachAction.Pause;
 
+        // Trade-scoped only, so this is never asked.
+        public OrderRejectedReason EntryRejectionReason => OrderRejectedReason.PriceOutsideBands;
+
         // Eurex times its volatility interruptions rather than leaving them open; configuring no
         // duration leaves the pause standing until someone ends it.
         public TimeSpan? ResumeAfter => _resumeAfter;
