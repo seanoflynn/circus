@@ -1,12 +1,9 @@
-﻿using System;
+namespace Circus.Examples;
 
-namespace Circus.Examples
+class Program
 {
-    class Program
+    static void Main(string[] args)
     {
-        static void Main(string[] args)
-        {
-            OrderBookExample.TestExample();
-        }
+        OrderBookExample.TestExample();
     }
 }

@@ -37,9 +37,7 @@ dotnet_style_prefer_simplified_using_statement = true:suggestion
 
 #### Namespaces ####
 
-# Aspirational, and the reason this is a suggestion rather than a warning: every file is still
-# block-scoped. Flip to `:warning` once the file-scoped conversion has been done.
-csharp_style_namespace_declarations = file_scoped:suggestion
+csharp_style_namespace_declarations = file_scoped:warning
 
 #### Layout and braces ####
 

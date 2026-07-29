@@ -1,10 +1,9 @@
-namespace Circus
+namespace Circus;
+
+public enum SecurityType
 {
-    public enum SecurityType
-    {
-        Stock,
-        Etf,
-        Future,
-        Option
-    }
+    Stock,
+    Etf,
+    Future,
+    Option
 }

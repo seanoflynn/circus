@@ -1,8 +1,7 @@
-namespace Circus
+namespace Circus;
+
+public enum Side
 {
-    public enum Side
-    {
-        Buy,
-        Sell,
-    }
+    Buy,
+    Sell,
 }

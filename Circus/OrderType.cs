@@ -1,11 +1,10 @@
-namespace Circus
+namespace Circus;
+
+public enum OrderType
 {
-    public enum OrderType
-    {
-        Market,
-        MarketLimit,
-        Limit,
-        StopMarket,
-        StopLimit
-    }
+    Market,
+    MarketLimit,
+    Limit,
+    StopMarket,
+    StopLimit
 }
