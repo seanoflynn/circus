@@ -15,7 +15,13 @@ namespace Circus.OrderBook
         public decimal? ReferencePrice { get; init; }
     }
 
-    public sealed record CloseTrading : OrderBookAction;
+    // A trading day can hold several sessions, and only the last close of the day retires that
+    // day's Day/GoodTilDate orders - an intra-day close (a lunch break, say) leaves them resting.
+    // Defaults to true so a single-session day needs to say nothing.
+    public sealed record CloseTrading : OrderBookAction
+    {
+        public bool EndsTradingDay { get; init; } = true;
+    }
 
     public abstract record OrderAction : OrderBookAction
     {

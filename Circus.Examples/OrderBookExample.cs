@@ -21,7 +21,8 @@ namespace Circus.Examples
             var open = new TimeSpan(1, 10, 0);
             var close = new TimeSpan(22, 10, 0);
             var sessionProvider = new SessionProvider(preOpen, open, close);
-            sessionProvider.Changed += (_, args) => book.UpdateStatus(args.Status);
+            sessionProvider.Changed += (_, args) =>
+                book.UpdateStatus(args.Status, endsTradingDay: args.EndsTradingDay);
             sessionProvider.Update(new DateTime(2020, 1, 1, 1, 30, 0));
 
             Print(book.CreateLimitOrder("Buyer", "Order1", new OrderValidity.Day(), Side.Buy, 3, 100));
@@ -42,7 +43,7 @@ namespace Circus.Examples
             sessionProvider.Changed += (_, args) =>
             {
                 timeProvider.SetCurrentTime(args.Time);
-                book.UpdateStatus(args.Status);
+                book.UpdateStatus(args.Status, endsTradingDay: args.EndsTradingDay);
             };
 
             // loop through data
@@ -71,7 +72,8 @@ namespace Circus.Examples
             var open = new TimeSpan(1, 10, 0);
             var close = new TimeSpan(22, 10, 0);
             var sessionProvider = new SessionProvider(preOpen, open, close);
-            sessionProvider.Changed += (_, args) => book.UpdateStatus(args.Status);
+            sessionProvider.Changed += (_, args) =>
+                book.UpdateStatus(args.Status, endsTradingDay: args.EndsTradingDay);
             Task.Run(() =>
             {
                 var i = 0;

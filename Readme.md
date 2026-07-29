@@ -28,6 +28,7 @@ Time in force/order validity
 Sessions
 - [x] Time provider
 - [x] Sessions
+- [x] Multiple sessions per day
 - [ ] Market statistics
 
 Market data

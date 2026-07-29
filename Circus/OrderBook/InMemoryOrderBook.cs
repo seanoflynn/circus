@@ -109,7 +109,7 @@ namespace Circus.OrderBook
                 CancelOrder cancel => CancelOrder(cancel.CompanyId, cancel.ClientOrderId, cancel.PreviousClientOrderId),
                 PreOpenTrading s => UpdateStatus(OrderBookStatus.PreOpen, s.ReferencePrice),
                 OpenTrading s => UpdateStatus(OrderBookStatus.Open, s.ReferencePrice),
-                CloseTrading => UpdateStatus(OrderBookStatus.Closed, null),
+                CloseTrading c => UpdateStatus(OrderBookStatus.Closed, null, c.EndsTradingDay),
                 _ => throw new ArgumentException("Unknown order book action")
             };
         }
@@ -677,7 +677,11 @@ namespace Circus.OrderBook
             }
         }
 
-        private List<OrderBookEvent> UpdateStatus(OrderBookStatus status, decimal? referencePrice = null)
+        // endsTradingDay qualifies a close: several sessions can share one trading day, and only the
+        // last of them ends it. The phase table stays the authority on whether a phase expires day
+        // orders at all - this only says whether this particular close is that day's last.
+        private List<OrderBookEvent> UpdateStatus(OrderBookStatus status, decimal? referencePrice = null,
+            bool endsTradingDay = true)
         {
             if (referencePrice.HasValue && TryConvertToTicks(referencePrice, out var referenceTicks))
             {
@@ -696,9 +700,16 @@ namespace Circus.OrderBook
 
             if (arriving.StartsSession)
             {
-                // TODO: need better system for multiple sessions per day
+                // Seeded from the date so an id carries the day it was issued, but only ever
+                // forwards: a second session on the same date computes a seed the counter has
+                // already passed and so continues from where it was. Restarting it would re-issue
+                // ids that orders surviving the previous session (GTC, or GTD not yet due) still
+                // hold, and _orders/_completedOrders are keyed on exactly that. Math.Max is also
+                // what keeps a replay whose clock moves backwards from colliding - a run of ids
+                // that no longer encodes its date beats one that repeats itself.
                 var date = Now();
-                _nextSequenceNumber = ((date.Year * 10000) + (date.Month * 100) + date.Day) * 10000000000L;
+                var seed = ((date.Year * 10000) + (date.Month * 100) + date.Day) * 10000000000L;
+                _nextSequenceNumber = Math.Max(_nextSequenceNumber, seed);
             }
 
             var events = new List<OrderBookEvent> {new StatusChanged(_security, Now(), _status)};
@@ -712,7 +723,7 @@ namespace Circus.OrderBook
             // Then trading continues under whatever governs the phase just entered.
             Match(events);
 
-            if (arriving.ExpiresDayOrders)
+            if (arriving.ExpiresDayOrders && endsTradingDay)
                 events.AddRange(ExpireOrders());
 
             return events;
