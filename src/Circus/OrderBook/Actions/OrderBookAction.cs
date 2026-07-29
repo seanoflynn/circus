@@ -1,4 +1,4 @@
-namespace Circus.OrderBook;
+namespace Circus.OrderBook.Actions;
 
 public abstract record OrderBookAction
 {

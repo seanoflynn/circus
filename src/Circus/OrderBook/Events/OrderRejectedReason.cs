@@ -1,4 +1,4 @@
-namespace Circus.OrderBook;
+namespace Circus.OrderBook.Events;
 
 public enum OrderRejectedReason
 {

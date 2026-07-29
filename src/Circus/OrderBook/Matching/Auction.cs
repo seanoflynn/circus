@@ -1,4 +1,4 @@
-namespace Circus.OrderBook;
+namespace Circus.OrderBook.Matching;
 
 // A call-auction print: every trade clears at one price, sized off each side's full remaining
 // quantity. The print is a single atomic allocation, not a sequence of continuous touches an

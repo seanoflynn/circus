@@ -1,4 +1,4 @@
-namespace Circus.OrderBook;
+namespace Circus.OrderBook.Matching;
 
 // All anything outside Matcher is handed. Writes go through Matcher's own Rest/Unrest/Reprice,
 // so the ladders it owns cannot be mutated from outside.

@@ -1,5 +1,7 @@
 using Circus.DataProducers;
 using Circus.OrderBook;
+using Circus.OrderBook.Actions;
+using Circus.OrderBook.Events;
 using Circus.TimeProviders;
 using NUnit.Framework;
 

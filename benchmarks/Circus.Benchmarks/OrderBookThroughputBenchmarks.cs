@@ -1,5 +1,6 @@
 using BenchmarkDotNet.Attributes;
 using Circus.OrderBook;
+using Circus.OrderBook.Actions;
 using Circus.Simulator;
 using Circus.TimeProviders;
 

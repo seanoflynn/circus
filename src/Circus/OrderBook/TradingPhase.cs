@@ -1,3 +1,5 @@
+using Circus.OrderBook.Matching;
+
 namespace Circus.OrderBook;
 
 // What a phase permits and which algorithm governs it. Everything the book does differently

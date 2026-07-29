@@ -1,4 +1,6 @@
-namespace Circus.OrderBook;
+using Circus.OrderBook.Events;
+
+namespace Circus.OrderBook.Restrictions;
 
 // A threshold that stops trading rather than capping it. Set against a settlement price like a
 // daily limit, and unlike one it halts: no matching, no quote, nothing published until it

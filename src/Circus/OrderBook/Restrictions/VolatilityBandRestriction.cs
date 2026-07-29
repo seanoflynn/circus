@@ -1,4 +1,6 @@
-namespace Circus.OrderBook;
+using Circus.OrderBook.Events;
+
+namespace Circus.OrderBook.Restrictions;
 
 // A range checked against the prospective trade price rather than the submitted one. A breach
 // interrupts continuous trading into an auction rather than rejecting, Eurex-style.

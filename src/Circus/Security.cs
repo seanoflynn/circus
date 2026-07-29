@@ -1,3 +1,5 @@
+using Circus.OrderBook.Restrictions;
+
 namespace Circus;
 
 // MarketOrderProtectionTicks is not a price restriction and stays here: it prices a market

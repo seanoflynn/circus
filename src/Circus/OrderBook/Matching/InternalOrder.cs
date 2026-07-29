@@ -1,4 +1,4 @@
-namespace Circus.OrderBook;
+namespace Circus.OrderBook.Matching;
 
 // Price/TriggerPrice are tick counts (price / Security.TickSize), not decimal: decimal
 // comparison has no hardware path, so the hot paths stay on long and convert back only at the
