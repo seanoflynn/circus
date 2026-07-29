@@ -4,10 +4,10 @@ using Circus.OrderBook.Events;
 using Circus.Time;
 using NUnit.Framework;
 
-namespace Circus.Tests.OrderBook;
+namespace Circus.Tests.OrderBook.Orders;
 
 [TestFixture]
-public class InMemoryOrderBookUpdateOrderTests
+public class UpdateOrderTests
 {
     private static readonly Security Sec = new("GCZ6", SecurityType.Future, 10, 10);
 

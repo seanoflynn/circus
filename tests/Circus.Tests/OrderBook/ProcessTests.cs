@@ -1,13 +1,14 @@
 using Circus.OrderBook;
 using Circus.OrderBook.Actions;
 using Circus.OrderBook.Events;
+using Circus.Tests.Helpers;
 using Circus.Time;
 using NUnit.Framework;
 
 namespace Circus.Tests.OrderBook;
 
 [TestFixture]
-public class InMemoryOrderBookProcessTests
+public class ProcessTests
 {
     private static readonly Security Sec = new("GCZ6", SecurityType.Future, 10, 10);
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);

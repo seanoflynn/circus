@@ -4,14 +4,14 @@ using Circus.OrderBook.Events;
 using Circus.Time;
 using NUnit.Framework;
 
-namespace Circus.Tests.OrderBook;
+namespace Circus.Tests.OrderBook.Sessions;
 
 // A trading day can hold more than one session. Sequence numbers are seeded from the date, so
 // the thing to prove is that a second session on the same date carries on issuing ids rather
 // than restarting - orders surviving the break still hold the ids a restart would hand out
 // again, and both _orders and _completedOrders are keyed on exactly those.
 [TestFixture]
-public class InMemoryOrderBookMultipleSessionsTests
+public class MultipleSessionsTests
 {
     private static readonly Security Sec = new("GCZ6", SecurityType.Future, 10, 10);
 

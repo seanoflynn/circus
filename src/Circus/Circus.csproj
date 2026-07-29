@@ -9,7 +9,13 @@
         <Title>Circus</Title>
         <Description>Financial exchange simulator.</Description>
         <PackageTags>finance financial exchange orderbook trading simulator simulation backtest</PackageTags>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
     </PropertyGroup>
+
+    <!-- The repository readme, packed at the root so nuget.org renders it on the listing page. -->
+    <ItemGroup>
+        <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    </ItemGroup>
 
     <!-- Ship sources and symbols alongside the package. -->
     <PropertyGroup>
