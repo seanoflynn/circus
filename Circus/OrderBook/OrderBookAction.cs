@@ -23,6 +23,14 @@ namespace Circus.OrderBook
         public bool EndsTradingDay { get; init; } = true;
     }
 
+    // Interrupt trading within a session, keeping a quote. The book raises this itself on a
+    // volatility band breach; as an action it is the operator-driven equivalent.
+    public sealed record PauseTrading : OrderBookAction;
+
+    // Suspend trading with no price discovery. The book raises this itself when a restriction
+    // breach calls for a halt; as an action it is the operator-driven equivalent.
+    public sealed record HaltTrading : OrderBookAction;
+
     public abstract record OrderAction : OrderBookAction
     {
         public required string CompanyId { get; init; }

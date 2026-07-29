@@ -65,7 +65,7 @@ namespace Circus.Tests.OrderBook
             Assert.IsInstanceOf<CreateOrderConfirmed>(resting[0],
                 "entry band is 1000 wide - this order is nowhere near it");
             Assert.IsInstanceOf<CreateOrderConfirmed>(crossing[0]);
-            Assert.AreEqual(OrderBookStatus.PreOpen, book.Status,
+            Assert.AreEqual(OrderBookStatus.Paused, book.Status,
                 "the 5-tick volatility band should have paused the book on the trade");
         }
 

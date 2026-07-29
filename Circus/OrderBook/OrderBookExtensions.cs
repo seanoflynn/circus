@@ -105,11 +105,17 @@ namespace Circus.OrderBook
         public static IReadOnlyList<OrderBookEvent> CloseTrading(this IOrderBook book, bool endsTradingDay = true) =>
             book.Process(new CloseTrading { Security = book.Security, EndsTradingDay = endsTradingDay });
 
+        public static IReadOnlyList<OrderBookEvent> PauseTrading(this IOrderBook book) =>
+            book.Process(new PauseTrading { Security = book.Security });
+
+        public static IReadOnlyList<OrderBookEvent> HaltTrading(this IOrderBook book) =>
+            book.Process(new HaltTrading { Security = book.Security });
+
         // Bridge for callers that only know the target status at runtime (e.g. a session/schedule
         // provider driving the book off a clock) and so can't pick PreOpenTrading/OpenTrading/
-        // CloseTrading directly. ReferencePrice is ignored when closing - CloseTrading has no such
-        // property, since a reference price is meaningless once the book stops accepting orders -
-        // and endsTradingDay is ignored for the two opening statuses, which end nothing.
+        // CloseTrading directly. ReferencePrice is ignored for every status but the two opening
+        // ones - a reference price is meaningless once the book stops trading - and endsTradingDay
+        // applies only to closing, since nothing else ends a day.
         public static IReadOnlyList<OrderBookEvent> UpdateStatus(this IOrderBook book, OrderBookStatus status,
             decimal? referencePrice = null, bool endsTradingDay = true) =>
             status switch
@@ -117,6 +123,8 @@ namespace Circus.OrderBook
                 OrderBookStatus.PreOpen => book.PreOpenTrading(referencePrice),
                 OrderBookStatus.Open => book.OpenTrading(referencePrice),
                 OrderBookStatus.Closed => book.CloseTrading(endsTradingDay),
+                OrderBookStatus.Paused => book.PauseTrading(),
+                OrderBookStatus.Halted => book.HaltTrading(),
                 _ => throw new ArgumentOutOfRangeException(nameof(status), status, null)
             };
     }

@@ -45,6 +45,26 @@ namespace Circus.OrderBook
                     OrderBookStatus.Closed,
                     new TradingPhase(null, AcceptsOrderActions: false, AcceptsMarketOrders: false,
                         MatchesContinuously: false, StartsSession: false, ExpiresDayOrders: true)
+                },
+                {
+                    // Quotes and prints on the way out exactly as pre-open does, so a pause
+                    // resolves into a single uncrossing price rather than resuming mid-sweep. It is
+                    // an interruption within a session and not the start of one, though, so unlike
+                    // pre-open it neither reseeds sequence numbers nor retires anything.
+                    OrderBookStatus.Paused,
+                    new TradingPhase(new Auction(), AcceptsOrderActions: true, AcceptsMarketOrders: false,
+                        MatchesContinuously: false, StartsSession: false, ExpiresDayOrders: false)
+                },
+                {
+                    // No algorithm, so nothing matches and no indicative quote is published -
+                    // withholding price discovery is what makes this a halt rather than a pause.
+                    // Order actions stay open so resting positions can still be managed, and the
+                    // day's orders survive: a halt is not a close. Nothing prints on the way out
+                    // either, so a caller wanting a reopening auction goes through PreOpen or
+                    // Paused rather than straight back to Open.
+                    OrderBookStatus.Halted,
+                    new TradingPhase(null, AcceptsOrderActions: true, AcceptsMarketOrders: false,
+                        MatchesContinuously: false, StartsSession: false, ExpiresDayOrders: false)
                 }
             };
 
@@ -110,6 +130,8 @@ namespace Circus.OrderBook
                 PreOpenTrading s => UpdateStatus(OrderBookStatus.PreOpen, s.ReferencePrice),
                 OpenTrading s => UpdateStatus(OrderBookStatus.Open, s.ReferencePrice),
                 CloseTrading c => UpdateStatus(OrderBookStatus.Closed, null, c.EndsTradingDay),
+                PauseTrading => UpdateStatus(OrderBookStatus.Paused),
+                HaltTrading => UpdateStatus(OrderBookStatus.Halted),
                 _ => throw new ArgumentException("Unknown order book action")
             };
         }
@@ -561,8 +583,12 @@ namespace Circus.OrderBook
                     ApplyTrade(resting, aggressor, priceTicks, quantity, usesFullRemainingQuantity, events, time);
                     break;
 
+                // Assigned directly rather than routed through UpdateStatus: this runs inside the
+                // Run/Apply loop, and UpdateStatus matches, which would re-enter the matcher
+                // mid-enumeration. The phases these land on are deliberately ones with nothing to
+                // do on arrival anyway - neither starts a session nor expires orders.
                 case TradeRestrictionBreached(_, var action):
-                    _status = action == RestrictionBreachAction.Halt ? OrderBookStatus.Closed : OrderBookStatus.PreOpen;
+                    _status = action == RestrictionBreachAction.Halt ? OrderBookStatus.Halted : OrderBookStatus.Paused;
                     events.Add(new StatusChanged(_security, Now(), _status));
                     break;
 
