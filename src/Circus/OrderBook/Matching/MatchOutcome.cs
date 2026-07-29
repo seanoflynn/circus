@@ -1,4 +1,6 @@
-namespace Circus.OrderBook;
+using Circus.OrderBook.Restrictions;
+
+namespace Circus.OrderBook.Matching;
 
 // What Matcher.Run decided should happen next. Run mutates nothing and emits nothing;
 // InMemoryOrderBook.Apply does both.

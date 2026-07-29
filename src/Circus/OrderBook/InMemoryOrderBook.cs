@@ -1,3 +1,7 @@
+using Circus.OrderBook.Actions;
+using Circus.OrderBook.Events;
+using Circus.OrderBook.Matching;
+using Circus.OrderBook.Restrictions;
 using Circus.TimeProviders;
 
 namespace Circus.OrderBook;

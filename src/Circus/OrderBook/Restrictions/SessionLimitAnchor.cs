@@ -1,4 +1,4 @@
-namespace Circus.OrderBook;
+namespace Circus.OrderBook.Restrictions;
 
 // The reference and resolved width shared by the two restrictions set against a settlement
 // price rather than against a moving market. Both are inert until a reference arrives, because

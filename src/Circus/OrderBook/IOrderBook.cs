@@ -1,3 +1,6 @@
+using Circus.OrderBook.Actions;
+using Circus.OrderBook.Events;
+
 namespace Circus.OrderBook;
 
 // Actions in, events out. Everything a consumer knows about the book - price levels, trades,

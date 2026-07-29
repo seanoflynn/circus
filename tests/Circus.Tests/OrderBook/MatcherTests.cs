@@ -1,4 +1,4 @@
-using Circus.OrderBook;
+using Circus.OrderBook.Matching;
 using NUnit.Framework;
 
 namespace Circus.Tests.OrderBook;

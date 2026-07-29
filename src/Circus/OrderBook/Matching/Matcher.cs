@@ -1,4 +1,6 @@
-namespace Circus.OrderBook;
+using Circus.OrderBook.Restrictions;
+
+namespace Circus.OrderBook.Matching;
 
 // Owns the working and stop ladders outright: Rest, Unrest and Reprice are the only ways an
 // order enters, leaves or moves within them, and the ladders never leave this class in a form

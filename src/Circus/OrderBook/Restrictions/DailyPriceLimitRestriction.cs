@@ -1,4 +1,6 @@
-namespace Circus.OrderBook;
+using Circus.OrderBook.Events;
+
+namespace Circus.OrderBook.Restrictions;
 
 // A session-long ceiling and floor set against a settlement price. The only restriction that
 // neither rejects nor interrupts: trading continues, at the limit price, and simply cannot go

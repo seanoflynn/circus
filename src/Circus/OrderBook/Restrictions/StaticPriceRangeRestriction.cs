@@ -1,4 +1,6 @@
-namespace Circus.OrderBook;
+using Circus.OrderBook.Events;
+
+namespace Circus.OrderBook.Restrictions;
 
 // A range measured from a fixed reference rather than from recent trades. Eurex's static
 // volatility interruption, which exists because a range that follows the market can be walked

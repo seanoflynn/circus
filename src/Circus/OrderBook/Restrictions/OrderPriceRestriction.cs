@@ -1,4 +1,6 @@
-namespace Circus.OrderBook;
+using Circus.OrderBook.Events;
+
+namespace Circus.OrderBook.Restrictions;
 
 // The hard band checked at order entry. Sees only client-supplied resting limit prices - trigger
 // and Market/MarketLimit prices are governed elsewhere in InMemoryOrderBook.

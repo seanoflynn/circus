@@ -1,4 +1,5 @@
 using Circus.OrderBook;
+using Circus.OrderBook.Events;
 
 namespace Circus.DataProducers;
 

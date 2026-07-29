@@ -1,5 +1,6 @@
 using Circus.DataProducers;
 using Circus.OrderBook;
+using Circus.OrderBook.Actions;
 using Circus.TimeProviders;
 
 namespace Circus.Examples;

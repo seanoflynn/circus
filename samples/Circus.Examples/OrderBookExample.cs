@@ -1,4 +1,6 @@
 using Circus.OrderBook;
+using Circus.OrderBook.Actions;
+using Circus.OrderBook.Events;
 using Circus.SessionProviders;
 using Circus.TimeProviders;
 

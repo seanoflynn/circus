@@ -1,4 +1,4 @@
-namespace Circus.OrderBook;
+namespace Circus.OrderBook.Matching;
 
 // Continuous trading under price-time priority. The aggressor trades against the FIFO-earliest
 // order at the best crossing level - taking the head and only moving on once it is consumed is

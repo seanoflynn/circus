@@ -1,4 +1,6 @@
-namespace Circus.OrderBook;
+using Circus.OrderBook.Actions;
+
+namespace Circus.OrderBook.Events;
 
 public enum OrderCancelledReason
 {

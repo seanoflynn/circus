@@ -1,4 +1,4 @@
-namespace Circus;
+namespace Circus.OrderBook.Restrictions;
 
 // What restrictions a security trades under, as data. The book turns each of these into the
 // adapter that enforces it, so adding a restriction is adding a case here rather than another
