@@ -1788,7 +1788,7 @@ namespace Circus.Tests.OrderBook
         }
 
         [Test]
-        public void MarketOrder_MarketPreOpen_Rejected()
+        public void MarketOrder_MarketOrdersNotAccepted_Rejected()
         {
             // arrange
             Book.UpdateStatus(OrderBookStatus.PreOpen);
@@ -1805,7 +1805,7 @@ namespace Circus.Tests.OrderBook
             Assert.AreEqual(Now1, rejected.Time);
             Assert.AreEqual(CompanyId1, rejected.CompanyId);
             Assert.AreEqual(OrderId1, rejected.ClientOrderId);
-            Assert.AreEqual(OrderRejectedReason.MarketPreOpen, rejected.Reason);
+            Assert.AreEqual(OrderRejectedReason.MarketOrdersNotAccepted, rejected.Reason);
         }
 
         [TestCase(0)]

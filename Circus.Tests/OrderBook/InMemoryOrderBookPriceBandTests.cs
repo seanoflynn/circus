@@ -29,10 +29,11 @@ namespace Circus.Tests.OrderBook
         }
 
         [Test]
-        public void BandDisabled_OrderFarFromReferencePrice_Accepted()
+        public void NoBandConfigured_OrderFarFromReferencePrice_Accepted()
         {
-            // arrange - PriceBandTicks is null (the default), so banding is off even though a
-            // reference price is seeded
+            // arrange - no restrictions at all, so banding is off even though a reference price is
+            // seeded. A security without a band leaves the restriction out rather than configuring
+            // one with no width.
             var security = new Security("GCZ6", SecurityType.Future, 10, 10);
             var book = new LevelTrackingOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.Open, 100);
@@ -47,12 +48,16 @@ namespace Circus.Tests.OrderBook
         [Test]
         public void BothBandsConfigured_EachRestrictionGetsItsOwnThreshold()
         {
-            // arrange - the entry band wide (1000) and the volatility band narrow (5). Each
-            // restriction is handed only its own width, so the wiring in the book's constructor is
-            // now the only place these two could be crossed over. A wide entry band must not
-            // reject, and a narrow volatility band must still pause on the resulting trade.
-            var security = new Security("GCZ6", SecurityType.Future, 10, 10, PriceBandTicks: 1000,
-                VolatilityAuctionBandTicks: 5);
+            // arrange - the entry band wide (1000) and the volatility band narrow (5). Each config
+            // carries its own width, so the mapping in the book's constructor is the only place the
+            // two could be crossed over. A wide entry band must not reject, and a narrow volatility
+            // band must still pause on the resulting trade.
+            var security = new Security("GCZ6", SecurityType.Future, 10, 10,
+                PriceRestrictions: new PriceRestrictionConfig[]
+                {
+                    new OrderPriceBand(1000),
+                    new VolatilityBand(5)
+                });
             var book = new LevelTrackingOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.Open, 100);
 
@@ -73,7 +78,8 @@ namespace Circus.Tests.OrderBook
         public void NoReferencePriceSeeded_NoTradeYet_BandInactive_Accepted()
         {
             // arrange - band is configured, but there's no anchor to check against yet
-            var security = new Security("GCZ6", SecurityType.Future, 10, 10, PriceBandTicks: 5);
+            var security = new Security("GCZ6", SecurityType.Future, 10, 10,
+                PriceRestrictions: new PriceRestrictionConfig[] {new OrderPriceBand(5)});
             var book = new LevelTrackingOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.Open);
 
@@ -88,7 +94,8 @@ namespace Circus.Tests.OrderBook
         public void ReferencePriceSeeded_OrderWithinBand_Accepted_OutsideBand_Rejected()
         {
             // arrange - band of 5 ticks (50) around a seeded reference of 100, so [50, 150]
-            var security = new Security("GCZ6", SecurityType.Future, 10, 10, PriceBandTicks: 5);
+            var security = new Security("GCZ6", SecurityType.Future, 10, 10,
+                PriceRestrictions: new PriceRestrictionConfig[] {new OrderPriceBand(5)});
             var book = new LevelTrackingOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.Open, 100);
 
@@ -111,7 +118,8 @@ namespace Circus.Tests.OrderBook
         public void BandMovesDynamically_AfterATrade_ReanchorsToNewLastTradedPrice()
         {
             // arrange - reference seeded at 100, band [50, 150]
-            var security = new Security("GCZ6", SecurityType.Future, 10, 10, PriceBandTicks: 5);
+            var security = new Security("GCZ6", SecurityType.Future, 10, 10,
+                PriceRestrictions: new PriceRestrictionConfig[] {new OrderPriceBand(5)});
             var book = new LevelTrackingOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.Open, 100);
 
@@ -137,7 +145,8 @@ namespace Circus.Tests.OrderBook
         public void UpdateOrder_RepriceOutsideBand_Rejected()
         {
             // arrange - reference seeded at 100, band [50, 150]
-            var security = new Security("GCZ6", SecurityType.Future, 10, 10, PriceBandTicks: 5);
+            var security = new Security("GCZ6", SecurityType.Future, 10, 10,
+                PriceRestrictions: new PriceRestrictionConfig[] {new OrderPriceBand(5)});
             var book = new LevelTrackingOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.Open, 100);
             book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100);

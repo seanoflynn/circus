@@ -9,7 +9,7 @@ namespace Circus.Tests.OrderBook
         [Test]
         public void Scope_IsOrderEntry_OnBreach_IsReject()
         {
-            var restriction = new OrderPriceRestriction(null);
+            var restriction = new OrderPriceRestriction(5);
 
             Assert.AreEqual(RestrictionScope.OrderEntry, restriction.Scope);
             Assert.AreEqual(RestrictionBreachAction.Reject, restriction.OnBreach);
@@ -24,16 +24,7 @@ namespace Circus.Tests.OrderBook
         }
 
         [Test]
-        public void NoBandConfigured_AlwaysAllows()
-        {
-            var restriction = new OrderPriceRestriction(null);
-            restriction.OnSessionChange(100);
-
-            Assert.IsTrue(restriction.Allows(1_000_000, default));
-        }
-
-        [Test]
-        public void BandConfigured_NoReferencePriceYet_AlwaysAllows()
+        public void NoReferencePriceYet_AlwaysAllows()
         {
             var restriction = new OrderPriceRestriction(5);
 

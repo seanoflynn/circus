@@ -86,13 +86,22 @@ namespace Circus.OrderBook
         private const int MaxClientOrderIdLength = 20;
 
         public InMemoryOrderBook(Security security, ITimeProvider timeProvider)
-            : this(security, timeProvider, new IPriceRestriction[]
-            {
-                new OrderPriceRestriction(security.PriceBandTicks),
-                new DailyPriceBandLimit(security.VolatilityAuctionBandTicks, security.VolatilityAuctionDuration)
-            })
+            : this(security, timeProvider, Adapt(security.PriceRestrictions))
         {
         }
+
+        // Config in, enforcement out. The security describes what it trades under; this is the only
+        // place that knows which adapter each description means, so a new restriction is a new arm
+        // rather than a change to how books are constructed.
+        private static IReadOnlyList<IPriceRestriction> Adapt(IReadOnlyList<PriceRestrictionConfig>? configs) =>
+            configs == null
+                ? Array.Empty<IPriceRestriction>()
+                : configs.Select<PriceRestrictionConfig, IPriceRestriction>(config => config switch
+                {
+                    OrderPriceBand band => new OrderPriceRestriction(band.BandTicks),
+                    VolatilityBand band => new VolatilityBandRestriction(band.BandTicks, band.PauseFor),
+                    _ => throw new ArgumentException($"Unknown price restriction {config.GetType().Name}")
+                }).ToList();
 
         // Restrictions supplied outright rather than derived from the security. Internal because it
         // is a seam, not an API: it exists so combinations a Security cannot yet describe - two
@@ -202,7 +211,7 @@ namespace Circus.OrderBook
             if (!CurrentPhase.AcceptsOrderActions)
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.MarketClosed);
             if (type == OrderType.Market && !CurrentPhase.AcceptsMarketOrders)
-                return RejectCreate(companyId, clientOrderId, OrderRejectedReason.MarketPreOpen);
+                return RejectCreate(companyId, clientOrderId, OrderRejectedReason.MarketOrdersNotAccepted);
             if (string.IsNullOrEmpty(clientOrderId))
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.ClientOrderIdRequired);
             if (clientOrderId.Length > MaxClientOrderIdLength)

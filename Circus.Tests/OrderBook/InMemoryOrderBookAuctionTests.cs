@@ -361,7 +361,8 @@ namespace Circus.Tests.OrderBook
             // actual price movement by itself; only an executed trade at an extreme price should
             // pause the book. This order doesn't cross anything (isolated at 200, nothing on the
             // opposing side), so it must not trigger a pause just for being entered.
-            var security = new Security("GCZ6", SecurityType.Future, 10, 10, VolatilityAuctionBandTicks: 5);
+            var security = new Security("GCZ6", SecurityType.Future, 10, 10,
+                PriceRestrictions: new PriceRestrictionConfig[] {new VolatilityBand(5)});
             var book = new LevelTrackingOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.Open, 100);
 
@@ -380,7 +381,8 @@ namespace Circus.Tests.OrderBook
             // arrange - continuous trading establishes a reference price of 100, then a resting
             // sell stop (trigger 90) is added, plus a resting sell at 200 that hasn't crossed
             // anything yet (so hasn't paused anything, per the test above)
-            var security = new Security("GCZ6", SecurityType.Future, 10, 10, VolatilityAuctionBandTicks: 5);
+            var security = new Security("GCZ6", SecurityType.Future, 10, 10,
+                PriceRestrictions: new PriceRestrictionConfig[] {new VolatilityBand(5)});
             var book = new LevelTrackingOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.Open);
             book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100);
@@ -431,11 +433,12 @@ namespace Circus.Tests.OrderBook
         }
 
         [Test]
-        public void PriceBandTicksOnly_NoVolatilityAuctionBandConfigured_Unaffected()
+        public void EntryBandOnly_NoVolatilityBandConfigured_Unaffected()
         {
-            // arrange - #23's hard-reject band still works exactly as before when
-            // VolatilityAuctionBandTicks isn't set
-            var security = new Security("GCZ6", SecurityType.Future, 10, 10, PriceBandTicks: 5);
+            // arrange - #23's hard-reject band still works exactly as before with no volatility
+            // band alongside it
+            var security = new Security("GCZ6", SecurityType.Future, 10, 10,
+                PriceRestrictions: new PriceRestrictionConfig[] {new OrderPriceBand(5)});
             var book = new LevelTrackingOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.Open, 100);
 
