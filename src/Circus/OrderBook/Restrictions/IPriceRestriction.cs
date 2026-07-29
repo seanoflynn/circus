@@ -7,28 +7,6 @@ namespace Circus.OrderBook.Restrictions;
 // instrument rather than the book; each adapter here is named for the config it enforces.
 // InMemoryOrderBook.Adapt is what turns one into the other.
 
-// Flags, because a daily price limit is both: it refuses an order priced beyond the limit and
-// refuses to print through it. Everything else governs one or the other.
-[Flags]
-internal enum RestrictionScope
-{
-    OrderEntry = 1,
-    Trade = 2
-}
-
-internal enum RestrictionBreachAction
-{
-    Reject,
-    Block,
-    Pause,
-    Halt
-}
-
-// A breached Trade-scoped restriction: what it costs the book, and how long for. ResumeAfter
-// null leaves the interruption open-ended, waiting for someone to end it explicitly - and for
-// Block means nothing at all, since a limit does not interrupt anything to be resumed from.
-internal readonly record struct RestrictionBreach(RestrictionBreachAction Action, TimeSpan? ResumeAfter);
-
 // A price-restriction adapter. Each owns its own reference price - there is no shared anchor -
 // updating it from OnTrade (ranges that follow the market), OnIndicativePrice (the entry band
 // during an auction) and/or OnSessionChange (limits fixed against a settlement price).

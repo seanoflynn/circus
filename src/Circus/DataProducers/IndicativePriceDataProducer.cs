@@ -28,5 +28,3 @@ public class IndicativePriceDataProducer : IDataProducer<IndicativePriceDataEven
         return output ?? (IList<IndicativePriceDataEvent>) Array.Empty<IndicativePriceDataEvent>();
     }
 }
-
-public record IndicativePriceDataEvent(DateTime Time, decimal? Price, int Quantity);

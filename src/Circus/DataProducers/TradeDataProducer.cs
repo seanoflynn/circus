@@ -21,5 +21,3 @@ public class TradeDataProducer : IDataProducer<TradedDataEvent>
         return output ?? (IList<TradedDataEvent>) Array.Empty<TradedDataEvent>();
     }
 }
-
-public record TradedDataEvent(DateTime Time, decimal Price, int Quantity);

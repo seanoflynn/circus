@@ -3,19 +3,6 @@ using Circus.OrderBook.Events;
 
 namespace Circus.DataProducers;
 
-public enum OrderBookDeltaAction
-{
-    Added,
-    Modified,
-    Removed,
-    Filled
-}
-
-// ExchangeOrderId only - never CompanyId/ClientOrderId, which identify the originating
-// client and must not be broadcast on a public depth feed.
-public record OrderBookDeltaEvent(DateTime Time, Side Side, string ExchangeOrderId, decimal Price, int Quantity,
-    OrderBookDeltaAction Action);
-
 // Full order-by-order (L3) view of the working book, derived purely from the
 // OrderConfirmedEvent stream - no IOrderBook access, no snapshotting. A consumer replays the
 // returned deltas in order onto its own mirrored book, same as a real incremental feed.
