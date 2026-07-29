@@ -1,15 +1,16 @@
+using System;
 using Circus.OrderBook;
 using NUnit.Framework;
 
 namespace Circus.Tests.OrderBook
 {
     [TestFixture]
-    public class DailyPriceBandLimitTests
+    public class VolatilityBandRestrictionTests
     {
         [Test]
         public void Scope_IsTrade_OnBreach_IsPause()
         {
-            var restriction = new DailyPriceBandLimit(null);
+            var restriction = new VolatilityBandRestriction(5);
 
             Assert.AreEqual(RestrictionScope.Trade, restriction.Scope);
             Assert.AreEqual(RestrictionBreachAction.Pause, restriction.OnBreach);
@@ -18,7 +19,7 @@ namespace Circus.Tests.OrderBook
         [Test]
         public void NoDurationConfigured_PauseIsOpenEnded()
         {
-            var restriction = new DailyPriceBandLimit(5);
+            var restriction = new VolatilityBandRestriction(5);
 
             Assert.IsNull(restriction.ResumeAfter);
         }
@@ -26,24 +27,15 @@ namespace Circus.Tests.OrderBook
         [Test]
         public void DurationConfigured_IsWhatThePauseResumesAfter()
         {
-            var restriction = new DailyPriceBandLimit(5, System.TimeSpan.FromMinutes(2));
+            var restriction = new VolatilityBandRestriction(5, TimeSpan.FromMinutes(2));
 
-            Assert.AreEqual(System.TimeSpan.FromMinutes(2), restriction.ResumeAfter);
+            Assert.AreEqual(TimeSpan.FromMinutes(2), restriction.ResumeAfter);
         }
 
         [Test]
-        public void NoBandConfigured_AlwaysAllows()
+        public void NoReferencePriceYet_AlwaysAllows()
         {
-            var restriction = new DailyPriceBandLimit(null);
-            restriction.OnSessionChange(100);
-
-            Assert.IsTrue(restriction.Allows(1_000_000, default));
-        }
-
-        [Test]
-        public void BandConfigured_NoReferencePriceYet_AlwaysAllows()
-        {
-            var restriction = new DailyPriceBandLimit(5);
+            var restriction = new VolatilityBandRestriction(5);
 
             Assert.IsTrue(restriction.Allows(1_000_000, default));
         }
@@ -51,7 +43,7 @@ namespace Circus.Tests.OrderBook
         [Test]
         public void WithinBand_Allowed_AtEdge_Allowed_BeyondEdge_Disallowed()
         {
-            var restriction = new DailyPriceBandLimit(5);
+            var restriction = new VolatilityBandRestriction(5);
             restriction.OnSessionChange(100);
 
             Assert.IsTrue(restriction.Allows(100, default));
@@ -64,7 +56,7 @@ namespace Circus.Tests.OrderBook
         [Test]
         public void OnTrade_MovesReferenceToLastTrade()
         {
-            var restriction = new DailyPriceBandLimit(5);
+            var restriction = new VolatilityBandRestriction(5);
             restriction.OnSessionChange(100);
 
             restriction.OnTrade(200, default);

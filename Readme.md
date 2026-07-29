@@ -39,6 +39,7 @@ Market data
 
 Safety features
 - [x] Banding
+- [x] Volatility interruptions (a trade-price band breach pauses into an auction)
 - [ ] Daily price limits (static, session-long limit up/down)
 - [ ] Circuit breakers
 - [ ] Stop & velocity logic

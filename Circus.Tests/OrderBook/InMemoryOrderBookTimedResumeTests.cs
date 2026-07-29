@@ -33,7 +33,7 @@ namespace Circus.Tests.OrderBook
         private IOrderBook PausingBook(TimeSpan? duration)
         {
             var security = new Security("GCZ6", SecurityType.Future, 10, 10,
-                VolatilityAuctionBandTicks: 5, VolatilityAuctionDuration: duration);
+                PriceRestrictions: new PriceRestrictionConfig[] {new VolatilityBand(5, duration)});
             var book = new InMemoryOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.Open, 100);
             return book;

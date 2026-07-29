@@ -1,18 +1,16 @@
-using System;
+using System.Collections.Generic;
 
 namespace Circus
 {
+    // MarketOrderProtectionTicks is not a price restriction and stays here: it prices a market
+    // order rather than restricting one, deciding how far through the book an order with no limit
+    // of its own may sweep.
     public record Security(
         string Name,
         SecurityType Type,
         decimal TickSize,
         decimal TickValue,
         int MarketOrderProtectionTicks = 10,
-        int? PriceBandTicks = null,
-        int? VolatilityAuctionBandTicks = null,
-
-        // How long a volatility auction lasts before the book resumes by itself. Null leaves it
-        // standing until something ends it explicitly.
-        TimeSpan? VolatilityAuctionDuration = null
+        IReadOnlyList<PriceRestrictionConfig>? PriceRestrictions = null
     );
 }

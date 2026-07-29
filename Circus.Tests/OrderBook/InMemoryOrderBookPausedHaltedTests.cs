@@ -200,7 +200,8 @@ namespace Circus.Tests.OrderBook
         public void VolatilityBandBreach_PausesRatherThanReturningToPreOpen()
         {
             // arrange - a reference of 100 and a 5-tick volatility band
-            var security = new Security("GCZ6", SecurityType.Future, 10, 10, VolatilityAuctionBandTicks: 5);
+            var security = new Security("GCZ6", SecurityType.Future, 10, 10,
+                PriceRestrictions: new PriceRestrictionConfig[] {new VolatilityBand(5)});
             var book = new InMemoryOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.Open, 100);
             book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 200);
