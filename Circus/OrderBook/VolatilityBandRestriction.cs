@@ -32,7 +32,17 @@ namespace Circus.OrderBook
             !_referencePriceTicks.HasValue ||
             Math.Abs(priceTicks - _referencePriceTicks.Value) <= _bandTicks;
 
+        // Not an entry restriction, so it has no say in how a stop is priced.
+        public bool AllowsStopSpread(long spreadTicks) => true;
+
         public void OnTrade(long priceTicks, DateTime time) => _referencePriceTicks = priceTicks;
+
+        // Ignored: CME and Eurex both measure volatility against prices that actually traded, not
+        // against one an auction is only quoting. The entry band does follow it - each restriction
+        // owning its own anchor is what lets the two disagree.
+        public void OnIndicativePrice(long? priceTicks)
+        {
+        }
 
         public void OnSessionChange(long? referencePriceTicks)
         {
