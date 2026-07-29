@@ -6,8 +6,12 @@ namespace Circus.OrderBook
     public record OrderBookEvent(Security Security, DateTime Time);
 
     // Reason defaults to Requested, which is what every externally driven transition is.
+    //
+    // ResumesAt is when a timed interruption is due to end, and is null for everything else - which
+    // includes an interruption configured to last until told otherwise, and every ordinary
+    // transition, since an explicit one supersedes whatever was pending.
     public record StatusChanged(Security Security, DateTime Time, OrderBookStatus Status,
-            StatusChangeReason Reason = StatusChangeReason.Requested)
+            StatusChangeReason Reason = StatusChangeReason.Requested, DateTime? ResumesAt = null)
         : OrderBookEvent(Security, Time);
 
     public record OrderEvent(Security Security, DateTime Time, string CompanyId, string ClientOrderId,
