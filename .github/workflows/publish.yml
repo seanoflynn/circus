@@ -18,10 +18,10 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Build
-        run: dotnet build Circus/Circus.csproj -c Release
+        run: dotnet build src/Circus/Circus.csproj -c Release
 
       - name: Pack
-        run: dotnet pack Circus/Circus.csproj -c Release -o artifacts --no-build
+        run: dotnet pack src/Circus/Circus.csproj -c Release -o artifacts --no-build
 
       - name: NuGet login (OIDC -> temporary API key)
         uses: NuGet/login@v1
