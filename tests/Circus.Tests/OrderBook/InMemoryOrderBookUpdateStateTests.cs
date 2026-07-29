@@ -1,7 +1,7 @@
 using Circus.OrderBook;
 using Circus.OrderBook.Actions;
 using Circus.OrderBook.Events;
-using Circus.TimeProviders;
+using Circus.Time;
 using NUnit.Framework;
 
 namespace Circus.Tests.OrderBook;
@@ -23,14 +23,14 @@ public class InMemoryOrderBookUpdateStateTests
     private static readonly string OrderId2 = "Order2";
     private static readonly string OrderId3 = "Order3";
 
-    private static TestTimeProvider TimeProvider;
+    private static ManualClock Clock;
     private static IOrderBook Book;
 
     [SetUp]
     public void SetUp()
     {
-        TimeProvider = new TestTimeProvider(Now1);
-        Book = new InMemoryOrderBook(Sec, TimeProvider);
+        Clock = new ManualClock(Now1);
+        Book = new InMemoryOrderBook(Sec, Clock);
     }
 
     [TestCase(OrderBookStatus.PreOpen)]
@@ -59,9 +59,9 @@ public class InMemoryOrderBookUpdateStateTests
         // arrange
         Book.UpdateStatus(OrderBookStatus.PreOpen);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
         Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 5, 100);
-        TimeProvider.SetCurrentTime(Now3);
+        Clock.SetCurrentTime(Now3);
 
         // act
         var events = Book.UpdateStatus(OrderBookStatus.Open);
@@ -134,7 +134,7 @@ public class InMemoryOrderBookUpdateStateTests
         // arrange
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act
         var events = Book.UpdateStatus(OrderBookStatus.Closed);
@@ -175,7 +175,7 @@ public class InMemoryOrderBookUpdateStateTests
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100);
         Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 5, 100);
         Book.CreateStopMarketOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Sell, 5, 90);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act
         var events = Book.UpdateStatus(OrderBookStatus.Closed);
@@ -214,7 +214,7 @@ public class InMemoryOrderBookUpdateStateTests
         // arrange
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.GoodTilCanceled(), Side.Buy, 5, 100);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act
         var events = Book.UpdateStatus(OrderBookStatus.Closed);
@@ -237,7 +237,7 @@ public class InMemoryOrderBookUpdateStateTests
         Book.UpdateStatus(OrderBookStatus.Open);
         var goodTilDate = DateOnly.FromDateTime(Now1).AddDays(1);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.GoodTilDate { Date = goodTilDate }, Side.Buy, 5, 100);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act
         var events = Book.UpdateStatus(OrderBookStatus.Closed);
@@ -260,7 +260,7 @@ public class InMemoryOrderBookUpdateStateTests
         Book.UpdateStatus(OrderBookStatus.Open);
         var goodTilDate = DateOnly.FromDateTime(Now1);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.GoodTilDate { Date = goodTilDate }, Side.Buy, 5, 100);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act
         var events = Book.UpdateStatus(OrderBookStatus.Closed);
@@ -291,13 +291,13 @@ public class InMemoryOrderBookUpdateStateTests
         Book.UpdateStatus(OrderBookStatus.Closed); // day 1 close, not due
 
         var day2 = Now1.AddDays(1);
-        TimeProvider.SetCurrentTime(day2);
+        Clock.SetCurrentTime(day2);
         Book.UpdateStatus(OrderBookStatus.PreOpen);
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.UpdateStatus(OrderBookStatus.Closed); // day 2 close, still not due
 
         var day3 = Now1.AddDays(2);
-        TimeProvider.SetCurrentTime(day3);
+        Clock.SetCurrentTime(day3);
         Book.UpdateStatus(OrderBookStatus.PreOpen);
         Book.UpdateStatus(OrderBookStatus.Open);
 

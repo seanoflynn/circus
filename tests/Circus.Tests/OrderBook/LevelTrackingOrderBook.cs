@@ -1,8 +1,8 @@
-using Circus.DataProducers;
+using Circus.MarketData;
 using Circus.OrderBook;
 using Circus.OrderBook.Actions;
 using Circus.OrderBook.Events;
-using Circus.TimeProviders;
+using Circus.Time;
 
 namespace Circus.Tests.OrderBook;
 
@@ -20,9 +20,9 @@ internal sealed class LevelTrackingOrderBook : IOrderBook
     private readonly LevelDataProducer _levelDataProducer = new(MaxLevels);
     private LevelsDataEvent _levels = new(default, Array.Empty<Level>(), Array.Empty<Level>());
 
-    public LevelTrackingOrderBook(Security security, ITimeProvider timeProvider)
+    public LevelTrackingOrderBook(Security security, IClock clock)
     {
-        _book = new InMemoryOrderBook(security, timeProvider);
+        _book = new InMemoryOrderBook(security, clock);
     }
 
     public Security Security => _book.Security;

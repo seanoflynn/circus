@@ -1,4 +1,4 @@
-namespace Circus.SessionProviders;
+namespace Circus.Sessions;
 
 public interface ISessionProvider
 {

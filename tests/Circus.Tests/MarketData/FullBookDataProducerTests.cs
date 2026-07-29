@@ -1,11 +1,11 @@
-using Circus.DataProducers;
+using Circus.MarketData;
 using Circus.OrderBook;
 using Circus.OrderBook.Actions;
 using Circus.OrderBook.Events;
-using Circus.TimeProviders;
+using Circus.Time;
 using NUnit.Framework;
 
-namespace Circus.Tests.DataProducers;
+namespace Circus.Tests.MarketData;
 
 public class FullBookDataProducerTests
 {
@@ -32,14 +32,14 @@ public class FullBookDataProducerTests
     private static readonly string OrderId5 = "Order5";
     private static readonly string OrderId6 = "Order6";
 
-    private static TestTimeProvider TimeProvider;
+    private static ManualClock Clock;
     private static IOrderBook Book;
 
     [SetUp]
     public void SetUp()
     {
-        TimeProvider = new TestTimeProvider(Now1);
-        Book = new InMemoryOrderBook(Sec, TimeProvider);
+        Clock = new ManualClock(Now1);
+        Book = new InMemoryOrderBook(Sec, Clock);
     }
 
     [Test]
@@ -205,17 +205,17 @@ public class FullBookDataProducerTests
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 500);
         Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 3, 500);
 
-        TimeProvider.SetCurrentTime(Now3);
+        Clock.SetCurrentTime(Now3);
         Book.CreateLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Sell, 5, 520);
 
-        TimeProvider.SetCurrentTime(Now4);
+        Clock.SetCurrentTime(Now4);
         Book.CreateStopLimitOrder(CompanyId4, OrderId4, new OrderValidity.Day(), Side.Buy, 5, 530, 510);
 
-        TimeProvider.SetCurrentTime(Now5);
+        Clock.SetCurrentTime(Now5);
         Book.CreateLimitOrder(CompanyId5, OrderId5, new OrderValidity.Day(), Side.Sell, 2, 510);
 
         // act - trade at the trigger price, converting the stop into a working limit order
-        TimeProvider.SetCurrentTime(Now6);
+        Clock.SetCurrentTime(Now6);
         var bookEvents = Book.CreateLimitOrder(CompanyId6, OrderId6, new OrderValidity.Day(), Side.Buy, 2, 510);
         var deltas = producer.Process(Book, bookEvents);
 

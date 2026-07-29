@@ -1,24 +1,24 @@
-using Circus.DataProducers;
+using Circus.MarketData;
 using Circus.OrderBook;
 using Circus.OrderBook.Actions;
 using Circus.OrderBook.Events;
-using Circus.TimeProviders;
+using Circus.Time;
 using NUnit.Framework;
 
-namespace Circus.Tests.DataProducers;
+namespace Circus.Tests.MarketData;
 
 public class SecurityStatusDataProducerTests
 {
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
     private static readonly TimeSpan PauseFor = TimeSpan.FromMinutes(2);
 
-    private TestTimeProvider TimeProvider;
+    private ManualClock Clock;
     private SecurityStatusDataProducer Producer;
 
     [SetUp]
     public void SetUp()
     {
-        TimeProvider = new TestTimeProvider(Now1);
+        Clock = new ManualClock(Now1);
         Producer = new SecurityStatusDataProducer();
     }
 
@@ -26,14 +26,14 @@ public class SecurityStatusDataProducerTests
         Producer.Process(book, bookEvents);
 
     private IOrderBook PlainBook() =>
-        new InMemoryOrderBook(new Security("GCZ6", SecurityType.Future, 10, 10), TimeProvider);
+        new InMemoryOrderBook(new Security("GCZ6", SecurityType.Future, 10, 10), Clock);
 
     // A 5-tick volatility range on a reference of 100, pausing for two minutes.
     private IOrderBook PausingBook() =>
         new InMemoryOrderBook(
             new Security("GCZ6", SecurityType.Future, 10, 10,
                 PriceRestrictions: new PriceRestrictionConfig[] {new VolatilityBand(5, PauseFor)}),
-            TimeProvider);
+            Clock);
 
     [Test]
     public void OrdinaryOpen_PublishesTheStatusAndNothingPending()
@@ -98,7 +98,7 @@ public class SecurityStatusDataProducerTests
         Publish(book, book.CreateLimitOrder("Company2", "Order2", new OrderValidity.Day(), Side.Buy, 5, 200));
 
         // act
-        TimeProvider.SetCurrentTime(Now1 + PauseFor);
+        Clock.SetCurrentTime(Now1 + PauseFor);
         var events = Publish(book, book.AdvanceTime());
 
         // assert
@@ -115,7 +115,7 @@ public class SecurityStatusDataProducerTests
         var book = new InMemoryOrderBook(
             new Security("GCZ6", SecurityType.Future, 10, 10,
                 PriceRestrictions: new PriceRestrictionConfig[] {new VolatilityBand(5)}),
-            TimeProvider);
+            Clock);
         Publish(book, book.UpdateStatus(OrderBookStatus.Open, 100));
         book.CreateLimitOrder("Company1", "Order1", new OrderValidity.Day(), Side.Sell, 5, 200);
 
@@ -140,14 +140,14 @@ public class SecurityStatusDataProducerTests
                 {
                     new DailyPriceLimit(new PriceLimitWidth.Ticks(5))
                 }),
-            TimeProvider);
+            Clock);
 
         Publish(book, book.UpdateStatus(OrderBookStatus.Open, 200));
         book.CreateLimitOrder("Company1", "Sell1", new OrderValidity.Day(), Side.Sell, 5, 200);
         book.CreateLimitOrder("Company2", "Buy1", new OrderValidity.Day(), Side.Buy, 5, 200);
         book.CreateLimitOrder("Company2", "Buy2", new OrderValidity.Day(), Side.Buy, 5, 240);
 
-        TimeProvider.SetCurrentTime(Now1.AddMinutes(1));
+        Clock.SetCurrentTime(Now1.AddMinutes(1));
         Publish(book, book.UpdateStatus(OrderBookStatus.Open, 100));
 
         // act - a sell inside the limit, crossing into the buy that is not

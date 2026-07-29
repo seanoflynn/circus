@@ -1,7 +1,7 @@
 using Circus.OrderBook;
 using Circus.OrderBook.Actions;
 using Circus.OrderBook.Events;
-using Circus.TimeProviders;
+using Circus.Time;
 using NUnit.Framework;
 
 namespace Circus.Tests.OrderBook;
@@ -25,14 +25,14 @@ public class InMemoryOrderBookPausedHaltedTests
     private static readonly string OrderId2 = "Order2";
     private static readonly string CancelId1 = "Cancel1";
 
-    private TestTimeProvider TimeProvider;
+    private ManualClock Clock;
     private IOrderBook Book;
 
     [SetUp]
     public void SetUp()
     {
-        TimeProvider = new TestTimeProvider(Now1);
-        Book = new InMemoryOrderBook(Sec, TimeProvider);
+        Clock = new ManualClock(Now1);
+        Book = new InMemoryOrderBook(Sec, Clock);
     }
 
     [TestCase(OrderBookStatus.Paused)]
@@ -93,7 +93,7 @@ public class InMemoryOrderBookPausedHaltedTests
         // arrange
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act - only a close that ends the trading day retires day orders
         var events = Book.UpdateStatus(status);
@@ -119,7 +119,7 @@ public class InMemoryOrderBookPausedHaltedTests
         var beforeId = ExchangeOrderIdOf(Book, CompanyId1, OrderId1, Side.Buy, 5, 100);
 
         // act
-        TimeProvider.SetCurrentTime(NextDay);
+        Clock.SetCurrentTime(NextDay);
         Book.UpdateStatus(status);
         var afterId = ExchangeOrderIdOf(Book, CompanyId2, OrderId2, Side.Buy, 5, 90);
 
@@ -137,7 +137,7 @@ public class InMemoryOrderBookPausedHaltedTests
         var beforeId = ExchangeOrderIdOf(Book, CompanyId1, OrderId1, Side.Buy, 5, 100);
 
         // act
-        TimeProvider.SetCurrentTime(NextDay);
+        Clock.SetCurrentTime(NextDay);
         Book.UpdateStatus(OrderBookStatus.PreOpen);
         var afterId = ExchangeOrderIdOf(Book, CompanyId2, OrderId2, Side.Buy, 5, 90);
 
@@ -202,7 +202,7 @@ public class InMemoryOrderBookPausedHaltedTests
         // arrange - a reference of 100 and a 5-tick volatility band
         var security = new Security("GCZ6", SecurityType.Future, 10, 10,
             PriceRestrictions: new PriceRestrictionConfig[] {new VolatilityBand(5)});
-        var book = new InMemoryOrderBook(security, TimeProvider);
+        var book = new InMemoryOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 200);
 
@@ -221,7 +221,7 @@ public class InMemoryOrderBookPausedHaltedTests
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100);
         Book.UpdateStatus(OrderBookStatus.Halted);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act
         var events = Book.UpdateStatus(OrderBookStatus.Closed);

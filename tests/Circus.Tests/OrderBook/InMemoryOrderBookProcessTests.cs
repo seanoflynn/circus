@@ -1,7 +1,7 @@
 using Circus.OrderBook;
 using Circus.OrderBook.Actions;
 using Circus.OrderBook.Events;
-using Circus.TimeProviders;
+using Circus.Time;
 using NUnit.Framework;
 
 namespace Circus.Tests.OrderBook;
@@ -16,14 +16,14 @@ public class InMemoryOrderBookProcessTests
     private static readonly string OrderId2 = "Order2";
     private static readonly string OrderId3 = "Order3";
 
-    private static TestTimeProvider TimeProvider;
+    private static ManualClock Clock;
     private static LevelTrackingOrderBook Book;
 
     [SetUp]
     public void SetUp()
     {
-        TimeProvider = new TestTimeProvider(Now1);
-        Book = new LevelTrackingOrderBook(Sec, TimeProvider);
+        Clock = new ManualClock(Now1);
+        Book = new LevelTrackingOrderBook(Sec, Clock);
     }
 
     [Test]

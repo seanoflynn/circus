@@ -1,7 +1,7 @@
 using Circus.OrderBook;
 using Circus.OrderBook.Actions;
 using Circus.OrderBook.Events;
-using Circus.TimeProviders;
+using Circus.Time;
 using NUnit.Framework;
 
 namespace Circus.Tests.OrderBook;
@@ -21,12 +21,12 @@ public class InMemoryOrderBookPriceBandTests
     private static readonly string OrderId3 = "Order3";
     private static readonly string OrderId4 = "Order4";
 
-    private static TestTimeProvider TimeProvider;
+    private static ManualClock Clock;
 
     [SetUp]
     public void SetUp()
     {
-        TimeProvider = new TestTimeProvider(Now1);
+        Clock = new ManualClock(Now1);
     }
 
     [Test]
@@ -36,7 +36,7 @@ public class InMemoryOrderBookPriceBandTests
         // seeded. A security without a band leaves the restriction out rather than configuring
         // one with no width.
         var security = new Security("GCZ6", SecurityType.Future, 10, 10);
-        var book = new LevelTrackingOrderBook(security, TimeProvider);
+        var book = new LevelTrackingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
 
         // act
@@ -59,7 +59,7 @@ public class InMemoryOrderBookPriceBandTests
                 new OrderPriceBand(1000),
                 new VolatilityBand(5)
             });
-        var book = new LevelTrackingOrderBook(security, TimeProvider);
+        var book = new LevelTrackingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
 
         // act - 200 is far outside the narrow volatility band but well inside the wide entry
@@ -81,7 +81,7 @@ public class InMemoryOrderBookPriceBandTests
         // arrange - band is configured, but there's no anchor to check against yet
         var security = new Security("GCZ6", SecurityType.Future, 10, 10,
             PriceRestrictions: new PriceRestrictionConfig[] {new OrderPriceBand(5)});
-        var book = new LevelTrackingOrderBook(security, TimeProvider);
+        var book = new LevelTrackingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open);
 
         // act
@@ -97,7 +97,7 @@ public class InMemoryOrderBookPriceBandTests
         // arrange - band of 5 ticks (50) around a seeded reference of 100, so [50, 150]
         var security = new Security("GCZ6", SecurityType.Future, 10, 10,
             PriceRestrictions: new PriceRestrictionConfig[] {new OrderPriceBand(5)});
-        var book = new LevelTrackingOrderBook(security, TimeProvider);
+        var book = new LevelTrackingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
 
         // act/assert - at the reference price
@@ -121,7 +121,7 @@ public class InMemoryOrderBookPriceBandTests
         // arrange - reference seeded at 100, band [50, 150]
         var security = new Security("GCZ6", SecurityType.Future, 10, 10,
             PriceRestrictions: new PriceRestrictionConfig[] {new OrderPriceBand(5)});
-        var book = new LevelTrackingOrderBook(security, TimeProvider);
+        var book = new LevelTrackingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
 
         // 160 is outside the original [50, 150] band
@@ -148,7 +148,7 @@ public class InMemoryOrderBookPriceBandTests
         // arrange - reference seeded at 100, band [50, 150]
         var security = new Security("GCZ6", SecurityType.Future, 10, 10,
             PriceRestrictions: new PriceRestrictionConfig[] {new OrderPriceBand(5)});
-        var book = new LevelTrackingOrderBook(security, TimeProvider);
+        var book = new LevelTrackingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100);
 
@@ -175,7 +175,7 @@ public class InMemoryOrderBookPriceBandTests
     public void PreOpen_ReferenceMovesFromTheSettlementPriceToTheIndicativePrice()
     {
         // arrange - settled at 100, so the band starts out [50, 150]
-        var book = new LevelTrackingOrderBook(BandedSecurity(), TimeProvider);
+        var book = new LevelTrackingOrderBook(BandedSecurity(), Clock);
         book.UpdateStatus(OrderBookStatus.PreOpen, 100);
 
         // assert - 200 is outside the band while the settlement price is still the reference
@@ -201,7 +201,7 @@ public class InMemoryOrderBookPriceBandTests
     public void ContinuousTrading_ReferenceReturnsToTheLastTrade_OnceTheQuoteIsWithdrawn()
     {
         // arrange - open on an auction that prints at 150, which withdraws the quote
-        var book = new LevelTrackingOrderBook(BandedSecurity(), TimeProvider);
+        var book = new LevelTrackingOrderBook(BandedSecurity(), Clock);
         book.UpdateStatus(OrderBookStatus.PreOpen, 100);
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 10, 150);
         book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 10, 150);
@@ -226,7 +226,7 @@ public class InMemoryOrderBookPriceBandTests
     // far side of it can never be more than a band away from a limit price still inside it.
     private LevelTrackingOrderBook StopSpreadBook(Security security)
     {
-        var book = new LevelTrackingOrderBook(security, TimeProvider);
+        var book = new LevelTrackingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100);
         book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 5, 100);

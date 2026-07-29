@@ -2,7 +2,7 @@ using BenchmarkDotNet.Attributes;
 using Circus.OrderBook;
 using Circus.OrderBook.Actions;
 using Circus.Simulator;
-using Circus.TimeProviders;
+using Circus.Time;
 
 namespace Circus.Benchmarks;
 
@@ -29,7 +29,7 @@ public class OrderBookThroughputBenchmarks
     [Benchmark]
     public int ReplayTrace()
     {
-        var book = new InMemoryOrderBook(_security, new TestTimeProvider(DateTime.UtcNow));
+        var book = new InMemoryOrderBook(_security, new ManualClock(DateTime.UtcNow));
         book.UpdateStatus(OrderBookStatus.Open);
 
         var eventCount = 0;

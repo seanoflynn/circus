@@ -1,7 +1,7 @@
 using Circus.OrderBook;
 using Circus.OrderBook.Actions;
 using Circus.OrderBook.Events;
-using Circus.TimeProviders;
+using Circus.Time;
 using NUnit.Framework;
 
 namespace Circus.Tests.OrderBook;
@@ -27,14 +27,14 @@ public class InMemoryOrderBookUpdateOrderTests
     private static readonly string OrderId6 = "Order6";
     private static readonly string OrderId7 = "Order7";
 
-    private static TestTimeProvider TimeProvider;
+    private static ManualClock Clock;
     private static IOrderBook Book;
 
     [SetUp]
     public void SetUp()
     {
-        TimeProvider = new TestTimeProvider(Now1);
-        Book = new InMemoryOrderBook(Sec, TimeProvider);
+        Clock = new ManualClock(Now1);
+        Book = new InMemoryOrderBook(Sec, Clock);
     }
 
     [Test]
@@ -44,7 +44,7 @@ public class InMemoryOrderBookUpdateOrderTests
         Book.UpdateStatus(OrderBookStatus.Open);
         var created = Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 100)
             .OfType<CreateOrderConfirmed>().Single();
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act - reprice loses time priority, so ExchangeOrderId is re-derived (the order is
         // functionally a new entry at the back of the queue), same as a real exchange's own
@@ -67,7 +67,7 @@ public class InMemoryOrderBookUpdateOrderTests
         Book.UpdateStatus(OrderBookStatus.Open);
         var created = Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100)
             .OfType<CreateOrderConfirmed>().Single();
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act - a quantity decrease alone preserves time priority, so ExchangeOrderId must not change
         var events = Book.UpdateOrder(CompanyId1, OrderId4, OrderId1, newTotalQuantity: 3);
@@ -84,7 +84,7 @@ public class InMemoryOrderBookUpdateOrderTests
         // arrange
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 100);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act
         var events = Book.UpdateOrder(CompanyId1, OrderId4, OrderId1, price: 110);
@@ -101,7 +101,7 @@ public class InMemoryOrderBookUpdateOrderTests
         // arrange
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 100);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act
         var events = Book.UpdateOrder(CompanyId1, OrderId4, OrderId1, newTotalQuantity: 8);
@@ -119,7 +119,7 @@ public class InMemoryOrderBookUpdateOrderTests
         // arrange
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 100);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act
         var events = Book.UpdateOrder(CompanyId1, OrderId4, OrderId1, quantity);
@@ -159,7 +159,7 @@ public class InMemoryOrderBookUpdateOrderTests
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 100);
         Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 3, 100);
         Book.CreateStopMarketOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Buy, 3, 110);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act
         var events = Book.UpdateOrder(CompanyId3, OrderId5, OrderId3, quantity);
@@ -199,7 +199,7 @@ public class InMemoryOrderBookUpdateOrderTests
         // arrange
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), side, 3, 100);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act
         var events = Book.UpdateOrder(CompanyId1, OrderId4, OrderId1, price: price);
@@ -241,7 +241,7 @@ public class InMemoryOrderBookUpdateOrderTests
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 100);
         Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 3, 100);
         Book.CreateStopLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), side, 3, triggerPrice, triggerPrice);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act
         var events = Book.UpdateOrder(CompanyId3, OrderId5, OrderId3, price: newPrice);
@@ -284,7 +284,7 @@ public class InMemoryOrderBookUpdateOrderTests
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 100);
         Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 3, 100);
         Book.CreateStopLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), side, 3, price, triggerPrice);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act
         var events = Book.UpdateOrder(CompanyId3, OrderId5, OrderId3, triggerPrice: newTriggerPrice);
@@ -321,7 +321,7 @@ public class InMemoryOrderBookUpdateOrderTests
         // arrange
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 100);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act
         var events = Book.UpdateOrder(CompanyId1, OrderId4, OrderId1, triggerPrice: 110);
@@ -360,7 +360,7 @@ public class InMemoryOrderBookUpdateOrderTests
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 100);
         Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 3, 100);
         Book.CreateStopMarketOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Buy, 3, 110);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act
         var events = Book.UpdateOrder(CompanyId3, OrderId5, OrderId3, 5);
@@ -399,7 +399,7 @@ public class InMemoryOrderBookUpdateOrderTests
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 100);
         Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 3, 100);
         Book.CreateStopMarketOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Sell, 3, 90);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act
         var events = Book.UpdateOrder(CompanyId3, OrderId5, OrderId3, 1);
@@ -437,7 +437,7 @@ public class InMemoryOrderBookUpdateOrderTests
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100);
         Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 4, 100);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act
         var events = Book.UpdateOrder(CompanyId1, OrderId4, OrderId1, 2, 100);
@@ -477,7 +477,7 @@ public class InMemoryOrderBookUpdateOrderTests
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 10, 100);
         Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Buy, 4, 100); // partial fill: 4@100
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act
         var events = Book.UpdateOrder(CompanyId1, OrderId4, OrderId1, 6, 110);
@@ -502,9 +502,9 @@ public class InMemoryOrderBookUpdateOrderTests
         // arrange
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 90);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
         Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 80);
-        TimeProvider.SetCurrentTime(Now3);
+        Clock.SetCurrentTime(Now3);
 
         // act
         var events = Book.UpdateOrder(CompanyId1, OrderId4, OrderId1, 3, 70);
@@ -701,7 +701,7 @@ public class InMemoryOrderBookUpdateOrderTests
         var created = Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 100)
             .OfType<CreateOrderConfirmed>().Single();
         Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 3, 100);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act
         var events = Book.UpdateOrder(CompanyId1, OrderId4, OrderId1, 5, 110);
@@ -728,7 +728,7 @@ public class InMemoryOrderBookUpdateOrderTests
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 100);
         Book.CancelOrder(CompanyId1, OrderId6, OrderId1);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act
         var events = Book.UpdateOrder(CompanyId1, OrderId4, OrderId6, 5, 110);
@@ -780,7 +780,7 @@ public class InMemoryOrderBookUpdateOrderTests
         Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 3, 90);
         Book.CreateStopMarketOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Buy, 3, 100);
         Book.CancelOrder(CompanyId3, OrderId7, OrderId3);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act
         var events = Book.UpdateOrder(CompanyId3, OrderId5, OrderId7, 5);

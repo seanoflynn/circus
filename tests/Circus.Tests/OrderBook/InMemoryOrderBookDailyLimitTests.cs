@@ -1,7 +1,7 @@
 using Circus.OrderBook;
 using Circus.OrderBook.Actions;
 using Circus.OrderBook.Events;
-using Circus.TimeProviders;
+using Circus.Time;
 using NUnit.Framework;
 
 namespace Circus.Tests.OrderBook;
@@ -17,12 +17,12 @@ public class InMemoryOrderBookDailyLimitTests
     private static readonly string CompanyId1 = "Company1";
     private static readonly string CompanyId2 = "Company2";
 
-    private TestTimeProvider TimeProvider;
+    private ManualClock Clock;
 
     [SetUp]
     public void SetUp()
     {
-        TimeProvider = new TestTimeProvider(Now1);
+        Clock = new ManualClock(Now1);
     }
 
     // 5 ticks on a tick size of 10, referenced at 100, so the limits are 50 and 150.
@@ -33,7 +33,7 @@ public class InMemoryOrderBookDailyLimitTests
             {
                 new DailyPriceLimit(new PriceLimitWidth.Ticks(5))
             });
-        var book = new InMemoryOrderBook(security, TimeProvider);
+        var book = new InMemoryOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
         return book;
     }
@@ -83,7 +83,7 @@ public class InMemoryOrderBookDailyLimitTests
             {
                 new DailyPriceLimit(new PriceLimitWidth.Ticks(5))
             });
-        var book = new InMemoryOrderBook(security, TimeProvider);
+        var book = new InMemoryOrderBook(security, Clock);
 
         book.UpdateStatus(OrderBookStatus.Open, 200);
         book.CreateLimitOrder(CompanyId1, "Sell1", new OrderValidity.Day(), Side.Sell, 5, 200);
@@ -95,7 +95,7 @@ public class InMemoryOrderBookDailyLimitTests
         // hand it to the sell - and price-time prints at the resting order's price. Left at one
         // instant, an incoming sell would price the trade at its own limit rather than at the
         // buy resting above the ceiling, and there would be nothing out of range to refuse.
-        TimeProvider.SetCurrentTime(Now1.AddMinutes(1));
+        Clock.SetCurrentTime(Now1.AddMinutes(1));
         book.UpdateStatus(OrderBookStatus.Open, 100);
         return book;
     }
@@ -153,7 +153,7 @@ public class InMemoryOrderBookDailyLimitTests
             {
                 new DailyPriceLimit(new PriceLimitWidth.Percent(7))
             });
-        var book = new InMemoryOrderBook(security, TimeProvider);
+        var book = new InMemoryOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 1000);
 
         // act + assert - 1070 is exactly on the ceiling
@@ -173,7 +173,7 @@ public class InMemoryOrderBookDailyLimitTests
             {
                 new DailyPriceLimit(new PriceLimitWidth.Percent(7))
             });
-        var book = new InMemoryOrderBook(security, TimeProvider);
+        var book = new InMemoryOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open);
 
         // act

@@ -1,6 +1,6 @@
 using Circus.OrderBook;
 
-namespace Circus.DataProducers;
+namespace Circus.MarketData;
 
 // ResumesAt is when a timed interruption is due back, null when nothing is pending. LimitState
 // is which way a daily limit has the market stuck - Buy for limit up, where buyers cannot push

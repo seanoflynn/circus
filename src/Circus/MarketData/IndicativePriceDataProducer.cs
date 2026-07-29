@@ -1,7 +1,7 @@
 using Circus.OrderBook;
 using Circus.OrderBook.Events;
 
-namespace Circus.DataProducers;
+namespace Circus.MarketData;
 
 // Publishes the auction quote a book is running - CME's indicative opening price, Eurex's
 // indicative auction price. Unlike the level producers this holds no state of its own: the

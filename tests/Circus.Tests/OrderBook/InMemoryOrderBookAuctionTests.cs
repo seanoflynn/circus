@@ -1,7 +1,7 @@
 using Circus.OrderBook;
 using Circus.OrderBook.Actions;
 using Circus.OrderBook.Events;
-using Circus.TimeProviders;
+using Circus.Time;
 using NUnit.Framework;
 
 namespace Circus.Tests.OrderBook;
@@ -31,12 +31,12 @@ public class InMemoryOrderBookAuctionTests
     private static readonly string OrderId8 = "Order8";
     private static readonly string CancelId1 = "Cancel1";
 
-    private static TestTimeProvider TimeProvider;
+    private static ManualClock Clock;
 
     [SetUp]
     public void SetUp()
     {
-        TimeProvider = new TestTimeProvider(Now1);
+        Clock = new ManualClock(Now1);
     }
 
     [Test]
@@ -48,7 +48,7 @@ public class InMemoryOrderBookAuctionTests
         // sells fully fill (also price improvement - they get 120, not their own lower limit),
         // and the 120 buy (the marginal order) only partially fills for the 1 unit left over
         var security = new Security("GCZ6", SecurityType.Future, 10, 10);
-        var book = new LevelTrackingOrderBook(security, TimeProvider);
+        var book = new LevelTrackingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.PreOpen);
 
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 140);
@@ -97,14 +97,14 @@ public class InMemoryOrderBookAuctionTests
         // before the later order gets anything - it must not lose its place in the queue just
         // because its displayed peak needs replenishing mid-print.
         var security = new Security("GCZ6", SecurityType.Future, 10, 10);
-        var book = new LevelTrackingOrderBook(security, TimeProvider);
+        var book = new LevelTrackingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.PreOpen);
 
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 100, 100,
             maxVisibleQuantity: 10);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
         book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Buy, 60, 100);
-        TimeProvider.SetCurrentTime(Now3);
+        Clock.SetCurrentTime(Now3);
         book.CreateLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Sell, 100, 100);
 
         // act
@@ -130,12 +130,12 @@ public class InMemoryOrderBookAuctionTests
         // than the 10-unit peak must not leave DisplayedQuantity negative or stale - it should
         // come out re-derived to a fresh full peak, the same as if it had just been entered.
         var security = new Security("GCZ6", SecurityType.Future, 10, 10);
-        var book = new LevelTrackingOrderBook(security, TimeProvider);
+        var book = new LevelTrackingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.PreOpen);
 
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 100, 100,
             maxVisibleQuantity: 10);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
         book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 45, 100);
 
         // act
@@ -159,7 +159,7 @@ public class InMemoryOrderBookAuctionTests
         // arrange - 120 and 130 tie for max executable volume (10 each), with the surplus on
         // the sell side at both - CME's rule picks the lowest of the tied prices in that case
         var security = new Security("GCZ6", SecurityType.Future, 10, 10);
-        var book = new LevelTrackingOrderBook(security, TimeProvider);
+        var book = new LevelTrackingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.PreOpen);
 
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 140);
@@ -184,7 +184,7 @@ public class InMemoryOrderBookAuctionTests
         // arrange - same tie as above (120 vs 130), but with a reference price seeded at 130
         // (must be tick-aligned to TickSize 10) - that should win over the default rule
         var security = new Security("GCZ6", SecurityType.Future, 10, 10);
-        var book = new LevelTrackingOrderBook(security, TimeProvider);
+        var book = new LevelTrackingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.PreOpen, 130);
 
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 140);
@@ -208,7 +208,7 @@ public class InMemoryOrderBookAuctionTests
     {
         // arrange
         var security = new Security("GCZ6", SecurityType.Future, 10, 10);
-        var book = new LevelTrackingOrderBook(security, TimeProvider);
+        var book = new LevelTrackingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.PreOpen);
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100);
 
@@ -230,7 +230,7 @@ public class InMemoryOrderBookAuctionTests
         // happen is that governance turning into execution: a crossed book during pre-open is
         // quoted, not printed. Orders sit untouched until the open.
         var security = new Security("GCZ6", SecurityType.Future, 10, 10);
-        var book = new LevelTrackingOrderBook(security, TimeProvider);
+        var book = new LevelTrackingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.PreOpen);
 
         // act - deeply crossed: the bid is well through the offer
@@ -259,7 +259,7 @@ public class InMemoryOrderBookAuctionTests
     {
         // arrange - a crossed book in pre-open, quoting a price it would clear at
         var security = new Security("GCZ6", SecurityType.Future, 10, 10);
-        var book = new LevelTrackingOrderBook(security, TimeProvider);
+        var book = new LevelTrackingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.PreOpen);
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 10, 150);
         var quoting = book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 10, 100);
@@ -288,7 +288,7 @@ public class InMemoryOrderBookAuctionTests
         // arrange - continuous trading is governed by price-time, which has no single price it
         // would print at, so there is no indicative auction price to publish while open
         var security = new Security("GCZ6", SecurityType.Future, 10, 10);
-        var book = new LevelTrackingOrderBook(security, TimeProvider);
+        var book = new LevelTrackingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open);
 
         // act + assert - a resting order, then one that crosses it and trades: neither quotes
@@ -313,7 +313,7 @@ public class InMemoryOrderBookAuctionTests
     {
         // arrange
         var security = new Security("GCZ6", SecurityType.Future, 10, 10);
-        var book = new LevelTrackingOrderBook(security, TimeProvider);
+        var book = new LevelTrackingOrderBook(security, Clock);
         var preOpen = book.UpdateStatus(OrderBookStatus.PreOpen);
 
         // assert - nothing resting yet, so nothing to quote
@@ -363,7 +363,7 @@ public class InMemoryOrderBookAuctionTests
         // opposing side), so it must not trigger a pause just for being entered.
         var security = new Security("GCZ6", SecurityType.Future, 10, 10,
             PriceRestrictions: new PriceRestrictionConfig[] {new VolatilityBand(5)});
-        var book = new LevelTrackingOrderBook(security, TimeProvider);
+        var book = new LevelTrackingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
 
         // act
@@ -383,18 +383,18 @@ public class InMemoryOrderBookAuctionTests
         // anything yet (so hasn't paused anything, per the test above)
         var security = new Security("GCZ6", SecurityType.Future, 10, 10,
             PriceRestrictions: new PriceRestrictionConfig[] {new VolatilityBand(5)});
-        var book = new LevelTrackingOrderBook(security, TimeProvider);
+        var book = new LevelTrackingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open);
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100);
         book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 5, 100);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
         book.CreateStopLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Sell, 5, 80, 90);
         book.CreateLimitOrder(CompanyId4, OrderId4, new OrderValidity.Day(), Side.Sell, 10, 200);
 
         // act - a buy at 200 would actually cross and trade against the resting 200 sell, at a
         // price 100 away from the 100 reference - breaching the 50-wide volatility band. The
         // trade is prevented (not executed) and the book pauses instead; neither order fills
-        TimeProvider.SetCurrentTime(Now3);
+        Clock.SetCurrentTime(Now3);
         var events = book.CreateLimitOrder(CompanyId5, OrderId5, new OrderValidity.Day(), Side.Buy, 10, 200);
 
         // assert
@@ -416,7 +416,7 @@ public class InMemoryOrderBookAuctionTests
         Assert.AreEqual(10, sellLevels[0].Quantity); // untouched - the trade was prevented
 
         // orders can still be entered/cancelled while paused
-        TimeProvider.SetCurrentTime(Now4);
+        Clock.SetCurrentTime(Now4);
         book.CreateLimitOrder(CompanyId1, OrderId7, new OrderValidity.Day(), Side.Buy, 10, 90);
         book.CreateLimitOrder(CompanyId2, OrderId8, new OrderValidity.Day(), Side.Sell, 10, 90);
 
@@ -439,7 +439,7 @@ public class InMemoryOrderBookAuctionTests
         // band alongside it
         var security = new Security("GCZ6", SecurityType.Future, 10, 10,
             PriceRestrictions: new PriceRestrictionConfig[] {new OrderPriceBand(5)});
-        var book = new LevelTrackingOrderBook(security, TimeProvider);
+        var book = new LevelTrackingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
 
         // act

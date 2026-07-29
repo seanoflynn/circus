@@ -1,4 +1,4 @@
-namespace Circus.DataProducers;
+namespace Circus.MarketData;
 
 public enum OrderBookDeltaAction
 {

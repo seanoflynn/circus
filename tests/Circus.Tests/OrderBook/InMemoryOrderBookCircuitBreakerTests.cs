@@ -1,7 +1,7 @@
 using Circus.OrderBook;
 using Circus.OrderBook.Actions;
 using Circus.OrderBook.Events;
-using Circus.TimeProviders;
+using Circus.Time;
 using NUnit.Framework;
 
 namespace Circus.Tests.OrderBook;
@@ -18,12 +18,12 @@ public class InMemoryOrderBookCircuitBreakerTests
     private static readonly string CompanyId1 = "Company1";
     private static readonly string CompanyId2 = "Company2";
 
-    private TestTimeProvider TimeProvider;
+    private ManualClock Clock;
 
     [SetUp]
     public void SetUp()
     {
-        TimeProvider = new TestTimeProvider(Now1);
+        Clock = new ManualClock(Now1);
     }
 
     // CME's equity index levels: halt at 7 and 13 percent, end the trading day at 20. On a
@@ -37,7 +37,7 @@ public class InMemoryOrderBookCircuitBreakerTests
                 new CircuitBreaker(new PriceLimitWidth.Percent(13), HaltFor),
                 new CircuitBreaker(new PriceLimitWidth.Percent(20))
             });
-        var book = new InMemoryOrderBook(security, TimeProvider);
+        var book = new InMemoryOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 1000);
         return book;
     }
@@ -64,7 +64,7 @@ public class InMemoryOrderBookCircuitBreakerTests
         book.CancelOrder(CompanyId1, "Cancel1", "Sell1");
         book.CancelOrder(CompanyId2, "Cancel2", "Buy1");
 
-        TimeProvider.SetCurrentTime(Now1 + HaltFor);
+        Clock.SetCurrentTime(Now1 + HaltFor);
         var events = book.AdvanceTime();
 
         Assert.AreEqual(OrderBookStatus.Open, book.Status);
@@ -85,7 +85,7 @@ public class InMemoryOrderBookCircuitBreakerTests
         // act - the two narrower levels would each have ended by now
         book.CancelOrder(CompanyId1, "Cancel1", "Sell1");
         book.CancelOrder(CompanyId2, "Cancel2", "Buy1");
-        TimeProvider.SetCurrentTime(Now1 + HaltFor + HaltFor);
+        Clock.SetCurrentTime(Now1 + HaltFor + HaltFor);
         var events = book.AdvanceTime();
 
         // assert - still halted, because the level it actually reached never resumes on its own
@@ -104,7 +104,7 @@ public class InMemoryOrderBookCircuitBreakerTests
                 new VolatilityBand(2, PauseFor: TimeSpan.FromMinutes(2)),
                 new CircuitBreaker(new PriceLimitWidth.Percent(7), HaltFor)
             });
-        var book = new InMemoryOrderBook(security, TimeProvider);
+        var book = new InMemoryOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 1000);
 
         // act

@@ -1,7 +1,7 @@
 using Circus.OrderBook;
 using Circus.OrderBook.Events;
 
-namespace Circus.DataProducers;
+namespace Circus.MarketData;
 
 // Maintains its own view of working-book price levels purely from the OrderConfirmedEvent
 // stream - so one instance is required per IOrderBook, created before that book processes its

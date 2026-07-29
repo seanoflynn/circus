@@ -1,7 +1,7 @@
 using Circus.OrderBook;
 using Circus.OrderBook.Actions;
 using Circus.OrderBook.Events;
-using Circus.TimeProviders;
+using Circus.Time;
 using NUnit.Framework;
 
 namespace Circus.Tests.OrderBook;
@@ -25,14 +25,14 @@ public class InMemoryOrderBookIcebergTests
     private static readonly string OrderId3 = "Order3";
     private static readonly string OrderId1B = "Order1b";
 
-    private static TestTimeProvider TimeProvider;
+    private static ManualClock Clock;
     private static LevelTrackingOrderBook Book;
 
     [SetUp]
     public void SetUp()
     {
-        TimeProvider = new TestTimeProvider(Now1);
-        Book = new LevelTrackingOrderBook(Sec, TimeProvider);
+        Clock = new ManualClock(Now1);
+        Book = new LevelTrackingOrderBook(Sec, Clock);
     }
 
     [TestCase(0)]
@@ -78,9 +78,9 @@ public class InMemoryOrderBookIcebergTests
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 12, 100,
             maxVisibleQuantity: 5);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
         Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 5, 100);
-        TimeProvider.SetCurrentTime(Now3);
+        Clock.SetCurrentTime(Now3);
 
         // act - an aggressor larger than the peak
         var events = Book.CreateLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Buy, 8, 100);
@@ -129,7 +129,7 @@ public class InMemoryOrderBookIcebergTests
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 12, 100,
             maxVisibleQuantity: 5);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act - a single aggressor large enough to consume the whole iceberg
         var events = Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Buy, 12, 100);
@@ -161,7 +161,7 @@ public class InMemoryOrderBookIcebergTests
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 20, 100,
             maxVisibleQuantity: 3);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act - requires the full 15 to fill immediately or nothing does; the published level
         // only shows 3, but the true available liquidity (20) is what the gate actually checks
@@ -189,13 +189,13 @@ public class InMemoryOrderBookIcebergTests
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 10, 100,
             maxVisibleQuantity: 3);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
         Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 100);
-        TimeProvider.SetCurrentTime(Now3);
+        Clock.SetCurrentTime(Now3);
 
         // act - grow the iceberg's total size (hidden reserve only, peak is immutable)
         Book.UpdateOrder(CompanyId1, OrderId1B, OrderId1, newTotalQuantity: 15);
-        TimeProvider.SetCurrentTime(Now4);
+        Clock.SetCurrentTime(Now4);
 
         // a sell should still match the iceberg first - no priority lost
         var events = Book.CreateLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Sell, 3, 100);
@@ -212,13 +212,13 @@ public class InMemoryOrderBookIcebergTests
         // regression - confirms the exception added for icebergs doesn't affect plain orders
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 10, 100);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
         Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 100);
-        TimeProvider.SetCurrentTime(Now3);
+        Clock.SetCurrentTime(Now3);
 
         // act
         Book.UpdateOrder(CompanyId1, OrderId1B, OrderId1, newTotalQuantity: 15);
-        TimeProvider.SetCurrentTime(Now4);
+        Clock.SetCurrentTime(Now4);
 
         // a sell should now match Company2 first - Company1 lost priority by growing
         var events = Book.CreateLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Sell, 3, 100);
@@ -236,9 +236,9 @@ public class InMemoryOrderBookIcebergTests
         // a larger one behind it for the aggressor to keep working through
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 3, 100);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
         Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 20, 100);
-        TimeProvider.SetCurrentTime(Now3);
+        Clock.SetCurrentTime(Now3);
 
         // act - the aggressor itself is an iceberg: total 10, peak 3
         var events = Book.CreateLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Buy, 10, 100,

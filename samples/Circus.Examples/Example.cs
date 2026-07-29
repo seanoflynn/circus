@@ -1,7 +1,7 @@
-using Circus.DataProducers;
+using Circus.MarketData;
 using Circus.OrderBook;
 using Circus.OrderBook.Actions;
-using Circus.TimeProviders;
+using Circus.Time;
 
 namespace Circus.Examples;
 
@@ -9,7 +9,7 @@ public class Example
 {
     public static void Run()
     {
-        var time = new UtcTimeProvider();
+        var time = new SystemClock();
 
         var producer = new TradeDataProducer();
 

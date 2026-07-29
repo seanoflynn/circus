@@ -1,7 +1,7 @@
 using Circus.OrderBook;
 using Circus.OrderBook.Actions;
 using Circus.OrderBook.Events;
-using Circus.TimeProviders;
+using Circus.Time;
 using NUnit.Framework;
 
 namespace Circus.Tests.OrderBook;
@@ -27,14 +27,14 @@ public class InMemoryOrderBookMultipleSessionsTests
     private static readonly string OrderId3 = "Order3";
     private static readonly string OrderId4 = "Order4";
 
-    private TestTimeProvider TimeProvider;
+    private ManualClock Clock;
     private IOrderBook Book;
 
     [SetUp]
     public void SetUp()
     {
-        TimeProvider = new TestTimeProvider(MorningSession);
-        Book = new InMemoryOrderBook(Sec, TimeProvider);
+        Clock = new ManualClock(MorningSession);
+        Book = new InMemoryOrderBook(Sec, Clock);
     }
 
     // The seed InMemoryOrderBook derives from a date, so a test can say which run of ids it
@@ -62,7 +62,7 @@ public class InMemoryOrderBookMultipleSessionsTests
         Book.CloseTrading(endsTradingDay: false);
 
         // act - the same date, so the seed is one the counter has already passed
-        TimeProvider.SetCurrentTime(AfternoonSession);
+        Clock.SetCurrentTime(AfternoonSession);
         Book.UpdateStatus(OrderBookStatus.PreOpen);
         Book.UpdateStatus(OrderBookStatus.Open);
         var afternoonId = ExchangeOrderIdOf(Book, CompanyId2, OrderId2, new OrderValidity.GoodTilCanceled(),
@@ -86,7 +86,7 @@ public class InMemoryOrderBookMultipleSessionsTests
         Book.CloseTrading(endsTradingDay: false);
 
         // act
-        TimeProvider.SetCurrentTime(AfternoonSession);
+        Clock.SetCurrentTime(AfternoonSession);
         Book.UpdateStatus(OrderBookStatus.PreOpen);
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId3, new OrderValidity.Day(), Side.Buy, 5, 100);
@@ -127,7 +127,7 @@ public class InMemoryOrderBookMultipleSessionsTests
         Book.CloseTrading();
 
         // act
-        TimeProvider.SetCurrentTime(NextDay);
+        Clock.SetCurrentTime(NextDay);
         Book.UpdateStatus(OrderBookStatus.PreOpen);
         Book.UpdateStatus(OrderBookStatus.Open);
         var day2Id = ExchangeOrderIdOf(Book, CompanyId2, OrderId2, new OrderValidity.GoodTilCanceled(),
@@ -162,7 +162,7 @@ public class InMemoryOrderBookMultipleSessionsTests
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100);
         Book.CloseTrading(endsTradingDay: false);
 
-        TimeProvider.SetCurrentTime(AfternoonSession);
+        Clock.SetCurrentTime(AfternoonSession);
         Book.UpdateStatus(OrderBookStatus.PreOpen);
         Book.UpdateStatus(OrderBookStatus.Open);
 
@@ -183,7 +183,7 @@ public class InMemoryOrderBookMultipleSessionsTests
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100);
         Book.CloseTrading(endsTradingDay: false);
 
-        TimeProvider.SetCurrentTime(AfternoonSession);
+        Clock.SetCurrentTime(AfternoonSession);
         Book.UpdateStatus(OrderBookStatus.PreOpen);
         Book.UpdateStatus(OrderBookStatus.Open);
 
@@ -210,7 +210,7 @@ public class InMemoryOrderBookMultipleSessionsTests
         // act
         var breakEvents = Book.CloseTrading(endsTradingDay: false);
 
-        TimeProvider.SetCurrentTime(AfternoonSession);
+        Clock.SetCurrentTime(AfternoonSession);
         Book.UpdateStatus(OrderBookStatus.PreOpen);
         Book.UpdateStatus(OrderBookStatus.Open);
         var closeEvents = Book.CloseTrading();

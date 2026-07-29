@@ -1,8 +1,8 @@
 using Circus.OrderBook;
 using Circus.OrderBook.Actions;
 using Circus.OrderBook.Events;
-using Circus.SessionProviders;
-using Circus.TimeProviders;
+using Circus.Sessions;
+using Circus.Time;
 
 namespace Circus.Examples;
 
@@ -12,8 +12,8 @@ public static class OrderBookExample
     {
         var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
 
-        var timeProvider = new TestTimeProvider(DateTime.Now);
-        IOrderBook book = new InMemoryOrderBook(sec, timeProvider);
+        var clock = new ManualClock(DateTime.Now);
+        IOrderBook book = new InMemoryOrderBook(sec, clock);
 
         var preOpen = new TimeSpan(1, 0, 0);
         var open = new TimeSpan(1, 10, 0);
@@ -31,8 +31,8 @@ public static class OrderBookExample
     {
         var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
 
-        var timeProvider = new TestTimeProvider(DateTime.Now);
-        IOrderBook book = new InMemoryOrderBook(sec, timeProvider);
+        var clock = new ManualClock(DateTime.Now);
+        IOrderBook book = new InMemoryOrderBook(sec, clock);
 
         var preOpen = new TimeSpan(1, 0, 0);
         var open = new TimeSpan(1, 10, 0);
@@ -40,7 +40,7 @@ public static class OrderBookExample
         var sessionProvider = new SessionProvider(preOpen, open, close);
         sessionProvider.Changed += (_, args) =>
         {
-            timeProvider.SetCurrentTime(args.Time);
+            clock.SetCurrentTime(args.Time);
             book.UpdateStatus(args.Status, endsTradingDay: args.EndsTradingDay);
         };
 
@@ -52,7 +52,7 @@ public static class OrderBookExample
             // update status with correct time
             sessionProvider.Update(time);
             // set data time
-            timeProvider.SetCurrentTime(time);
+            clock.SetCurrentTime(time);
             // pass in data - each order needs its own ClientOrderId, since Buyer's ids are
             // permanently reserved once used
             Print(book.CreateLimitOrder("Buyer", $"Order{i}", new OrderValidity.Day(), Side.Buy, 3, 100));
@@ -63,8 +63,8 @@ public static class OrderBookExample
     {
         var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
 
-        var timeProvider = new UtcTimeProvider();
-        IOrderBook book = new InMemoryOrderBook(sec, timeProvider);
+        var clock = new SystemClock();
+        IOrderBook book = new InMemoryOrderBook(sec, clock);
 
         var preOpen = new TimeSpan(1, 0, 0);
         var open = new TimeSpan(1, 10, 0);
@@ -78,7 +78,7 @@ public static class OrderBookExample
             while (i < 100)
             {
                 // this needs to happen on same thread as book is updated
-                sessionProvider.Update(timeProvider.GetCurrentTime());
+                sessionProvider.Update(clock.GetCurrentTime());
                 Thread.Sleep(100);
                 i++;
             }

@@ -1,11 +1,11 @@
-using Circus.DataProducers;
+using Circus.MarketData;
 using Circus.OrderBook;
 using Circus.OrderBook.Actions;
 using Circus.OrderBook.Events;
-using Circus.TimeProviders;
+using Circus.Time;
 using NUnit.Framework;
 
-namespace Circus.Tests.DataProducers;
+namespace Circus.Tests.MarketData;
 
 public class IndicativePriceDataProducerTests
 {
@@ -14,14 +14,14 @@ public class IndicativePriceDataProducerTests
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
     private static readonly DateTime Now2 = new(2000, 1, 1, 12, 1, 0);
 
-    private static TestTimeProvider TimeProvider;
+    private static ManualClock Clock;
     private static IOrderBook Book;
 
     [SetUp]
     public void SetUp()
     {
-        TimeProvider = new TestTimeProvider(Now1);
-        Book = new InMemoryOrderBook(Sec, TimeProvider);
+        Clock = new ManualClock(Now1);
+        Book = new InMemoryOrderBook(Sec, Clock);
     }
 
     private static IList<IndicativePriceDataEvent> Publish(IndicativePriceDataProducer producer,
@@ -77,7 +77,7 @@ public class IndicativePriceDataProducerTests
         Publish(producer, Book.CreateLimitOrder("Company1", "Order1", new OrderValidity.Day(), Side.Buy, 5, 100));
         Publish(producer, Book.CreateLimitOrder("Company2", "Order2", new OrderValidity.Day(), Side.Sell, 5, 100));
 
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
         var events = Publish(producer, Book.UpdateStatus(OrderBookStatus.Open));
 
         Assert.AreEqual(1, events.Count);

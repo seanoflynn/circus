@@ -1,6 +1,6 @@
-namespace Circus.TimeProviders;
+namespace Circus.Time;
 
-public class UtcTimeProvider : ITimeProvider
+public class SystemClock : IClock
 {
     public DateTime GetCurrentTime()
     {

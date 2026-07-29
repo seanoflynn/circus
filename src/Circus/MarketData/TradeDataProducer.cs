@@ -1,7 +1,7 @@
 using Circus.OrderBook;
 using Circus.OrderBook.Events;
 
-namespace Circus.DataProducers;
+namespace Circus.MarketData;
 
 public class TradeDataProducer : IDataProducer<TradedDataEvent>
 {

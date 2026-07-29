@@ -1,7 +1,7 @@
 using Circus.OrderBook;
 using Circus.OrderBook.Actions;
 using Circus.OrderBook.Events;
-using Circus.TimeProviders;
+using Circus.Time;
 using NUnit.Framework;
 
 namespace Circus.Tests.OrderBook;
@@ -36,14 +36,14 @@ public class InMemoryOrderBookImmediateOrCancelTests
     private static readonly string OrderId5 = "Order5";
     private static readonly string OrderId6 = "Order6";
 
-    private static TestTimeProvider TimeProvider;
+    private static ManualClock Clock;
     private static LevelTrackingOrderBook Book;
 
     [SetUp]
     public void SetUp()
     {
-        TimeProvider = new TestTimeProvider(Now1);
-        Book = new LevelTrackingOrderBook(Sec, TimeProvider);
+        Clock = new ManualClock(Now1);
+        Book = new LevelTrackingOrderBook(Sec, Clock);
     }
 
     // ----- no MinQuantity (classic IOC/FillAndKill behavior) -----
@@ -54,7 +54,7 @@ public class InMemoryOrderBookImmediateOrCancelTests
         // arrange
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 3, 100);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act
         var events = Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.ImmediateOrCancel(), Side.Buy, 3, 100);
@@ -82,7 +82,7 @@ public class InMemoryOrderBookImmediateOrCancelTests
         // arrange
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 2, 100);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act
         var events = Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.ImmediateOrCancel(), Side.Buy, 5, 100);
@@ -146,10 +146,10 @@ public class InMemoryOrderBookImmediateOrCancelTests
     {
         // arrange
         var sec = new Security("GCZ6", SecurityType.Future, 10, 10, 20);
-        var book = new LevelTrackingOrderBook(sec, TimeProvider);
+        var book = new LevelTrackingOrderBook(sec, Clock);
         book.UpdateStatus(OrderBookStatus.Open);
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 2, 500);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act
         // NB: a Market + GTC/Day order in the same situation would instead rest the
@@ -185,17 +185,17 @@ public class InMemoryOrderBookImmediateOrCancelTests
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 500);
         Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 500); // last traded price = 500
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // IOC stop-limit buy: triggers when price rises to/above 520, then willing to pay up to 530
         Book.CreateStopLimitOrder(CompanyId3, OrderId3, new OrderValidity.ImmediateOrCancel(), Side.Buy, 5, 530, 520);
-        TimeProvider.SetCurrentTime(Now3);
+        Clock.SetCurrentTime(Now3);
 
         // only 2 available to fill the stop once triggered
         Book.CreateLimitOrder(CompanyId4, OrderId4, new OrderValidity.Day(), Side.Sell, 2, 530);
-        TimeProvider.SetCurrentTime(Now4);
+        Clock.SetCurrentTime(Now4);
         Book.CreateLimitOrder(CompanyId5, OrderId5, new OrderValidity.Day(), Side.Buy, 1, 520);
-        TimeProvider.SetCurrentTime(Now5);
+        Clock.SetCurrentTime(Now5);
 
         // act - trade at 520 triggers the stop
         var events = Book.CreateLimitOrder(CompanyId6, OrderId6, new OrderValidity.Day(), Side.Sell, 1, 520);
@@ -240,7 +240,7 @@ public class InMemoryOrderBookImmediateOrCancelTests
         // arrange
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 100);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act
         var events = Book.CreateLimitOrder(CompanyId2, OrderId2,
@@ -265,9 +265,9 @@ public class InMemoryOrderBookImmediateOrCancelTests
         // arrange
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 3, 100);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
         Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 3, 110);
-        TimeProvider.SetCurrentTime(Now3);
+        Clock.SetCurrentTime(Now3);
 
         // act - only fills if the 3@100 and 2@110 levels are summed together
         var events = Book.CreateLimitOrder(CompanyId3, OrderId3,
@@ -298,7 +298,7 @@ public class InMemoryOrderBookImmediateOrCancelTests
         // arrange
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 2, 100);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act
         var events = Book.CreateLimitOrder(CompanyId2, OrderId2,
@@ -331,18 +331,18 @@ public class InMemoryOrderBookImmediateOrCancelTests
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 500);
         Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 500); // last traded price = 500
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // FOK-equivalent stop-limit buy: triggers when price rises to/above 520, then willing to pay up to 530
         Book.CreateStopLimitOrder(CompanyId3, OrderId3, new OrderValidity.ImmediateOrCancel { MinQuantity = 5 },
             Side.Buy, 5, 530, 520);
-        TimeProvider.SetCurrentTime(Now3);
+        Clock.SetCurrentTime(Now3);
 
         // only 2 available - not enough to fill the stop's 5 in full
         Book.CreateLimitOrder(CompanyId4, OrderId4, new OrderValidity.Day(), Side.Sell, 2, 530);
-        TimeProvider.SetCurrentTime(Now4);
+        Clock.SetCurrentTime(Now4);
         Book.CreateLimitOrder(CompanyId5, OrderId5, new OrderValidity.Day(), Side.Buy, 1, 520);
-        TimeProvider.SetCurrentTime(Now5);
+        Clock.SetCurrentTime(Now5);
 
         // act - trade at 520 triggers the stop
         var events = Book.CreateLimitOrder(CompanyId6, OrderId6, new OrderValidity.Day(), Side.Sell, 1, 520);
@@ -398,7 +398,7 @@ public class InMemoryOrderBookImmediateOrCancelTests
         // satisfy a MinQuantity of 3
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 3, 100);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act
         var events = Book.CreateLimitOrder(CompanyId2, OrderId2,
@@ -426,7 +426,7 @@ public class InMemoryOrderBookImmediateOrCancelTests
         // arrange - only 2 available, below the MinQuantity of 3
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 2, 100);
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // act
         var events = Book.CreateLimitOrder(CompanyId2, OrderId2,
@@ -452,18 +452,18 @@ public class InMemoryOrderBookImmediateOrCancelTests
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 500);
         Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 500); // last traded price = 500
-        TimeProvider.SetCurrentTime(Now2);
+        Clock.SetCurrentTime(Now2);
 
         // IOC stop-limit buy: triggers at/above 520, willing to pay up to 530, needs at least 2
         Book.CreateStopLimitOrder(CompanyId3, OrderId3, new OrderValidity.ImmediateOrCancel { MinQuantity = 2 },
             Side.Buy, 5, 530, 520);
-        TimeProvider.SetCurrentTime(Now3);
+        Clock.SetCurrentTime(Now3);
 
         // only 1 available once the stop triggers - below its MinQuantity of 2
         Book.CreateLimitOrder(CompanyId4, OrderId4, new OrderValidity.Day(), Side.Sell, 1, 530);
-        TimeProvider.SetCurrentTime(Now4);
+        Clock.SetCurrentTime(Now4);
         Book.CreateLimitOrder(CompanyId5, OrderId5, new OrderValidity.Day(), Side.Buy, 1, 520);
-        TimeProvider.SetCurrentTime(Now5);
+        Clock.SetCurrentTime(Now5);
 
         // act - a sell crossing the just-rested 520 buy prints a trade at 520, triggering the stop
         var events = Book.CreateLimitOrder(CompanyId6, OrderId6, new OrderValidity.Day(), Side.Sell, 1, 520);

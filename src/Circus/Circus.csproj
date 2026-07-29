@@ -5,7 +5,7 @@
     <PropertyGroup>
         <IsPackable>true</IsPackable>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-        <PackageVersion>0.6.0</PackageVersion>
+        <PackageVersion>0.7.0</PackageVersion>
         <Title>Circus</Title>
         <Description>Financial exchange simulator.</Description>
         <PackageTags>finance financial exchange orderbook trading simulator simulation backtest</PackageTags>

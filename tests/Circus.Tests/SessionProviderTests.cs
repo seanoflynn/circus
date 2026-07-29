@@ -1,5 +1,5 @@
 using Circus.OrderBook;
-using Circus.SessionProviders;
+using Circus.Sessions;
 using NUnit.Framework;
 
 namespace Circus.Tests;

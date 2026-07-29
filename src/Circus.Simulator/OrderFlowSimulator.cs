@@ -1,8 +1,8 @@
-using Circus.DataProducers;
+using Circus.MarketData;
 using Circus.OrderBook;
 using Circus.OrderBook.Actions;
 using Circus.OrderBook.Events;
-using Circus.TimeProviders;
+using Circus.Time;
 
 namespace Circus.Simulator;
 
@@ -48,7 +48,7 @@ public sealed class OrderFlowSimulator
         _seed = seed ?? Random.Shared.Next();
         _random = new Random(_seed);
 
-        _shadowBook = new InMemoryOrderBook(_security, new TestTimeProvider(DateTime.UtcNow));
+        _shadowBook = new InMemoryOrderBook(_security, new ManualClock(DateTime.UtcNow));
         _shadowBook.UpdateStatus(OrderBookStatus.Open);
     }
 
