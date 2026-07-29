@@ -32,4 +32,18 @@ namespace Circus
     // catches a whole day's drift that a range following the market never notices. Eurex's static
     // volatility interruption. Anchored only by the reference prices supplied at status changes.
     public sealed record StaticPriceRange(int RangeTicks, TimeSpan? PauseFor = null) : PriceRestrictionConfig;
+
+    // "Too far, too fast": the same windowed range a dynamic volatility interruption uses, at the
+    // short timescale that catches a run of steps each unremarkable next to the last. CME's
+    // velocity logic, which it describes as watching what price banding cannot - banding catches a
+    // price that goes too far, this catches one that gets there too quickly.
+    //
+    // Not a different mechanism from VolatilityBand and deliberately not a different adapter: the
+    // window is the whole of what separates them. It is a config of its own so that a product says
+    // which it means, rather than leaving a reader to infer it from how short the window is.
+    //
+    // Window is required, unlike VolatilityBand's - a velocity limit without one would just be a
+    // range around the last trade, which is the other config.
+    public sealed record VelocityLimit(int RangeTicks, TimeSpan Window, TimeSpan? PauseFor = null)
+        : PriceRestrictionConfig;
 }

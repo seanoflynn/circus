@@ -102,6 +102,11 @@ namespace Circus.OrderBook
                     VolatilityBand band => new VolatilityBandRestriction(band.RangeTicks, band.PauseFor,
                         band.Window, band.ExtendedRangeTicks),
                     StaticPriceRange range => new StaticPriceRangeRestriction(range.RangeTicks, range.PauseFor),
+
+                    // Same adapter as VolatilityBand: a velocity limit is that range at a short
+                    // window, and the two configs exist to say which is meant, not to behave apart.
+                    VelocityLimit limit => new VolatilityBandRestriction(limit.RangeTicks, limit.PauseFor,
+                        limit.Window),
                     _ => throw new ArgumentException($"Unknown price restriction {config.GetType().Name}")
                 }).ToList();
 

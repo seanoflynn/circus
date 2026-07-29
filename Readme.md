@@ -39,10 +39,11 @@ Market data
 
 Safety features
 - [x] Banding
-- [x] Volatility interruptions (a trade-price band breach pauses into an auction)
+- [x] Volatility interruptions (dynamic, static and extended ranges)
+- [x] Velocity logic (too far, too fast over a rolling window)
 - [ ] Daily price limits (static, session-long limit up/down)
 - [ ] Circuit breakers
-- [ ] Stop & velocity logic
+- [ ] Stop price logic
 - [x] Self-match prevention
 
 Matching algorithms
