@@ -1,4 +1,4 @@
-namespace Circus.OrderBook.Restrictions;
+namespace Circus;
 
 // What restrictions a security trades under, as data. The book turns each of these into the
 // adapter that enforces it, so adding a restriction is adding a case here rather than another
@@ -6,6 +6,11 @@ namespace Circus.OrderBook.Restrictions;
 //
 // A restriction that does not apply is left out of the list rather than configured with no
 // width: absence is modelled by absence.
+//
+// Declarations only, and deliberately alongside Security rather than with the adapters in
+// OrderBook/Restrictions: this is part of describing an instrument, so a caller building a
+// Security should not have to reach into the book to say what it trades under. Each adapter is
+// named for the config it enforces - VolatilityBand is enforced by VolatilityBandRestriction.
 public abstract record PriceRestrictionConfig;
 
 // Rejects an order priced too far from the reference, at entry. CME's price banding.
