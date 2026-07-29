@@ -1,9 +1,6 @@
-using System;
+namespace Circus.TimeProviders;
 
-namespace Circus.TimeProviders
+public interface ITimeProvider
 {
-    public interface ITimeProvider
-    {
-        DateTime GetCurrentTime();
-    }
+    DateTime GetCurrentTime();
 }

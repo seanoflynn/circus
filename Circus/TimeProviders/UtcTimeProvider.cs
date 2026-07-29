@@ -1,12 +1,9 @@
-using System;
+namespace Circus.TimeProviders;
 
-namespace Circus.TimeProviders
+public class UtcTimeProvider : ITimeProvider
 {
-    public class UtcTimeProvider : ITimeProvider
+    public DateTime GetCurrentTime()
     {
-        public DateTime GetCurrentTime()
-        {
-            return DateTime.UtcNow;
-        }
+        return DateTime.UtcNow;
     }
 }

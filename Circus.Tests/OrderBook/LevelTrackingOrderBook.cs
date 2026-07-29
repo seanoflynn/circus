@@ -1,46 +1,42 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Circus.DataProducers;
 using Circus.OrderBook;
 using Circus.TimeProviders;
 
-namespace Circus.Tests.OrderBook
+namespace Circus.Tests.OrderBook;
+
+// An InMemoryOrderBook plus the level view a subscriber would keep beside it. The book
+// answers no questions about its own levels, so a test that needs to know where orders ended
+// up rebuilds them from the event stream - which also means these assertions are against what
+// a market data consumer can actually see, not the book's internals.
+internal sealed class LevelTrackingOrderBook : IOrderBook
 {
-    // An InMemoryOrderBook plus the level view a subscriber would keep beside it. The book
-    // answers no questions about its own levels, so a test that needs to know where orders ended
-    // up rebuilds them from the event stream - which also means these assertions are against what
-    // a market data consumer can actually see, not the book's internals.
-    internal sealed class LevelTrackingOrderBook : IOrderBook
+    // Deeper than any test asks for, so a level is only ever missing because the caller's own
+    // maxPrices cut it off.
+    private const int MaxLevels = 100;
+
+    private readonly IOrderBook _book;
+    private readonly LevelDataProducer _levelDataProducer = new(MaxLevels);
+    private LevelsDataEvent _levels = new(default, Array.Empty<Level>(), Array.Empty<Level>());
+
+    public LevelTrackingOrderBook(Security security, ITimeProvider timeProvider)
     {
-        // Deeper than any test asks for, so a level is only ever missing because the caller's own
-        // maxPrices cut it off.
-        private const int MaxLevels = 100;
-
-        private readonly IOrderBook _book;
-        private readonly LevelDataProducer _levelDataProducer = new(MaxLevels);
-        private LevelsDataEvent _levels = new(default, Array.Empty<Level>(), Array.Empty<Level>());
-
-        public LevelTrackingOrderBook(Security security, ITimeProvider timeProvider)
-        {
-            _book = new InMemoryOrderBook(security, timeProvider);
-        }
-
-        public Security Security => _book.Security;
-
-        public OrderBookStatus Status => _book.Status;
-
-        public IReadOnlyList<OrderBookEvent> Process(OrderBookAction action)
-        {
-            var events = _book.Process(action);
-
-            foreach (var levels in _levelDataProducer.Process(_book, events))
-                _levels = levels;
-
-            return events;
-        }
-
-        public IReadOnlyList<Level> GetLevels(Side side, int maxPrices) =>
-            (side == Side.Buy ? _levels.Bids : _levels.Offers).Take(maxPrices).ToList();
+        _book = new InMemoryOrderBook(security, timeProvider);
     }
+
+    public Security Security => _book.Security;
+
+    public OrderBookStatus Status => _book.Status;
+
+    public IReadOnlyList<OrderBookEvent> Process(OrderBookAction action)
+    {
+        var events = _book.Process(action);
+
+        foreach (var levels in _levelDataProducer.Process(_book, events))
+            _levels = levels;
+
+        return events;
+    }
+
+    public IReadOnlyList<Level> GetLevels(Side side, int maxPrices) =>
+        (side == Side.Buy ? _levels.Bids : _levels.Offers).Take(maxPrices).ToList();
 }

@@ -1,27 +1,24 @@
-using System;
-using System.Collections.Generic;
 using Circus.OrderBook;
 
-namespace Circus.DataProducers
+namespace Circus.DataProducers;
+
+public class TradeDataProducer : IDataProducer<TradedDataEvent>
 {
-    public class TradeDataProducer : IDataProducer<TradedDataEvent>
+    public IList<TradedDataEvent> Process(IOrderBook book, IReadOnlyList<OrderBookEvent> events)
     {
-        public IList<TradedDataEvent> Process(IOrderBook book, IReadOnlyList<OrderBookEvent> events)
+        List<TradedDataEvent>? output = null;
+
+        foreach (var ev in events)
         {
-            List<TradedDataEvent>? output = null;
-
-            foreach (var ev in events)
+            if (ev is OrdersMatched matched)
             {
-                if (ev is OrdersMatched matched)
-                {
-                    output ??= new List<TradedDataEvent>();
-                    output.Add(new TradedDataEvent(matched.Time, matched.Price, matched.Quantity));
-                }
+                output ??= new List<TradedDataEvent>();
+                output.Add(new TradedDataEvent(matched.Time, matched.Price, matched.Quantity));
             }
-
-            return output ?? (IList<TradedDataEvent>) Array.Empty<TradedDataEvent>();
         }
-    }
 
-    public record TradedDataEvent(DateTime Time, decimal Price, int Quantity);
+        return output ?? (IList<TradedDataEvent>) Array.Empty<TradedDataEvent>();
+    }
 }
+
+public record TradedDataEvent(DateTime Time, decimal Price, int Quantity);

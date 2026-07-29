@@ -1,14 +1,11 @@
-using System;
+namespace Circus;
 
-namespace Circus
+[Flags]
+public enum OrderStatus
 {
-    [Flags]
-    public enum OrderStatus
-    {
-        Hidden,
-        Working,
-        Filled,
-        Cancelled,
-        Expired,
-    }
+    Hidden,
+    Working,
+    Filled,
+    Cancelled,
+    Expired,
 }

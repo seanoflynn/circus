@@ -1,11 +1,10 @@
-namespace Circus.OrderBook
+namespace Circus.OrderBook;
+
+public enum OrderCancelledReason
 {
-    public enum OrderCancelledReason
-    {
-        Cancelled,
-        UpdatedQuantityLowerThanFilledQuantity,
-        NoOrdersToMatchMarketOrder,
-        ImmediateOrCancelNotFilled,
-        SelfMatchPrevention
-    }
+    Cancelled,
+    UpdatedQuantityLowerThanFilledQuantity,
+    NoOrdersToMatchMarketOrder,
+    ImmediateOrCancelNotFilled,
+    SelfMatchPrevention
 }

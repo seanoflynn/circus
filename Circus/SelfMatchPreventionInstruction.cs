@@ -1,9 +1,8 @@
-namespace Circus
+namespace Circus;
+
+public enum SelfMatchPreventionInstruction
 {
-    public enum SelfMatchPreventionInstruction
-    {
-        CancelResting,
-        CancelAggressor,
-        CancelBoth
-    }
+    CancelResting,
+    CancelAggressor,
+    CancelBoth
 }
