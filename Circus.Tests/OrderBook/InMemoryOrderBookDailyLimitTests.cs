@@ -90,6 +90,12 @@ namespace Circus.Tests.OrderBook
             book.CreateLimitOrder(CompanyId2, "Buy1", new OrderValidity.Day(), Side.Buy, 5, 200);
             book.CreateLimitOrder(CompanyId2, "Buy2", new OrderValidity.Day(), Side.Buy, 5, 240);
 
+            // The clock has to move on before whatever the test does next. Matcher.Run picks the
+            // resting side with a strict ModifiedTime comparison, so orders sharing a timestamp
+            // hand it to the sell - and price-time prints at the resting order's price. Left at one
+            // instant, an incoming sell would price the trade at its own limit rather than at the
+            // buy resting above the ceiling, and there would be nothing out of range to refuse.
+            TimeProvider.SetCurrentTime(Now1.AddMinutes(1));
             book.UpdateStatus(OrderBookStatus.Open, 100);
             return book;
         }
