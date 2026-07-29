@@ -25,13 +25,13 @@ namespace Circus.Tests.OrderBook
         private static readonly string Smp2 = "Smp2";
 
         private static TestTimeProvider TimeProvider;
-        private static IOrderBook Book;
+        private static LevelTrackingOrderBook Book;
 
         [SetUp]
         public void SetUp()
         {
             TimeProvider = new TestTimeProvider(Now1);
-            Book = new InMemoryOrderBook(Sec, TimeProvider);
+            Book = new LevelTrackingOrderBook(Sec, TimeProvider);
         }
 
         [Test]

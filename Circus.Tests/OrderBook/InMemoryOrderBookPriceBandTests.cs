@@ -34,7 +34,7 @@ namespace Circus.Tests.OrderBook
             // arrange - PriceBandTicks is null (the default), so banding is off even though a
             // reference price is seeded
             var security = new Security("GCZ6", SecurityType.Future, 10, 10);
-            var book = new InMemoryOrderBook(security, TimeProvider);
+            var book = new LevelTrackingOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.Open, 100);
 
             // act
@@ -53,7 +53,7 @@ namespace Circus.Tests.OrderBook
             // reject, and a narrow volatility band must still pause on the resulting trade.
             var security = new Security("GCZ6", SecurityType.Future, 10, 10, PriceBandTicks: 1000,
                 VolatilityAuctionBandTicks: 5);
-            var book = new InMemoryOrderBook(security, TimeProvider);
+            var book = new LevelTrackingOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.Open, 100);
 
             // act - 200 is far outside the narrow volatility band but well inside the wide entry
@@ -74,7 +74,7 @@ namespace Circus.Tests.OrderBook
         {
             // arrange - band is configured, but there's no anchor to check against yet
             var security = new Security("GCZ6", SecurityType.Future, 10, 10, PriceBandTicks: 5);
-            var book = new InMemoryOrderBook(security, TimeProvider);
+            var book = new LevelTrackingOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.Open);
 
             // act
@@ -89,7 +89,7 @@ namespace Circus.Tests.OrderBook
         {
             // arrange - band of 5 ticks (50) around a seeded reference of 100, so [50, 150]
             var security = new Security("GCZ6", SecurityType.Future, 10, 10, PriceBandTicks: 5);
-            var book = new InMemoryOrderBook(security, TimeProvider);
+            var book = new LevelTrackingOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.Open, 100);
 
             // act/assert - at the reference price
@@ -112,7 +112,7 @@ namespace Circus.Tests.OrderBook
         {
             // arrange - reference seeded at 100, band [50, 150]
             var security = new Security("GCZ6", SecurityType.Future, 10, 10, PriceBandTicks: 5);
-            var book = new InMemoryOrderBook(security, TimeProvider);
+            var book = new LevelTrackingOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.Open, 100);
 
             // 160 is outside the original [50, 150] band
@@ -138,7 +138,7 @@ namespace Circus.Tests.OrderBook
         {
             // arrange - reference seeded at 100, band [50, 150]
             var security = new Security("GCZ6", SecurityType.Future, 10, 10, PriceBandTicks: 5);
-            var book = new InMemoryOrderBook(security, TimeProvider);
+            var book = new LevelTrackingOrderBook(security, TimeProvider);
             book.UpdateStatus(OrderBookStatus.Open, 100);
             book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100);
 

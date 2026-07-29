@@ -22,13 +22,13 @@ namespace Circus.Tests.OrderBook
         private static readonly string OrderId3 = "Order3";
 
         private static TestTimeProvider TimeProvider;
-        private static IOrderBook Book;
+        private static LevelTrackingOrderBook Book;
 
         [SetUp]
         public void SetUp()
         {
             TimeProvider = new TestTimeProvider(Now1);
-            Book = new InMemoryOrderBook(Sec, TimeProvider);
+            Book = new LevelTrackingOrderBook(Sec, TimeProvider);
         }
 
         [Test]
@@ -101,12 +101,12 @@ namespace Circus.Tests.OrderBook
             // the second level, contrasted against a MarketLimit order in the identical setup
             var sec = new Security("GCZ6", SecurityType.Future, 10, 10, 20);
 
-            var marketBook = new InMemoryOrderBook(sec, TimeProvider);
+            var marketBook = new LevelTrackingOrderBook(sec, TimeProvider);
             marketBook.UpdateStatus(OrderBookStatus.Open);
             marketBook.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 2, 500);
             marketBook.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 10, 600);
 
-            var marketLimitBook = new InMemoryOrderBook(sec, TimeProvider);
+            var marketLimitBook = new LevelTrackingOrderBook(sec, TimeProvider);
             marketLimitBook.UpdateStatus(OrderBookStatus.Open);
             marketLimitBook.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 2, 500);
             marketLimitBook.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 10, 600);

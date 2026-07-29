@@ -14,6 +14,9 @@ namespace Circus.OrderBook
         private long _nextSequenceNumber;
         private long? _lastTradedPrice;
 
+        // The indicative quote as last published, so only moves in it are emitted.
+        private (long PriceTicks, int Quantity)? _indicativeQuote;
+
         // Order-entry and trade-time price bands, each maintaining its own reference anchor.
         // A future velocity limit or circuit breaker is a new entry here, not a redesign.
         private readonly IReadOnlyList<IPriceRestriction> _priceRestrictions;
@@ -73,39 +76,21 @@ namespace Circus.OrderBook
         public Security Security => _security;
         public OrderBookStatus Status => _status;
 
-        public IReadOnlyList<Level> GetLevels(Side side, int maxPrices)
-        {
-            return _matcher.Working[side].EnumerateFromBest().Take(maxPrices)
-                .Select(x => new Level(ToDecimal(x.Tick), SumDisplayed(x.First), x.Count))
-                .ToList();
-        }
-
-        // Market data shows only what is publicly visible, so an iceberg's hidden reserve is
-        // excluded - unlike liquidity checks and auction pricing, which count it in full.
-        private static int SumDisplayed(InternalOrder? first)
-        {
-            var total = 0;
-            for (var order = first; order != null; order = order.LevelNext)
-                total += order.DisplayedQuantity;
-            return total;
-        }
-
-        // Answered by the current phase's algorithm, so a price comes back exactly when there is
-        // an auction to report one for - the start-of-day session or a volatility pause.
-        public bool TryGetIndicativeAuctionPrice(out decimal price, out int quantity)
-        {
-            price = 0;
-            quantity = 0;
-
-            var algorithm = CurrentPhase.Algorithm;
-            if (algorithm == null || !algorithm.TryQuoteIndicative(_matcher.Working, out var priceTicks, out quantity))
-                return false;
-
-            price = ToDecimal(priceTicks);
-            return true;
-        }
-
         public IReadOnlyList<OrderBookEvent> Process(OrderBookAction action)
+        {
+            var events = Handle(action);
+
+            // Last, so it reports where the action left the book rather than any state it passed
+            // through - a pre-open cancel that uncrosses the book withdraws the quote, and the
+            // opening print withdraws it after the trades it produced.
+            var quoteChange = TakeIndicativeQuoteChange();
+            if (quoteChange != null)
+                events.Add(quoteChange);
+
+            return events;
+        }
+
+        private List<OrderBookEvent> Handle(OrderBookAction action)
         {
             return action switch
             {
@@ -127,6 +112,27 @@ namespace Circus.OrderBook
                 CloseTrading => UpdateStatus(OrderBookStatus.Closed, null),
                 _ => throw new ArgumentException("Unknown order book action")
             };
+        }
+
+        // Asked of the phase's own algorithm, so a quote exists exactly when there is an auction
+        // to report one for - the start-of-day session or a volatility pause. Continuous trading
+        // declines (price-time prints at as many prices as a sweep touches, not one), as does an
+        // uncrossed book and a phase with no algorithm at all.
+        private OrderBookEvent? TakeIndicativeQuoteChange()
+        {
+            var algorithm = CurrentPhase.Algorithm;
+
+            (long PriceTicks, int Quantity)? quote = null;
+            if (algorithm != null &&
+                algorithm.TryQuoteIndicative(_matcher.Working, out var priceTicks, out var quantity))
+                quote = (priceTicks, quantity);
+
+            if (Nullable.Equals(quote, _indicativeQuote))
+                return null;
+
+            _indicativeQuote = quote;
+            return new IndicativePriceChanged(_security, Now(),
+                quote.HasValue ? (decimal?) ToDecimal(quote.Value.PriceTicks) : null, quote?.Quantity ?? 0);
         }
 
         private List<OrderBookEvent> CreateOrder(string companyId, string clientOrderId, OrderValidity validity,
@@ -579,10 +585,12 @@ namespace Circus.OrderBook
                     order.Fill(time, quantity);
             }
 
+            var restingDisplayed = resting.DisplayedQuantity;
             FillOrder(resting);
             var restingSnapshot = resting.ToOrder();
             var restingReplenish = FinishFill(resting, time);
 
+            var aggressorDisplayed = aggressor.DisplayedQuantity;
             FillOrder(aggressor);
             var aggressorSnapshot = aggressor.ToOrder();
             var aggressorReplenish = FinishFill(aggressor, time);
@@ -591,9 +599,9 @@ namespace Circus.OrderBook
                 new[]
                 {
                     new FillOrderConfirmed(_security, time, resting.CompanyId, restingSnapshot, price, quantity,
-                        true),
+                        restingDisplayed, true),
                     new FillOrderConfirmed(_security, time, aggressor.CompanyId, aggressorSnapshot, price,
-                        quantity, false)
+                        quantity, aggressorDisplayed, false)
                 }
             ));
 
@@ -720,6 +728,4 @@ namespace Circus.OrderBook
             return orders.Select(ExpireOrder).ToList();
         }
     }
-
-    public record Level(decimal Price, int Quantity, int Count);
 }

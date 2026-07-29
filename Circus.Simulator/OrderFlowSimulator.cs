@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Circus.DataProducers;
 using Circus.OrderBook;
 using Circus.TimeProviders;
 
@@ -20,6 +21,11 @@ namespace Circus.Simulator
         private readonly int _seed;
 
         private readonly InMemoryOrderBook _shadowBook;
+
+        // The touch, rebuilt from the shadow book's events the same way any market data consumer
+        // would - the book itself answers no questions about its levels.
+        private readonly LevelDataProducer _touch = new(1);
+        private LevelsDataEvent _levels = new(default, Array.Empty<Level>(), Array.Empty<Level>());
 
         // Keyed by ClientOrderId, not ExchangeOrderId - the latter no longer stays constant for
         // an order's whole life (a reprice, a quantity increase, or an iceberg peak refilling
@@ -69,6 +75,10 @@ namespace Circus.Simulator
         private void Apply(OrderBookAction action)
         {
             var events = _shadowBook.Process(action);
+
+            foreach (var levels in _touch.Process(_shadowBook, events))
+                _levels = levels;
+
             foreach (var e in events)
             {
                 switch (e)
@@ -243,8 +253,8 @@ namespace Circus.Simulator
         private decimal ComputePrice(Side side)
         {
             var tick = _security.TickSize;
-            var bestBuy = _shadowBook.GetLevels(Side.Buy, 1);
-            var bestSell = _shadowBook.GetLevels(Side.Sell, 1);
+            var bestBuy = _levels.Bids;
+            var bestSell = _levels.Offers;
 
             if (bestBuy.Count == 0 && bestSell.Count == 0)
                 return AlignToTick(_options.StartingPrice);
