@@ -111,6 +111,11 @@ namespace Circus.OrderBook
         public static IReadOnlyList<OrderBookEvent> HaltTrading(this IOrderBook book) =>
             book.Process(new HaltTrading { Security = book.Security });
 
+        // Returns whatever the elapsed time turned out to imply - a resumption and its print, or
+        // nothing at all.
+        public static IReadOnlyList<OrderBookEvent> AdvanceTime(this IOrderBook book) =>
+            book.Process(new AdvanceTime { Security = book.Security });
+
         // Bridge for callers that only know the target status at runtime (e.g. a session/schedule
         // provider driving the book off a clock) and so can't pick PreOpenTrading/OpenTrading/
         // CloseTrading directly. ReferencePrice is ignored for every status but the two opening

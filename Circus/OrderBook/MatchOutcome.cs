@@ -13,7 +13,7 @@ namespace Circus.OrderBook
         int Quantity, bool UsesFullRemainingQuantity) : MatchOutcome;
 
     // Terminal: Run stops yielding after this.
-    internal sealed record TradeRestrictionBreached(long PriceTicks, RestrictionBreachAction Action) : MatchOutcome;
+    internal sealed record TradeRestrictionBreached(long PriceTicks, RestrictionBreach Breach) : MatchOutcome;
 
     // Elected by the trade that just printed, in FIFO order across both sides, and still resting
     // in the stop ladders until Apply removes them.

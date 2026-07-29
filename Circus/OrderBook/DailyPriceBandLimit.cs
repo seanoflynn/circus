@@ -9,17 +9,24 @@ namespace Circus.OrderBook
     internal sealed class DailyPriceBandLimit : IPriceRestriction
     {
         private readonly int? _bandTicks;
+        private readonly TimeSpan? _resumeAfter;
         private long? _referencePriceTicks;
 
-        internal DailyPriceBandLimit(int? bandTicks)
+        internal DailyPriceBandLimit(int? bandTicks, TimeSpan? resumeAfter = null)
         {
             _bandTicks = bandTicks;
+            _resumeAfter = resumeAfter;
         }
 
         public RestrictionScope Scope => RestrictionScope.Trade;
         public RestrictionBreachAction OnBreach => RestrictionBreachAction.Pause;
 
-        public bool Allows(long priceTicks) =>
+        // Eurex times its volatility interruptions rather than leaving them open; configuring no
+        // duration leaves the pause standing until someone ends it, which is the older behaviour.
+        public TimeSpan? ResumeAfter => _resumeAfter;
+
+        // Anchored on the last trade rather than a window, so the time is not consulted.
+        public bool Allows(long priceTicks, DateTime time) =>
             !_bandTicks.HasValue || !_referencePriceTicks.HasValue ||
             Math.Abs(priceTicks - _referencePriceTicks.Value) <= _bandTicks.Value;
 

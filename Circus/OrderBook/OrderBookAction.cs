@@ -31,6 +31,12 @@ namespace Circus.OrderBook
     // breach calls for a halt; as an action it is the operator-driven equivalent.
     public sealed record HaltTrading : OrderBookAction;
 
+    // Nothing to do but let the clock be noticed. A timed interruption ends on its own, and a book
+    // with no order flow to carry it there needs something to ask - so a caller driving the book
+    // off a clock sends this as it ticks. Carries no time of its own: the book's time provider is
+    // the one authority on what time it is.
+    public sealed record AdvanceTime : OrderBookAction;
+
     public abstract record OrderAction : OrderBookAction
     {
         public required string CompanyId { get; init; }

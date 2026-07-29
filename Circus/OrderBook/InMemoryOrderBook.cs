@@ -14,6 +14,11 @@ namespace Circus.OrderBook
         private long _nextSequenceNumber;
         private long? _lastTradedPrice;
 
+        // A timed interruption's deadline and where it returns to. Null whenever the book is not
+        // serving one, which includes an interruption configured to last until told otherwise.
+        private DateTime? _resumeAt;
+        private OrderBookStatus _resumeTo;
+
         // The indicative quote as last published, so only moves in it are emitted.
         private (long PriceTicks, int Quantity)? _indicativeQuote;
 
@@ -81,14 +86,23 @@ namespace Circus.OrderBook
         private const int MaxClientOrderIdLength = 20;
 
         public InMemoryOrderBook(Security security, ITimeProvider timeProvider)
+            : this(security, timeProvider, new IPriceRestriction[]
+            {
+                new OrderPriceRestriction(security.PriceBandTicks),
+                new DailyPriceBandLimit(security.VolatilityAuctionBandTicks, security.VolatilityAuctionDuration)
+            })
+        {
+        }
+
+        // Restrictions supplied outright rather than derived from the security. Internal because it
+        // is a seam, not an API: it exists so combinations a Security cannot yet describe - two
+        // trade-scoped restrictions disagreeing about severity, say - can still be exercised.
+        internal InMemoryOrderBook(Security security, ITimeProvider timeProvider,
+            IReadOnlyList<IPriceRestriction> priceRestrictions)
         {
             _security = security;
             _timeProvider = timeProvider;
-            _priceRestrictions = new IPriceRestriction[]
-            {
-                new OrderPriceRestriction(security.PriceBandTicks),
-                new DailyPriceBandLimit(security.VolatilityAuctionBandTicks)
-            };
+            _priceRestrictions = priceRestrictions;
         }
 
         private DateTime Now() => _timeProvider.GetCurrentTime();
@@ -98,7 +112,12 @@ namespace Circus.OrderBook
 
         public IReadOnlyList<OrderBookEvent> Process(OrderBookAction action)
         {
-            var events = Handle(action);
+            // Before the action rather than after: an order arriving once the interruption has
+            // elapsed should meet a resumed book, not the paused one it would otherwise land in.
+            // Doing it here rather than only on AdvanceTime means a book being fed order flow
+            // resumes on its own, without needing anything to poke it.
+            var events = ResumeIfDue();
+            events.AddRange(Handle(action));
 
             // Last, so it reports where the action left the book rather than any state it passed
             // through - a pre-open cancel that uncrosses the book withdraws the quote, and the
@@ -132,8 +151,23 @@ namespace Circus.OrderBook
                 CloseTrading c => UpdateStatus(OrderBookStatus.Closed, null, c.EndsTradingDay),
                 PauseTrading => UpdateStatus(OrderBookStatus.Paused),
                 HaltTrading => UpdateStatus(OrderBookStatus.Halted),
+
+                // Carries nothing and does nothing: the work is the due-interruption check every
+                // Process already runs, and this is how a caller with no order flow reaches it.
+                AdvanceTime => new List<OrderBookEvent>(),
                 _ => throw new ArgumentException("Unknown order book action")
             };
+        }
+
+        // A timed interruption returns the book to whatever it interrupted. Cleared by any explicit
+        // status change, so a session closing over a pause ends it rather than being undone by it.
+        private List<OrderBookEvent> ResumeIfDue()
+        {
+            if (_resumeAt == null || Now() < _resumeAt.Value)
+                return new List<OrderBookEvent>();
+
+            _resumeAt = null;
+            return UpdateStatus(_resumeTo, reason: StatusChangeReason.InterruptionElapsed);
         }
 
         // Asked of the phase's own algorithm, so a quote exists exactly when there is an auction
@@ -280,7 +314,8 @@ namespace Circus.OrderBook
         // TriggerPriceMustBe... checks above, and Market/MarketLimit prices by
         // MarketOrderProtectionTicks.
         private bool AllowsOrderEntry(long priceTicks) =>
-            _priceRestrictions.Where(r => r.Scope == RestrictionScope.OrderEntry).All(r => r.Allows(priceTicks));
+            _priceRestrictions.Where(r => r.Scope == RestrictionScope.OrderEntry)
+                .All(r => r.Allows(priceTicks, Now()));
 
         // Only ever called on an order currently resting in the working book (a FAK remainder or
         // a self-match-prevention cancel during Match()) - never a still-Hidden stop order.
@@ -553,19 +588,35 @@ namespace Circus.OrderBook
             }
         }
 
-        // On the first Trade-scoped restriction that disallows priceTicks, returns its OnBreach
-        // consequence (Pause -> PreOpen, Halt -> Closed); a pure query, consulted by Matcher.Run
-        // only outside an auction uncrossing pass.
-        private RestrictionBreachAction? CheckTradeRestrictionBreach(long priceTicks)
+        // The severest consequence among the Trade-scoped restrictions that disallow priceTicks; a
+        // pure query, consulted by Matcher.Run only outside an auction uncrossing pass. Severest
+        // rather than first, so the order these are declared in cannot decide whether a breach that
+        // halts is served or shadowed by one that merely pauses.
+        private RestrictionBreach? CheckTradeRestrictionBreach(long priceTicks)
         {
+            var time = Now();
+            RestrictionBreach? worst = null;
+
             foreach (var restriction in _priceRestrictions)
             {
-                if (restriction.Scope == RestrictionScope.Trade && !restriction.Allows(priceTicks))
-                    return restriction.OnBreach;
+                if (restriction.Scope != RestrictionScope.Trade || restriction.Allows(priceTicks, time))
+                    continue;
+
+                if (worst == null || Severity(restriction.OnBreach) > Severity(worst.Value.Action))
+                    worst = new RestrictionBreach(restriction.OnBreach, restriction.ResumeAfter);
             }
 
-            return null;
+            return worst;
         }
+
+        // Ranked explicitly rather than leaning on the enum's declaration order, which is free to
+        // change. Reject never reaches here - it is an order-entry consequence.
+        private static int Severity(RestrictionBreachAction action) => action switch
+        {
+            RestrictionBreachAction.Halt => 2,
+            RestrictionBreachAction.Pause => 1,
+            _ => 0
+        };
 
         private void Apply(MatchOutcome outcome, List<OrderBookEvent> events, DateTime time,
             List<InternalOrder> pendingImmediateOrCancelStops)
@@ -587,9 +638,15 @@ namespace Circus.OrderBook
                 // Run/Apply loop, and UpdateStatus matches, which would re-enter the matcher
                 // mid-enumeration. The phases these land on are deliberately ones with nothing to
                 // do on arrival anyway - neither starts a session nor expires orders.
-                case TradeRestrictionBreached(_, var action):
-                    _status = action == RestrictionBreachAction.Halt ? OrderBookStatus.Halted : OrderBookStatus.Paused;
-                    events.Add(new StatusChanged(_security, Now(), _status));
+                case TradeRestrictionBreached(_, var breach):
+                    // Captured before the overwrite: an interruption returns to whatever it
+                    // interrupted, which is the only phase that could have been matching.
+                    _resumeTo = _status;
+                    _status = breach.Action == RestrictionBreachAction.Halt
+                        ? OrderBookStatus.Halted
+                        : OrderBookStatus.Paused;
+                    _resumeAt = breach.ResumeAfter.HasValue ? Now() + breach.ResumeAfter.Value : null;
+                    events.Add(new StatusChanged(_security, Now(), _status, StatusChangeReason.PriceRestriction));
                     break;
 
                 case StopsTriggered(var orders):
@@ -707,7 +764,7 @@ namespace Circus.OrderBook
         // last of them ends it. The phase table stays the authority on whether a phase expires day
         // orders at all - this only says whether this particular close is that day's last.
         private List<OrderBookEvent> UpdateStatus(OrderBookStatus status, decimal? referencePrice = null,
-            bool endsTradingDay = true)
+            bool endsTradingDay = true, StatusChangeReason reason = StatusChangeReason.Requested)
         {
             if (referencePrice.HasValue && TryConvertToTicks(referencePrice, out var referenceTicks))
             {
@@ -719,6 +776,10 @@ namespace Circus.OrderBook
 
             if (!_phases.ContainsKey(status))
                 throw new ArgumentOutOfRangeException(nameof(status), status, "no phase configured for this status");
+
+            // Any transition supersedes a pending one, so a session closing over a running pause
+            // ends it rather than being undone when that pause's deadline arrives.
+            _resumeAt = null;
 
             var departing = CurrentPhase;
             _status = status;
@@ -738,7 +799,7 @@ namespace Circus.OrderBook
                 _nextSequenceNumber = Math.Max(_nextSequenceNumber, seed);
             }
 
-            var events = new List<OrderBookEvent> {new StatusChanged(_security, Now(), _status)};
+            var events = new List<OrderBookEvent> {new StatusChanged(_security, Now(), _status, reason)};
 
             // A quoting phase has been accumulating orders for a print, and leaving it is where
             // that print happens - so a second auction phase would need nothing changed here.

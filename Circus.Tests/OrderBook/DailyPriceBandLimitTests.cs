@@ -16,12 +16,28 @@ namespace Circus.Tests.OrderBook
         }
 
         [Test]
+        public void NoDurationConfigured_PauseIsOpenEnded()
+        {
+            var restriction = new DailyPriceBandLimit(5);
+
+            Assert.IsNull(restriction.ResumeAfter);
+        }
+
+        [Test]
+        public void DurationConfigured_IsWhatThePauseResumesAfter()
+        {
+            var restriction = new DailyPriceBandLimit(5, System.TimeSpan.FromMinutes(2));
+
+            Assert.AreEqual(System.TimeSpan.FromMinutes(2), restriction.ResumeAfter);
+        }
+
+        [Test]
         public void NoBandConfigured_AlwaysAllows()
         {
             var restriction = new DailyPriceBandLimit(null);
             restriction.OnSessionChange(100);
 
-            Assert.IsTrue(restriction.Allows(1_000_000));
+            Assert.IsTrue(restriction.Allows(1_000_000, default));
         }
 
         [Test]
@@ -29,7 +45,7 @@ namespace Circus.Tests.OrderBook
         {
             var restriction = new DailyPriceBandLimit(5);
 
-            Assert.IsTrue(restriction.Allows(1_000_000));
+            Assert.IsTrue(restriction.Allows(1_000_000, default));
         }
 
         [Test]
@@ -38,11 +54,11 @@ namespace Circus.Tests.OrderBook
             var restriction = new DailyPriceBandLimit(5);
             restriction.OnSessionChange(100);
 
-            Assert.IsTrue(restriction.Allows(100));
-            Assert.IsTrue(restriction.Allows(105));
-            Assert.IsTrue(restriction.Allows(95));
-            Assert.IsFalse(restriction.Allows(106));
-            Assert.IsFalse(restriction.Allows(94));
+            Assert.IsTrue(restriction.Allows(100, default));
+            Assert.IsTrue(restriction.Allows(105, default));
+            Assert.IsTrue(restriction.Allows(95, default));
+            Assert.IsFalse(restriction.Allows(106, default));
+            Assert.IsFalse(restriction.Allows(94, default));
         }
 
         [Test]
@@ -53,9 +69,9 @@ namespace Circus.Tests.OrderBook
 
             restriction.OnTrade(200, default);
 
-            Assert.IsTrue(restriction.Allows(205));
-            Assert.IsFalse(restriction.Allows(206));
-            Assert.IsFalse(restriction.Allows(100));
+            Assert.IsTrue(restriction.Allows(205, default));
+            Assert.IsFalse(restriction.Allows(206, default));
+            Assert.IsFalse(restriction.Allows(100, default));
         }
     }
 }
