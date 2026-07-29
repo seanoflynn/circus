@@ -99,7 +99,9 @@ namespace Circus.OrderBook
                 : configs.Select<PriceRestrictionConfig, IPriceRestriction>(config => config switch
                 {
                     OrderPriceBand band => new OrderPriceRestriction(band.BandTicks),
-                    VolatilityBand band => new VolatilityBandRestriction(band.BandTicks, band.PauseFor),
+                    VolatilityBand band => new VolatilityBandRestriction(band.RangeTicks, band.PauseFor,
+                        band.Window, band.ExtendedRangeTicks),
+                    StaticPriceRange range => new StaticPriceRangeRestriction(range.RangeTicks, range.PauseFor),
                     _ => throw new ArgumentException($"Unknown price restriction {config.GetType().Name}")
                 }).ToList();
 
@@ -640,6 +642,36 @@ namespace Circus.OrderBook
             return worst;
         }
 
+        // Whether a restriction refuses to let the interruption the book is in end at the price it
+        // would end at. Eurex extends a volatility interruption rather than resolving it at a price
+        // still too far out; without a restriction configured for that, this always declines to
+        // interfere and every transition goes ahead.
+        //
+        // Only where a print is what would end it: a phase leaving for one that does not trade
+        // abandons its orders rather than crossing them, so there is no price to hold to anything -
+        // and a close must never be blocked by a price range.
+        private RestrictionBreach? CheckResumptionRefusal(OrderBookStatus arrivingStatus)
+        {
+            var departing = CurrentPhase;
+            if (!departing.PrintsOnExit || !_phases[arrivingStatus].MatchesContinuously)
+                return null;
+
+            if (!departing.Algorithm!.TryQuoteIndicative(_matcher.Working, out var priceTicks, out _))
+                return null;
+
+            var time = Now();
+            foreach (var restriction in _priceRestrictions)
+            {
+                // First refusal rather than the severest: every restriction refusing here is asking
+                // for the same thing, so there is nothing to rank.
+                if (restriction.Scope == RestrictionScope.Trade &&
+                    !restriction.AllowsResumption(priceTicks, time))
+                    return new RestrictionBreach(restriction.OnBreach, restriction.ResumeAfter);
+            }
+
+            return null;
+        }
+
         // Ranked explicitly rather than leaning on the enum's declaration order, which is free to
         // change. Reject never reaches here - it is an order-entry consequence.
         private static int Severity(RestrictionBreachAction action) => action switch
@@ -807,6 +839,17 @@ namespace Circus.OrderBook
 
             if (!_phases.ContainsKey(status))
                 throw new ArgumentOutOfRangeException(nameof(status), status, "no phase configured for this status");
+
+            var extension = CheckResumptionRefusal(status);
+            if (extension != null)
+            {
+                // Nothing has moved yet, so refusing simply leaves the book where it was. The status
+                // is unchanged and re-reported: what a subscriber needs to know is that the
+                // interruption is still running and why, which is the same thing a fresh one says.
+                _resumeAt = extension.Value.ResumeAfter.HasValue ? Now() + extension.Value.ResumeAfter.Value : null;
+                return new List<OrderBookEvent>
+                    {new StatusChanged(_security, Now(), _status, StatusChangeReason.PriceRestriction)};
+            }
 
             // Any transition supersedes a pending one, so a session closing over a running pause
             // ends it rather than being undone when that pause's deadline arrives.

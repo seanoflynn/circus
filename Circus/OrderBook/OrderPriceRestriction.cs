@@ -45,6 +45,10 @@ namespace Circus.OrderBook
         // that governs how far an order may be priced from the reference.
         public bool AllowsStopSpread(long spreadTicks) => spreadTicks <= _bandTicks;
 
+        // An entry band rejects orders; it never interrupts trading, so it has nothing to say about
+        // when an interruption should end.
+        public bool AllowsResumption(long priceTicks, DateTime time) => true;
+
         public void OnTrade(long priceTicks, DateTime time) => _lastTradePriceTicks = priceTicks;
 
         // Null withdraws the quote, dropping the reference back to the last trade.

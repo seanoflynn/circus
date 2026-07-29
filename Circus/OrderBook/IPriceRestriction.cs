@@ -43,6 +43,12 @@ namespace Circus.OrderBook
         // with the same band that governs entry prices. Only consulted for Scope == OrderEntry.
         bool AllowsStopSpread(long spreadTicks);
 
+        // Whether an interruption may end with a print at this price. Eurex holds the closing price
+        // of a volatility interruption to a wider range than the one that caused it, and extends
+        // the interruption rather than resolving it outside that range. A restriction with no such
+        // range says yes and lets the interruption end. Only consulted for Scope == Trade.
+        bool AllowsResumption(long priceTicks, DateTime time);
+
         // Maintain this restriction's own anchor. OnTrade fires on every print; OnSessionChange
         // fires when an explicit reference price (settlement-style) is supplied at a status change;
         // OnIndicativePrice fires when the auction quote moves, with null when it is withdrawn.
