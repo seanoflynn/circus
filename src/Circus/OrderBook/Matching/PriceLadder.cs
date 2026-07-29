@@ -1,14 +1,5 @@
 namespace Circus.OrderBook.Matching;
 
-// All anything outside Matcher is handed. Writes go through Matcher's own Rest/Unrest/Reprice,
-// so the ladders it owns cannot be mutated from outside.
-internal interface IReadOnlyPriceLadder
-{
-    bool TryGetBest(out long tick, out InternalOrder? firstOrder);
-
-    IEnumerable<(long Tick, InternalOrder First, int Count)> EnumerateFromBest();
-}
-
 // Dense, array-backed replacement for SortedDictionary<long, SortedDictionary<long, InternalOrder>>
 // keyed by price tick: the tick is used directly as an array offset (tick - _minTick) for O(1)
 // level access instead of an O(log n) tree lookup, with a cached best-price index so callers

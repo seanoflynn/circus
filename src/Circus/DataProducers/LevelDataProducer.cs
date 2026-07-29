@@ -125,8 +125,3 @@ public class LevelDataProducer : IDataProducer<LevelsDataEvent>
             .Select(kv => new Level(kv.Key, kv.Value.Quantity, kv.Value.Count))
             .ToList();
 }
-
-public record LevelsDataEvent(DateTime Time, IReadOnlyList<Level> Bids, IReadOnlyList<Level> Offers);
-
-// Aggregated market data, not a book structure: one publishable line per price.
-public record Level(decimal Price, int Quantity, int Count);

@@ -1,7 +1,5 @@
 namespace Circus.OrderBook.Matching;
 
-internal readonly record struct Allocation(InternalOrder Resting, int Quantity, long PriceTicks);
-
 // How a trade is allocated and priced. Matcher owns the loop around this - the crossing
 // condition, self-match detection, stop-triggering - and runs it identically whichever
 // algorithm is active; only the decisions below vary. Instances rather than singletons, so a
