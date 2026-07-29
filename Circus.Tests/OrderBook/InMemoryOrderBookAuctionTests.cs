@@ -299,8 +299,8 @@ namespace Circus.Tests.OrderBook
             Assert.IsInstanceOf<OrdersMatched>(crossing[^1]);
             Assert.IsEmpty(crossing.OfType<IndicativePriceChanged>().ToList());
 
-            // ...and it comes back the moment a volatility pause returns the book to PreOpen
-            book.UpdateStatus(OrderBookStatus.PreOpen);
+            // ...and it comes back the moment a volatility pause interrupts trading
+            book.UpdateStatus(OrderBookStatus.Paused);
             var paused = book.CreateLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Sell, 10, 100);
 
             var quote = paused.OfType<IndicativePriceChanged>().Last();
@@ -398,8 +398,8 @@ namespace Circus.Tests.OrderBook
             // assert
             Assert.AreEqual(3, events.Count);
             Assert.IsInstanceOf<CreateOrderConfirmed>(events[0]);
-            Assert.AreEqual(OrderBookStatus.PreOpen, ((StatusChanged) events[1]).Status);
-            Assert.AreEqual(OrderBookStatus.PreOpen, book.Status);
+            Assert.AreEqual(OrderBookStatus.Paused, ((StatusChanged) events[1]).Status);
+            Assert.AreEqual(OrderBookStatus.Paused, book.Status);
 
             // the pause is an auction, and it quotes the crossed book it inherited rather than
             // printing it

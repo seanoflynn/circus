@@ -35,6 +35,8 @@ namespace Circus.Tests.OrderBook
         [TestCase(OrderBookStatus.PreOpen)]
         [TestCase(OrderBookStatus.Open)]
         [TestCase(OrderBookStatus.Closed)]
+        [TestCase(OrderBookStatus.Paused)]
+        [TestCase(OrderBookStatus.Halted)]
         public void Valid_Success(OrderBookStatus status)
         {
             // act
