@@ -1,5 +1,3 @@
-using Circus.OrderBook;
-
 namespace Circus.MarketData;
 
 // ResumesAt is when a timed interruption is due back, null when nothing is pending. LimitState

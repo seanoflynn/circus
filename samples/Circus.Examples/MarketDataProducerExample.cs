@@ -1,7 +1,6 @@
+using Circus.Actions;
+using Circus.Events;
 using Circus.MarketData;
-using Circus.OrderBook;
-using Circus.OrderBook.Actions;
-using Circus.OrderBook.Events;
 using Circus.Time;
 
 namespace Circus.Examples;
@@ -15,8 +14,8 @@ public class MarketDataProducerExample
         var sec1 = new Security("GCZ6", SecurityType.Future, 10, 10);
         var sec2 = new Security("SIZ6", SecurityType.Future, 10, 10);
 
-        IOrderBook book1 = new InMemoryOrderBook(sec1, time);
-        IOrderBook book2 = new InMemoryOrderBook(sec2, time);
+        IOrderBook book1 = new OrderBook(sec1, time);
+        IOrderBook book2 = new OrderBook(sec2, time);
 
         var feed1 = new BookFeed();
         var feed2 = new BookFeed();

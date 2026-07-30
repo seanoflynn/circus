@@ -1,7 +1,6 @@
+using Circus.Actions;
+using Circus.Events;
 using Circus.MarketData;
-using Circus.OrderBook;
-using Circus.OrderBook.Actions;
-using Circus.OrderBook.Events;
 using Circus.Time;
 using NUnit.Framework;
 
@@ -21,7 +20,7 @@ public class IndicativePriceDataProducerTests
     public void SetUp()
     {
         Clock = new ManualClock(Now1);
-        Book = new InMemoryOrderBook(Sec, Clock);
+        Book = new OrderBook(Sec, Clock);
     }
 
     private static IList<IndicativePriceDataEvent> Publish(IndicativePriceDataProducer producer,

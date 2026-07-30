@@ -1,7 +1,6 @@
+using Circus.Actions;
+using Circus.Events;
 using Circus.MarketData;
-using Circus.OrderBook;
-using Circus.OrderBook.Actions;
-using Circus.OrderBook.Events;
 using Circus.Time;
 
 namespace Circus.Simulator;
@@ -20,7 +19,7 @@ public sealed class OrderFlowSimulator
     private readonly Random _random;
     private readonly int _seed;
 
-    private readonly InMemoryOrderBook _shadowBook;
+    private readonly OrderBook _shadowBook;
 
     // The touch, rebuilt from the shadow book's events the same way any market data consumer
     // would - the book itself answers no questions about its levels.
@@ -48,7 +47,7 @@ public sealed class OrderFlowSimulator
         _seed = seed ?? Random.Shared.Next();
         _random = new Random(_seed);
 
-        _shadowBook = new InMemoryOrderBook(_security, new ManualClock(DateTime.UtcNow));
+        _shadowBook = new OrderBook(_security, new ManualClock(DateTime.UtcNow));
         _shadowBook.UpdateStatus(OrderBookStatus.Open);
     }
 

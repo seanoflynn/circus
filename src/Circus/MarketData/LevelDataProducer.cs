@@ -1,5 +1,4 @@
-using Circus.OrderBook;
-using Circus.OrderBook.Events;
+using Circus.Events;
 
 namespace Circus.MarketData;
 

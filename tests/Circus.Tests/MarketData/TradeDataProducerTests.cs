@@ -1,6 +1,5 @@
+using Circus.Actions;
 using Circus.MarketData;
-using Circus.OrderBook;
-using Circus.OrderBook.Actions;
 using Circus.Time;
 using NUnit.Framework;
 
@@ -17,7 +16,7 @@ public class TradeDataProducerTests
         var clock = new ManualClock(now);
         var producer = new TradeDataProducer();
 
-        var book = new InMemoryOrderBook(sec, clock);
+        var book = new OrderBook(sec, clock);
         book.UpdateStatus(OrderBookStatus.Open);
         book.CreateLimitOrder("Company1", "Order1", new OrderValidity.Day(), Side.Buy, 3, 100);
         var bookEvents =
