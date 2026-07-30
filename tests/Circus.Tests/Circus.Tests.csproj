@@ -24,6 +24,10 @@
 
     <ItemGroup>
       <ProjectReference Include="..\..\src\Circus\Circus.csproj" />
+
+      <!-- The simulator generates the traces the replay tests feed through a sequencer, and has
+           behaviour of its own worth pinning now that it covers several securities. -->
+      <ProjectReference Include="..\..\src\Circus.Simulator\Circus.Simulator.csproj" />
     </ItemGroup>
 
 </Project>
