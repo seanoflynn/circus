@@ -238,14 +238,14 @@ public sealed class OrderFlowSimulator
         public BookState(Security security, DateTime openedAt)
         {
             Security = security;
+            Levels = new LevelsDataEvent(security, default, Array.Empty<Level>(), Array.Empty<Level>());
             _shadowBook = new OrderBook(security);
             _shadowBook.Process(new OpenTrading {Security = security, Time = openedAt});
         }
 
         public Security Security { get; }
 
-        public LevelsDataEvent Levels { get; private set; } =
-            new(default, Array.Empty<Level>(), Array.Empty<Level>());
+        public LevelsDataEvent Levels { get; private set; }
 
         public bool HasLive => _liveIds.Count > 0;
 
@@ -255,7 +255,7 @@ public sealed class OrderFlowSimulator
         {
             var events = _shadowBook.Process(action);
 
-            foreach (var levels in _touch.Process(_shadowBook, events))
+            foreach (var levels in _touch.Process(events))
                 Levels = levels;
 
             foreach (var e in events)

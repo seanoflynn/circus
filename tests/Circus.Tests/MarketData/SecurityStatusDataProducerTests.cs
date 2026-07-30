@@ -22,7 +22,7 @@ public class SecurityStatusDataProducerTests
     }
 
     private IList<SecurityStatusDataEvent> Publish(IOrderBook book, IReadOnlyList<OrderBookEvent> bookEvents) =>
-        Producer.Process(book, bookEvents);
+        Producer.Process(bookEvents);
 
     private IOrderBook PlainBook() =>
         new TimestampingOrderBook(new Security("GCZ6", SecurityType.Future, 10, 10), Clock);
@@ -184,7 +184,7 @@ public class SecurityStatusDataProducerTests
 
         // act - a limit event arriving on its own carries the remembered status with it, which
         // is what holding state is for
-        var events = Producer.Process(book,
+        var events = Producer.Process(
             new OrderBookEvent[] {new LimitStateChanged(book.Security, Now1, Side.Sell, 90)});
 
         // assert

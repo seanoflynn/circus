@@ -32,7 +32,7 @@ public class LevelDataProducer : IDataProducer<LevelsDataEvent>
         _maxLevels = maxLevels;
     }
 
-    public IList<LevelsDataEvent> Process(IOrderBook book, IReadOnlyList<OrderBookEvent> events)
+    public IList<LevelsDataEvent> Process(IReadOnlyList<OrderBookEvent> events)
     {
         if (events.Count == 0)
             return Array.Empty<LevelsDataEvent>();
@@ -79,7 +79,7 @@ public class LevelDataProducer : IDataProducer<LevelsDataEvent>
 
         var bids = Snapshot(Side.Buy);
         var offers = Snapshot(Side.Sell);
-        return new[] {new LevelsDataEvent(events[0].Time, bids, offers)};
+        return new[] {new LevelsDataEvent(events[0].Security, events[0].Time, bids, offers)};
     }
 
     private void Add(Side side, decimal price, int quantity)

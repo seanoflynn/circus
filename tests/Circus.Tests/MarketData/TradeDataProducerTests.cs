@@ -23,7 +23,7 @@ public class TradeDataProducerTests
             book.CreateLimitOrder("Company2", "Order2", new OrderValidity.Day(), Side.Sell, 3, 100);
 
         // act
-        var events = producer.Process(book, bookEvents);
+        var events = producer.Process(bookEvents);
 
         // assert
         Assert.IsNotNull(events);

@@ -17,11 +17,12 @@ internal sealed class LevelTrackingOrderBook : IOrderBook
 
     private readonly IOrderBook _book;
     private readonly LevelDataProducer _levelDataProducer = new(MaxLevels);
-    private LevelsDataEvent _levels = new(default, Array.Empty<Level>(), Array.Empty<Level>());
+    private LevelsDataEvent _levels;
 
     public LevelTrackingOrderBook(Security security, IClock clock)
     {
         _book = new TimestampingOrderBook(security, clock);
+        _levels = new LevelsDataEvent(security, default, Array.Empty<Level>(), Array.Empty<Level>());
     }
 
     public Security Security => _book.Security;
@@ -32,7 +33,7 @@ internal sealed class LevelTrackingOrderBook : IOrderBook
     {
         var events = _book.Process(action);
 
-        foreach (var levels in _levelDataProducer.Process(_book, events))
+        foreach (var levels in _levelDataProducer.Process(events))
             _levels = levels;
 
         return events;
