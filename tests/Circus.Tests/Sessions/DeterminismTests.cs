@@ -25,7 +25,7 @@ public class DeterminismTests
 
         // Not just the same shape - the same events, timestamps included. A clock read anywhere
         // inside the book would break this, which is the point.
-        CollectionAssert.AreEqual(first, second);
+        Assert.That(second, Is.EqualTo(first));
     }
 
     [Test]
@@ -47,9 +47,9 @@ public class DeterminismTests
         });
 
         Assert.Greater(events.Count, 1, "expected a create plus a match");
-        CollectionAssert.AreEqual(
-            Enumerable.Repeat(Now1.AddSeconds(1), events.Count),
-            events.Select(e => e.Time));
+        Assert.That(
+            events.Select(e => e.Time),
+            Is.EqualTo(Enumerable.Repeat(Now1.AddSeconds(1), events.Count)));
     }
 
     [Test]
@@ -80,7 +80,7 @@ public class DeterminismTests
             .Select(e => e.Order.ClientOrderId)
             .ToList();
 
-        CollectionAssert.AreEqual(ids.Except(cancelled).ToList(), expired);
+        Assert.That(expired, Is.EqualTo(ids.Except(cancelled).ToList()));
     }
 
     [Test]
