@@ -27,7 +27,7 @@ public class VelocityLogicTests
 
     // 5 ticks on a tick size of 10, so 50 of price movement inside ten seconds is too fast.
     private IOrderBook VelocityBook(TimeSpan? pauseFor = null) =>
-        new OrderBook(
+        new TimestampingOrderBook(
             new Security("GCZ6", SecurityType.Future, 10, 10,
                 PriceRestrictions: new PriceRestrictionConfig[]
                 {
@@ -90,7 +90,7 @@ public class VelocityLogicTests
                 new VolatilityBand(20),
                 new VelocityLimit(5, Window)
             });
-        var book = new OrderBook(security, Clock);
+        var book = new TimestampingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open);
 
         // act

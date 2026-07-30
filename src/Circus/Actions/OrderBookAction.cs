@@ -3,6 +3,16 @@ namespace Circus.Actions;
 public abstract record OrderBookAction
 {
     public required Security Security { get; init; }
+
+    // When the exchange accepted this action, stamped on the way in by whatever owns the clock
+    // - a gateway, a session driver, TimestampingOrderBook. The book reads no clock of its own,
+    // so this is the only time it knows: every event one action produces carries this instant,
+    // and a book fed the same actions twice behaves identically both times. That is what makes
+    // the action stream a complete record, replayable without a recorded clock beside it.
+    //
+    // Not the time the client sent it. An action is the book's input language, not a wire
+    // protocol, and a participant does not get to say when their order arrived.
+    public DateTime Time { get; init; }
 }
 
 public sealed record PreOpenTrading : OrderBookAction
@@ -31,10 +41,10 @@ public sealed record PauseTrading : OrderBookAction;
 // breach calls for a halt; as an action it is the operator-driven equivalent.
 public sealed record HaltTrading : OrderBookAction;
 
-// Nothing to do but let the clock be noticed. A timed interruption ends on its own, and a book
-// with no order flow to carry it there needs something to ask - so a caller driving the book
-// off a clock sends this as it ticks. Carries no time of its own: the book's time provider is
-// the one authority on what time it is.
+// Nothing to report but the time itself. A timed interruption ends on its own, and a book with
+// no order flow to carry it there needs something to ask - so a caller driving the book off a
+// clock sends this as it ticks. Its whole payload is the Time every action carries, which is
+// why it declares no members of its own.
 public sealed record AdvanceTime : OrderBookAction;
 
 public abstract record OrderAction : OrderBookAction

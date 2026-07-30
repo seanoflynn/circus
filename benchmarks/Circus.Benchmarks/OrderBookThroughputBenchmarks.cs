@@ -1,7 +1,6 @@
 using BenchmarkDotNet.Attributes;
 using Circus.Actions;
 using Circus.Simulator;
-using Circus.Time;
 
 namespace Circus.Benchmarks;
 
@@ -28,8 +27,11 @@ public class OrderBookThroughputBenchmarks
     [Benchmark]
     public int ReplayTrace()
     {
-        var book = new OrderBook(_security, new ManualClock(DateTime.UtcNow));
-        book.UpdateStatus(OrderBookStatus.Open);
+        // No clock: the trace carries the time each action happened, so replaying it is the
+        // whole job. Opening is stamped at the first action's instant - the book refuses time
+        // running backwards, and equal stamps are fine.
+        var book = new OrderBook(_security);
+        book.Process(new OpenTrading {Security = _security, Time = _trace[0].Time});
 
         var eventCount = 0;
         foreach (var action in _trace)

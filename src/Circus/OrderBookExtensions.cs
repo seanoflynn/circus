@@ -3,6 +3,14 @@ using Circus.Events;
 
 namespace Circus;
 
+// Convenience over Process(action) for callers building one action at a time.
+//
+// Each takes an optional time. Left out, the action goes unstamped and wants a book that stamps
+// - TimestampingOrderBook, or anything else wrapping one; a bare OrderBook refuses it and says
+// so, rather than treating the missing stamp as the start of time. Passed, it is the instant the
+// action happened, which is what a caller owning a schedule should do: a session provider knows
+// the boundary time it is firing on, and that is more truthful than whatever a clock reads by
+// the time the event handler runs.
 public static class OrderBookExtensions
 {
     private static SelfMatchPrevention? BuildSelfMatchPrevention(string? id,
@@ -13,10 +21,10 @@ public static class OrderBookExtensions
         string clientOrderId, OrderValidity orderValidity, Side side, int quantity, decimal price,
         string? selfMatchPreventionId = null,
         SelfMatchPreventionInstruction? selfMatchPreventionInstruction = null,
-        int? maxVisibleQuantity = null) =>
+        int? maxVisibleQuantity = null, DateTime time = default) =>
         book.Process(new CreateLimitOrder
         {
-            Security = book.Security, CompanyId = companyId, ClientOrderId = clientOrderId,
+            Security = book.Security, Time = time, CompanyId = companyId, ClientOrderId = clientOrderId,
             OrderValidity = orderValidity, Side = side, Quantity = quantity, Price = price,
             SelfMatchPrevention = BuildSelfMatchPrevention(selfMatchPreventionId, selfMatchPreventionInstruction),
             MaxVisibleQuantity = maxVisibleQuantity
@@ -26,10 +34,10 @@ public static class OrderBookExtensions
         string clientOrderId, OrderValidity orderValidity, Side side, int quantity,
         string? selfMatchPreventionId = null,
         SelfMatchPreventionInstruction? selfMatchPreventionInstruction = null,
-        int? maxVisibleQuantity = null) =>
+        int? maxVisibleQuantity = null, DateTime time = default) =>
         book.Process(new CreateMarketOrder
         {
-            Security = book.Security, CompanyId = companyId, ClientOrderId = clientOrderId,
+            Security = book.Security, Time = time, CompanyId = companyId, ClientOrderId = clientOrderId,
             OrderValidity = orderValidity, Side = side, Quantity = quantity,
             SelfMatchPrevention = BuildSelfMatchPrevention(selfMatchPreventionId, selfMatchPreventionInstruction),
             MaxVisibleQuantity = maxVisibleQuantity
@@ -39,10 +47,10 @@ public static class OrderBookExtensions
         string clientOrderId, OrderValidity orderValidity, Side side, int quantity,
         string? selfMatchPreventionId = null,
         SelfMatchPreventionInstruction? selfMatchPreventionInstruction = null,
-        int? maxVisibleQuantity = null) =>
+        int? maxVisibleQuantity = null, DateTime time = default) =>
         book.Process(new CreateMarketLimitOrder
         {
-            Security = book.Security, CompanyId = companyId, ClientOrderId = clientOrderId,
+            Security = book.Security, Time = time, CompanyId = companyId, ClientOrderId = clientOrderId,
             OrderValidity = orderValidity, Side = side, Quantity = quantity,
             SelfMatchPrevention = BuildSelfMatchPrevention(selfMatchPreventionId, selfMatchPreventionInstruction),
             MaxVisibleQuantity = maxVisibleQuantity
@@ -52,10 +60,10 @@ public static class OrderBookExtensions
         string clientOrderId, OrderValidity orderValidity, Side side, int quantity, decimal price,
         decimal triggerPrice, string? selfMatchPreventionId = null,
         SelfMatchPreventionInstruction? selfMatchPreventionInstruction = null,
-        int? maxVisibleQuantity = null) =>
+        int? maxVisibleQuantity = null, DateTime time = default) =>
         book.Process(new CreateStopLimitOrder
         {
-            Security = book.Security, CompanyId = companyId, ClientOrderId = clientOrderId,
+            Security = book.Security, Time = time, CompanyId = companyId, ClientOrderId = clientOrderId,
             OrderValidity = orderValidity, Side = side, Quantity = quantity,
             Price = price, TriggerPrice = triggerPrice,
             SelfMatchPrevention = BuildSelfMatchPrevention(selfMatchPreventionId, selfMatchPreventionInstruction),
@@ -66,10 +74,10 @@ public static class OrderBookExtensions
         string clientOrderId, OrderValidity orderValidity, Side side, int quantity, decimal triggerPrice,
         string? selfMatchPreventionId = null,
         SelfMatchPreventionInstruction? selfMatchPreventionInstruction = null,
-        int? maxVisibleQuantity = null) =>
+        int? maxVisibleQuantity = null, DateTime time = default) =>
         book.Process(new CreateStopMarketOrder
         {
-            Security = book.Security, CompanyId = companyId, ClientOrderId = clientOrderId,
+            Security = book.Security, Time = time, CompanyId = companyId, ClientOrderId = clientOrderId,
             OrderValidity = orderValidity, Side = side, Quantity = quantity,
             TriggerPrice = triggerPrice,
             SelfMatchPrevention = BuildSelfMatchPrevention(selfMatchPreventionId, selfMatchPreventionInstruction),
@@ -78,43 +86,47 @@ public static class OrderBookExtensions
 
     public static IReadOnlyList<OrderBookEvent> UpdateOrder(this IOrderBook book, string companyId,
         string clientOrderId, string previousClientOrderId, int? newTotalQuantity = null, decimal? price = null,
-        decimal? triggerPrice = null) =>
+        decimal? triggerPrice = null, DateTime time = default) =>
         book.Process(new UpdateOrder
         {
-            Security = book.Security, CompanyId = companyId, ClientOrderId = clientOrderId,
+            Security = book.Security, Time = time, CompanyId = companyId, ClientOrderId = clientOrderId,
             PreviousClientOrderId = previousClientOrderId, NewTotalQuantity = newTotalQuantity, Price = price,
             TriggerPrice = triggerPrice
         });
 
     public static IReadOnlyList<OrderBookEvent> CancelOrder(this IOrderBook book, string companyId,
-        string clientOrderId, string previousClientOrderId) =>
+        string clientOrderId, string previousClientOrderId, DateTime time = default) =>
         book.Process(new CancelOrder
         {
-            Security = book.Security, CompanyId = companyId, ClientOrderId = clientOrderId,
+            Security = book.Security, Time = time, CompanyId = companyId, ClientOrderId = clientOrderId,
             PreviousClientOrderId = previousClientOrderId
         });
 
     public static IReadOnlyList<OrderBookEvent> PreOpenTrading(this IOrderBook book,
-        decimal? referencePrice = null) =>
-        book.Process(new PreOpenTrading { Security = book.Security, ReferencePrice = referencePrice });
+        decimal? referencePrice = null, DateTime time = default) =>
+        book.Process(new PreOpenTrading
+            { Security = book.Security, Time = time, ReferencePrice = referencePrice });
 
     public static IReadOnlyList<OrderBookEvent> OpenTrading(this IOrderBook book,
-        decimal? referencePrice = null) =>
-        book.Process(new OpenTrading { Security = book.Security, ReferencePrice = referencePrice });
+        decimal? referencePrice = null, DateTime time = default) =>
+        book.Process(new OpenTrading
+            { Security = book.Security, Time = time, ReferencePrice = referencePrice });
 
-    public static IReadOnlyList<OrderBookEvent> CloseTrading(this IOrderBook book, bool endsTradingDay = true) =>
-        book.Process(new CloseTrading { Security = book.Security, EndsTradingDay = endsTradingDay });
+    public static IReadOnlyList<OrderBookEvent> CloseTrading(this IOrderBook book, bool endsTradingDay = true,
+        DateTime time = default) =>
+        book.Process(new CloseTrading
+            { Security = book.Security, Time = time, EndsTradingDay = endsTradingDay });
 
-    public static IReadOnlyList<OrderBookEvent> PauseTrading(this IOrderBook book) =>
-        book.Process(new PauseTrading { Security = book.Security });
+    public static IReadOnlyList<OrderBookEvent> PauseTrading(this IOrderBook book, DateTime time = default) =>
+        book.Process(new PauseTrading { Security = book.Security, Time = time });
 
-    public static IReadOnlyList<OrderBookEvent> HaltTrading(this IOrderBook book) =>
-        book.Process(new HaltTrading { Security = book.Security });
+    public static IReadOnlyList<OrderBookEvent> HaltTrading(this IOrderBook book, DateTime time = default) =>
+        book.Process(new HaltTrading { Security = book.Security, Time = time });
 
     // Returns whatever the elapsed time turned out to imply - a resumption and its print, or
     // nothing at all.
-    public static IReadOnlyList<OrderBookEvent> AdvanceTime(this IOrderBook book) =>
-        book.Process(new AdvanceTime { Security = book.Security });
+    public static IReadOnlyList<OrderBookEvent> AdvanceTime(this IOrderBook book, DateTime time = default) =>
+        book.Process(new AdvanceTime { Security = book.Security, Time = time });
 
     // Bridge for callers that only know the target status at runtime (e.g. a session/schedule
     // provider driving the book off a clock) and so can't pick PreOpenTrading/OpenTrading/
@@ -122,14 +134,14 @@ public static class OrderBookExtensions
     // ones - a reference price is meaningless once the book stops trading - and endsTradingDay
     // applies only to closing, since nothing else ends a day.
     public static IReadOnlyList<OrderBookEvent> UpdateStatus(this IOrderBook book, OrderBookStatus status,
-        decimal? referencePrice = null, bool endsTradingDay = true) =>
+        decimal? referencePrice = null, bool endsTradingDay = true, DateTime time = default) =>
         status switch
         {
-            OrderBookStatus.PreOpen => book.PreOpenTrading(referencePrice),
-            OrderBookStatus.Open => book.OpenTrading(referencePrice),
-            OrderBookStatus.Closed => book.CloseTrading(endsTradingDay),
-            OrderBookStatus.Paused => book.PauseTrading(),
-            OrderBookStatus.Halted => book.HaltTrading(),
+            OrderBookStatus.PreOpen => book.PreOpenTrading(referencePrice, time),
+            OrderBookStatus.Open => book.OpenTrading(referencePrice, time),
+            OrderBookStatus.Closed => book.CloseTrading(endsTradingDay, time),
+            OrderBookStatus.Paused => book.PauseTrading(time),
+            OrderBookStatus.Halted => book.HaltTrading(time),
             _ => throw new ArgumentOutOfRangeException(nameof(status), status, null)
         };
 }

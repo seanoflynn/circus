@@ -36,7 +36,7 @@ public class CircuitBreakerTests
                 new CircuitBreaker(new PriceLimitWidth.Percent(13), HaltFor),
                 new CircuitBreaker(new PriceLimitWidth.Percent(20))
             });
-        var book = new OrderBook(security, Clock);
+        var book = new TimestampingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 1000);
         return book;
     }
@@ -103,7 +103,7 @@ public class CircuitBreakerTests
                 new VolatilityBand(2, PauseFor: TimeSpan.FromMinutes(2)),
                 new CircuitBreaker(new PriceLimitWidth.Percent(7), HaltFor)
             });
-        var book = new OrderBook(security, Clock);
+        var book = new TimestampingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 1000);
 
         // act

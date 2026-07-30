@@ -42,7 +42,7 @@ public class LevelDataProducerTests
     public void SetUp()
     {
         Clock = new ManualClock(Now1);
-        Book = new OrderBook(Sec, Clock);
+        Book = new TimestampingOrderBook(Sec, Clock);
     }
 
     private static LevelsDataEvent Publish(LevelDataProducer producer, IReadOnlyList<OrderBookEvent> bookEvents)

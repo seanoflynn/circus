@@ -33,7 +33,7 @@ public class MultipleSessionsTests
     public void SetUp()
     {
         Clock = new ManualClock(MorningSession);
-        Book = new OrderBook(Sec, Clock);
+        Book = new TimestampingOrderBook(Sec, Clock);
     }
 
     // The seed OrderBook derives from a date, so a test can say which run of ids it

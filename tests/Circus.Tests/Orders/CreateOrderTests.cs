@@ -32,7 +32,7 @@ public class CreateOrderTests
     public void SetUp()
     {
         Clock = new ManualClock(Now1);
-        Book = new OrderBook(Sec, Clock);
+        Book = new TimestampingOrderBook(Sec, Clock);
     }
 
     [TestCase(Side.Buy)]
@@ -78,7 +78,7 @@ public class CreateOrderTests
     {
         // arrange
         var sec = new Security("GCZ6", SecurityType.Future, 10, 10, 20);
-        var book = new OrderBook(sec, Clock);
+        var book = new TimestampingOrderBook(sec, Clock);
         book.UpdateStatus(OrderBookStatus.Open);
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), side == Side.Buy ? Side.Sell : Side.Buy, 3, 500);
         Clock.SetCurrentTime(Now2);

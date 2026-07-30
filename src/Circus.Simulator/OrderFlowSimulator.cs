@@ -1,7 +1,6 @@
 using Circus.Actions;
 using Circus.Events;
 using Circus.MarketData;
-using Circus.Time;
 
 namespace Circus.Simulator;
 
@@ -40,6 +39,14 @@ public sealed class OrderFlowSimulator
     // stay reproducible for a given seed
     private long _nextId;
 
+    // A fixed epoch rather than DateTime.UtcNow, and a fixed step per action: a trace is
+    // supposed to be reproducible from its seed alone, and stamping it from the wall clock
+    // would have made the times - and so any GTD or rolling-window behaviour reading them -
+    // differ on every run of the same seed.
+    private static readonly DateTime Epoch = new(2000, 1, 1, 9, 0, 0, DateTimeKind.Utc);
+    private static readonly TimeSpan Step = TimeSpan.FromMilliseconds(1);
+    private DateTime _time = Epoch;
+
     public OrderFlowSimulator(Security security, SimulatorOptions? options = null, int? seed = null)
     {
         _security = security;
@@ -47,8 +54,8 @@ public sealed class OrderFlowSimulator
         _seed = seed ?? Random.Shared.Next();
         _random = new Random(_seed);
 
-        _shadowBook = new OrderBook(_security, new ManualClock(DateTime.UtcNow));
-        _shadowBook.UpdateStatus(OrderBookStatus.Open);
+        _shadowBook = new OrderBook(_security);
+        _shadowBook.Process(new OpenTrading {Security = _security, Time = _time});
     }
 
     public int Seed => _seed;
@@ -63,7 +70,10 @@ public sealed class OrderFlowSimulator
 
         for (var i = 0; i < actionCount; i++)
         {
-            var action = NextAction();
+            // Stamped here rather than in each Build* method, so every action gets one and the
+            // trace a caller receives is self-contained - replayable without a clock beside it.
+            _time += Step;
+            var action = NextAction() with {Time = _time};
             actions.Add(action);
             Apply(action);
         }

@@ -21,7 +21,7 @@ internal sealed class LevelTrackingOrderBook : IOrderBook
 
     public LevelTrackingOrderBook(Security security, IClock clock)
     {
-        _book = new OrderBook(security, clock);
+        _book = new TimestampingOrderBook(security, clock);
     }
 
     public Security Security => _book.Security;

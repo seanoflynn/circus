@@ -32,7 +32,7 @@ public class DailyLimitTests
             {
                 new DailyPriceLimit(new PriceLimitWidth.Ticks(5))
             });
-        var book = new OrderBook(security, Clock);
+        var book = new TimestampingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
         return book;
     }
@@ -82,7 +82,7 @@ public class DailyLimitTests
             {
                 new DailyPriceLimit(new PriceLimitWidth.Ticks(5))
             });
-        var book = new OrderBook(security, Clock);
+        var book = new TimestampingOrderBook(security, Clock);
 
         book.UpdateStatus(OrderBookStatus.Open, 200);
         book.CreateLimitOrder(CompanyId1, "Sell1", new OrderValidity.Day(), Side.Sell, 5, 200);
@@ -152,7 +152,7 @@ public class DailyLimitTests
             {
                 new DailyPriceLimit(new PriceLimitWidth.Percent(7))
             });
-        var book = new OrderBook(security, Clock);
+        var book = new TimestampingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 1000);
 
         // act + assert - 1070 is exactly on the ceiling
@@ -172,7 +172,7 @@ public class DailyLimitTests
             {
                 new DailyPriceLimit(new PriceLimitWidth.Percent(7))
             });
-        var book = new OrderBook(security, Clock);
+        var book = new TimestampingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open);
 
         // act

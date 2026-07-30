@@ -2,7 +2,6 @@ using Circus.Actions;
 using Circus.Events;
 using Circus.Matching;
 using Circus.Restrictions;
-using Circus.Time;
 
 namespace Circus;
 
@@ -10,12 +9,19 @@ namespace Circus;
 // does and writes nothing down, which is what a book is rather than a limitation of this one:
 // durability belongs to whatever journals the action stream on the way in, and rebuilds a book
 // by replaying it rather than by asking this one what it holds.
+//
+// A pure function of the actions it is given: it reads no clock and consults nothing ambient,
+// so the same actions always produce the same events. Time arrives stamped on each action -
+// see TimestampingOrderBook for the boundary that does the stamping.
 public class OrderBook : IOrderBook
 {
     private readonly Security _security;
-    private readonly IClock _clock;
 
     private OrderBookStatus _status = OrderBookStatus.Closed;
+
+    // The last action's stamp, kept only to refuse one that moves time backwards. Set from the
+    // first action, so a book has no opinion about what time it is until something tells it.
+    private DateTime _lastActionTime;
     private long _nextSequenceNumber;
     private long? _lastTradedPrice;
 
@@ -94,8 +100,8 @@ public class OrderBook : IOrderBook
 
     private const int MaxClientOrderIdLength = 20;
 
-    public OrderBook(Security security, IClock clock)
-        : this(security, clock, Adapt(security.PriceRestrictions))
+    public OrderBook(Security security)
+        : this(security, Adapt(security.PriceRestrictions))
     {
     }
 
@@ -124,11 +130,9 @@ public class OrderBook : IOrderBook
     // Restrictions supplied outright rather than derived from the security. Internal because it
     // is a seam, not an API: it exists so combinations a Security cannot yet describe - two
     // trade-scoped restrictions disagreeing about severity, say - can still be exercised.
-    internal OrderBook(Security security, IClock clock,
-        IReadOnlyList<IPriceRestriction> priceRestrictions)
+    internal OrderBook(Security security, IReadOnlyList<IPriceRestriction> priceRestrictions)
     {
         _security = security;
-        _clock = clock;
         _priceRestrictions = priceRestrictions;
     }
 
@@ -137,10 +141,27 @@ public class OrderBook : IOrderBook
 
     public IReadOnlyList<OrderBookEvent> Process(OrderBookAction action)
     {
-        // Read the clock once so all events from this action carry the same timestamp, making
-        // the sequence deterministic and reproducible regardless of when each operation
-        // individually reads system time.
-        var time = _clock.GetCurrentTime();
+        // The action's own stamp is the only time this book has, and every event below carries
+        // it. An unstamped action is a caller that has not decided when its action happened,
+        // which would otherwise land silently at DateTime.MinValue and expire every GTD order
+        // in the book.
+        var time = action.Time;
+        if (time == default)
+            throw new ArgumentException(
+                $"{action.GetType().Name} has no Time. Set it when constructing the action, or " +
+                "drive the book through a TimestampingOrderBook to have a clock stamp it.",
+                nameof(action));
+
+        // Refused rather than clamped: time running backwards means the caller has misordered
+        // its stream, and quietly carrying on would leave a book whose state no replay of those
+        // same actions could reproduce. Equal stamps are fine - a burst can share an instant.
+        if (time < _lastActionTime)
+            throw new ArgumentException(
+                $"{action.GetType().Name} is stamped {time:O}, behind the previous action's " +
+                $"{_lastActionTime:O}. Actions must arrive in time order.",
+                nameof(action));
+
+        _lastActionTime = time;
 
         // Before the action rather than after: an order arriving once the interruption has
         // elapsed should meet a resumed book, not the paused one it would otherwise land in.
@@ -638,7 +659,11 @@ public class OrderBook : IOrderBook
             throw new InvalidOperationException("a phase that matches continuously needs an algorithm");
         var pendingImmediateOrCancelStops = new List<InternalOrder>();
 
-        foreach (var outcome in _matcher.Run(algorithm ?? continuous, continuous, CheckTradeRestrictionBreach))
+        // Closed over the action's instant rather than passed as a method group, so a sweep
+        // judges every price it touches against the same moment the events it emits are stamped
+        // with. A restriction reading a clock here instead would drift within a single action.
+        foreach (var outcome in _matcher.Run(algorithm ?? continuous, continuous,
+                     priceTicks => CheckTradeRestrictionBreach(priceTicks, time)))
             Apply(outcome, events, time, pendingImmediateOrCancelStops);
 
         // Deferred until the sweep is done: the loop only exits once nothing crosses anywhere,
@@ -654,9 +679,8 @@ public class OrderBook : IOrderBook
     // pure query, consulted by Matcher.Run only outside an auction uncrossing pass. Severest
     // rather than first, so the order these are declared in cannot decide whether a breach that
     // halts is served or shadowed by one that merely pauses.
-    private RestrictionBreach? CheckTradeRestrictionBreach(long priceTicks)
+    private RestrictionBreach? CheckTradeRestrictionBreach(long priceTicks, DateTime time)
     {
-        var time = _clock.GetCurrentTime();
         RestrictionBreach? worst = null;
 
         foreach (var restriction in _priceRestrictions)
