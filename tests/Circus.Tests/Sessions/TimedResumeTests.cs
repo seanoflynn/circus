@@ -13,6 +13,11 @@ public class TimedResumeTests
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
     private static readonly TimeSpan PauseFor = TimeSpan.FromMinutes(2);
 
+    // How long past a pause's deadline nothing pokes the book. A sequencer ticking punctually
+    // never produces this; a book driven straight off order flow does, and it is what the resume
+    // stamp used to lie about.
+    private static readonly TimeSpan NoticedAfter = TimeSpan.FromMinutes(45);
+
     private static readonly string CompanyId1 = "Company1";
     private static readonly string CompanyId2 = "Company2";
     private static readonly string CompanyId3 = "Company3";
@@ -131,6 +136,59 @@ public class TimedResumeTests
         Assert.AreEqual(StatusChangeReason.InterruptionElapsed,
             events.OfType<StatusChanged>().Single().Reason);
         Assert.AreEqual(1, events.OfType<CreateOrderConfirmed>().Count());
+    }
+
+    [Test]
+    public void Resuming_NoticedLate_StampsTheResumeAtTheDeadline()
+    {
+        // arrange
+        var book = PausingBook(PauseFor);
+        Breach(book);
+
+        // act
+        Clock.SetCurrentTime(Now1 + PauseFor + NoticedAfter);
+        var events = book.AdvanceTime();
+
+        // assert - the interruption ended when it elapsed, not when something got round to asking
+        Assert.AreEqual(OrderBookStatus.Open, book.Status);
+        var resumed = events.OfType<StatusChanged>().Single();
+        Assert.AreEqual(StatusChangeReason.InterruptionElapsed, resumed.Reason);
+        Assert.AreEqual(Now1 + PauseFor, resumed.Time);
+    }
+
+    [Test]
+    public void Resuming_NoticedLate_PrintsAtTheDeadlineToo()
+    {
+        // arrange - the pair that caused the breach is still crossed, so resuming uncrosses it
+        var book = PausingBook(PauseFor);
+        Breach(book);
+
+        // act
+        Clock.SetCurrentTime(Now1 + PauseFor + NoticedAfter);
+        var events = book.AdvanceTime();
+
+        // assert - the auction uncrosses against the book as of the deadline, and the print says
+        // so rather than claiming the trade happened three quarters of an hour later
+        var matched = events.OfType<OrdersMatched>().Single();
+        Assert.AreEqual(200, matched.Price);
+        Assert.AreEqual(Now1 + PauseFor, matched.Time);
+    }
+
+    [Test]
+    public void Resuming_OnLateOrderFlow_StampsTheResumeAtTheDeadlineAndTheOrderOnArrival()
+    {
+        // arrange
+        var book = PausingBook(PauseFor);
+        Breach(book);
+
+        // act - the thing that notices is an order, and it happened when it happened
+        var arrival = Now1 + PauseFor + NoticedAfter;
+        Clock.SetCurrentTime(arrival);
+        var events = book.CreateLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Buy, 5, 90);
+
+        // assert - two instants in one batch: the resume it walked into, then the order itself
+        Assert.AreEqual(Now1 + PauseFor, events.OfType<StatusChanged>().Single().Time);
+        Assert.AreEqual(arrival, events.OfType<CreateOrderConfirmed>().Single().Time);
     }
 
     [Test]
