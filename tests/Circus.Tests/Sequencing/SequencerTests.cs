@@ -8,8 +8,8 @@ namespace Circus.Tests.Sequencing;
 
 // One book, so what is under test here is the queue rather than the routing: that three sources
 // feed one order, that ties at a single instant fall the way a venue needs them to, and that a
-// book's interruption comes back as a poke it never had to ask for. Several books are the next
-// step and change none of it.
+// book's interruption comes back as a poke it never had to ask for. SequencerRoutingTests covers
+// several books, and needed none of this to change.
 [TestFixture]
 public class SequencerTests
 {

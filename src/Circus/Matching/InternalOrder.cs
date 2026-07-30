@@ -16,6 +16,10 @@ internal class InternalOrder
     // Derived from SequenceNumber so it cannot drift: every priority-losing mutation bumps
     // that and so changes this. Real exchanges do the same, since an order sent to the back of
     // the queue is functionally a new entry.
+    //
+    // Unique within this Security and not beyond it - the counter behind it belongs to one book
+    // and is seeded from the session date, so every book opening on the same day issues the same
+    // run of ids. See Order for why that is the right trade and what the venue-wide identity is.
     public string ExchangeOrderId => SequenceNumber.ToString();
 
     public string ClientOrderId { get; private set; }
