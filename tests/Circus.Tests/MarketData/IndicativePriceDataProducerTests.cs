@@ -25,7 +25,7 @@ public class IndicativePriceDataProducerTests
 
     private static IList<IndicativePriceDataEvent> Publish(IndicativePriceDataProducer producer,
         IReadOnlyList<OrderBookEvent> bookEvents) =>
-        producer.Process(Book, bookEvents);
+        producer.Process(bookEvents);
 
     [Test]
     public void CrossedPreOpenBook_PublishesTheQuote()

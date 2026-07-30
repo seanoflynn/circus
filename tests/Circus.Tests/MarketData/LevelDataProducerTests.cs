@@ -47,7 +47,7 @@ public class LevelDataProducerTests
 
     private static LevelsDataEvent Publish(LevelDataProducer producer, IReadOnlyList<OrderBookEvent> bookEvents)
     {
-        var events = producer.Process(Book, bookEvents);
+        var events = producer.Process(bookEvents);
         Assert.AreEqual(1, events.Count);
         return events[0];
     }

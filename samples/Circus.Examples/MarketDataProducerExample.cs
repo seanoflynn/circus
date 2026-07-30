@@ -1,5 +1,3 @@
-using Circus.Actions;
-using Circus.Events;
 using Circus.MarketData;
 using Circus.Time;
 
@@ -17,88 +15,43 @@ public class MarketDataProducerExample
         IOrderBook book1 = new TimestampingOrderBook(sec1, time);
         IOrderBook book2 = new TimestampingOrderBook(sec2, time);
 
-        var feed1 = new BookFeed();
-        var feed2 = new BookFeed();
+        // Both instruments on one channel, the way a venue publishes them: one sequence a
+        // subscriber counts to notice it missed something, and each message saying which
+        // instrument it is about. A feed per security, because every producer behind one builds
+        // its view from a single book's events and none can resync after a missed one.
+        var channel = new MarketDataChannel();
+        channel.Add(new SecurityFeed(sec1, maxLevels: 10));
+        channel.Add(new SecurityFeed(sec2, maxLevels: 10));
 
         // book1 opens on an auction: orders accumulate in pre-open with the indicative quote
         // tracking them, and the print happens on the way out - the same orders as book2, which
         // opens first and trades them continuously.
-        feed1.Publish(book1, book1.UpdateStatus(OrderBookStatus.PreOpen));
-        feed1.Publish(book1,
+        Publish(channel, book1.UpdateStatus(OrderBookStatus.PreOpen));
+        Publish(channel,
             book1.CreateLimitOrder("Buyer", "Order1", new OrderValidity.Day(), Side.Buy, 3, 100));
-        feed1.Publish(book1,
+        Publish(channel,
             book1.CreateLimitOrder("Seller", "Order2", new OrderValidity.Day(), Side.Sell, 5, 100));
-        feed1.Publish(book1, book1.UpdateStatus(OrderBookStatus.Open));
+        Publish(channel, book1.UpdateStatus(OrderBookStatus.Open));
 
-        feed2.Publish(book2, book2.UpdateStatus(OrderBookStatus.Open));
-        feed2.Publish(book2,
+        Publish(channel, book2.UpdateStatus(OrderBookStatus.Open));
+        Publish(channel,
             book2.CreateLimitOrder("Buyer", "Order1", new OrderValidity.Day(), Side.Buy, 3, 100));
-        feed2.Publish(book2,
+        Publish(channel,
             book2.CreateLimitOrder("Seller", "Order2", new OrderValidity.Day(), Side.Sell, 5, 100));
     }
 
-    // One set of producers per book. The level and status producers each build their own view
-    // of a single book out of its event stream alone, so a set cannot be shared across two -
-    // and there is no way to resync one that missed an event, which is why they are created
-    // before the book they follow processes anything.
-    private sealed class BookFeed
+    private static void Publish(MarketDataChannel channel, IReadOnlyList<Events.OrderBookEvent> events)
     {
-        private readonly TradeDataProducer _trades = new();
-        private readonly LevelDataProducer _bbo = new(1);
-        private readonly LevelDataProducer _top10 = new(10);
-        private readonly FullBookDataProducer _fullBook = new();
-        private readonly IndicativePriceDataProducer _indicative = new();
-        private readonly SecurityStatusDataProducer _status = new();
-
-        public void Publish(IOrderBook book, IReadOnlyList<OrderBookEvent> events)
-        {
-            Print(_trades.Process(book, events));
-            Print(_bbo.Process(book, events));
-            Print(_top10.Process(book, events));
-            Print(_fullBook.Process(book, events));
-            Print(_indicative.Process(book, events));
-            Print(_status.Process(book, events));
-        }
+        foreach (var message in channel.Publish(events))
+            Console.WriteLine($"{message.Sequence,3} {message.Data.Security.Name} {Describe(message.Data)}");
     }
 
-    private static void Print(IEnumerable<TradedDataEvent> events)
+    // LevelsDataEvent holds lists, which a record's generated ToString renders as type names.
+    private static string Describe(MarketDataEvent data) => data switch
     {
-        foreach (var @event in events)
-        {
-            Console.WriteLine(@event);
-        }
-    }
-
-    private static void Print(IEnumerable<LevelsDataEvent> events)
-    {
-        foreach (var @event in events)
-        {
-            Console.WriteLine(
-                $"LevelsDataEvent {{ Bids = [{string.Join(", ", @event.Bids)}], Offers = [{string.Join(", ", @event.Offers)}] }}");
-        }
-    }
-
-    private static void Print(IEnumerable<IndicativePriceDataEvent> events)
-    {
-        foreach (var @event in events)
-        {
-            Console.WriteLine(@event);
-        }
-    }
-
-    private static void Print(IEnumerable<OrderBookDeltaEvent> events)
-    {
-        foreach (var @event in events)
-        {
-            Console.WriteLine(@event);
-        }
-    }
-
-    private static void Print(IEnumerable<SecurityStatusDataEvent> events)
-    {
-        foreach (var @event in events)
-        {
-            Console.WriteLine(@event);
-        }
-    }
+        LevelsDataEvent levels =>
+            $"LevelsDataEvent {{ Bids = [{string.Join(", ", levels.Bids)}], " +
+            $"Offers = [{string.Join(", ", levels.Offers)}] }}",
+        _ => data.ToString()!
+    };
 }

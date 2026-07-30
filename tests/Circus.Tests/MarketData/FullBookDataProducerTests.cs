@@ -48,7 +48,7 @@ public class FullBookDataProducerTests
         Book.UpdateStatus(OrderBookStatus.Open);
 
         var bookEvents = Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 100);
-        var deltas = producer.Process(Book, bookEvents);
+        var deltas = producer.Process(bookEvents);
 
         Assert.AreEqual(1, deltas.Count);
         Assert.AreEqual(Side.Buy, deltas[0].Side);
@@ -66,7 +66,7 @@ public class FullBookDataProducerTests
         // total 20, only 5 displayed at a time
         var bookEvents = Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 20, 100,
             maxVisibleQuantity: 5);
-        var deltas = producer.Process(Book, bookEvents);
+        var deltas = producer.Process(bookEvents);
 
         Assert.AreEqual(1, deltas.Count);
         Assert.AreEqual(5, deltas[0].Quantity, "only the displayed peak, never the hidden reserve");
@@ -81,11 +81,11 @@ public class FullBookDataProducerTests
         var created = Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 12, 100,
                 maxVisibleQuantity: 5)
             .OfType<CreateOrderConfirmed>().Single();
-        producer.Process(Book, new OrderBookEvent[] {created});
+        producer.Process(new OrderBookEvent[] {created});
 
         // aggressor larger than the peak - exhausts and replenishes the iceberg mid-match
         var bookEvents = Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 100);
-        var deltas = producer.Process(Book, bookEvents);
+        var deltas = producer.Process(bookEvents);
 
         // one Filled delta per leg of the match (the iceberg resting, and the aggressor)
         var filled = deltas.Where(d => d.Action == OrderBookDeltaAction.Filled).ToList();
@@ -112,7 +112,7 @@ public class FullBookDataProducerTests
             .OfType<CreateOrderConfirmed>().Single();
 
         var bookEvents = Book.UpdateOrder(CompanyId1, OrderId2, OrderId1, price: 110);
-        var deltas = producer.Process(Book, bookEvents);
+        var deltas = producer.Process(bookEvents);
 
         Assert.AreEqual(2, deltas.Count);
         Assert.AreEqual(created.Order.ExchangeOrderId, deltas[0].ExchangeOrderId);
@@ -133,7 +133,7 @@ public class FullBookDataProducerTests
             .OfType<CreateOrderConfirmed>().Single();
 
         var bookEvents = Book.UpdateOrder(CompanyId1, OrderId2, OrderId1, newTotalQuantity: 3);
-        var deltas = producer.Process(Book, bookEvents);
+        var deltas = producer.Process(bookEvents);
 
         Assert.AreEqual(1, deltas.Count);
         Assert.AreEqual(created.Order.ExchangeOrderId, deltas[0].ExchangeOrderId);
@@ -149,7 +149,7 @@ public class FullBookDataProducerTests
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 100);
 
         var bookEvents = Book.CancelOrder(CompanyId1, OrderId2, OrderId1);
-        var deltas = producer.Process(Book, bookEvents);
+        var deltas = producer.Process(bookEvents);
 
         Assert.AreEqual(1, deltas.Count);
         Assert.AreEqual(100, deltas[0].Price);
@@ -165,7 +165,7 @@ public class FullBookDataProducerTests
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100);
 
         var bookEvents = Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 3, 100);
-        var deltas = producer.Process(Book, bookEvents);
+        var deltas = producer.Process(bookEvents);
 
         var filled = deltas.Where(d => d.Action == OrderBookDeltaAction.Filled).ToList();
         Assert.AreEqual(2, filled.Count, "expected one Filled delta per leg of the match");
@@ -191,7 +191,7 @@ public class FullBookDataProducerTests
 
         var bookEvents =
             Book.CreateStopLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Buy, 5, 530, 510);
-        var deltas = producer.Process(Book, bookEvents);
+        var deltas = producer.Process(bookEvents);
 
         Assert.IsEmpty(deltas, "a stop order that hasn't triggered yet isn't part of the displayed order book");
     }
@@ -216,7 +216,7 @@ public class FullBookDataProducerTests
         // act - trade at the trigger price, converting the stop into a working limit order
         Clock.SetCurrentTime(Now6);
         var bookEvents = Book.CreateLimitOrder(CompanyId6, OrderId6, new OrderValidity.Day(), Side.Buy, 2, 510);
-        var deltas = producer.Process(Book, bookEvents);
+        var deltas = producer.Process(bookEvents);
 
         var activation = deltas.SingleOrDefault(d => d.Price == 530 && d.Action != OrderBookDeltaAction.Filled);
         Assert.IsNotNull(activation, "expected the triggered order's arrival into the working book");

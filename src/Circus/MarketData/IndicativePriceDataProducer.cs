@@ -11,7 +11,7 @@ namespace Circus.MarketData;
 // subscriber must publish as such rather than leaving the last price standing.
 public class IndicativePriceDataProducer : IDataProducer<IndicativePriceDataEvent>
 {
-    public IList<IndicativePriceDataEvent> Process(IOrderBook book, IReadOnlyList<OrderBookEvent> events)
+    public IList<IndicativePriceDataEvent> Process(IReadOnlyList<OrderBookEvent> events)
     {
         List<IndicativePriceDataEvent>? output = null;
 
@@ -20,7 +20,7 @@ public class IndicativePriceDataProducer : IDataProducer<IndicativePriceDataEven
             if (ev is IndicativePriceChanged changed)
             {
                 output ??= new List<IndicativePriceDataEvent>();
-                output.Add(new IndicativePriceDataEvent(changed.Time, changed.Price, changed.Quantity));
+                output.Add(new IndicativePriceDataEvent(changed.Security, changed.Time, changed.Price, changed.Quantity));
             }
         }
 
