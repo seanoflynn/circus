@@ -1,5 +1,3 @@
-using Circus.OrderBook;
-
 namespace Circus.Sessions;
 
 // EndsTradingDay is meaningful only when Status is Closed: false for a session closing with

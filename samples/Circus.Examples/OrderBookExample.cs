@@ -1,6 +1,5 @@
-using Circus.OrderBook;
-using Circus.OrderBook.Actions;
-using Circus.OrderBook.Events;
+using Circus.Actions;
+using Circus.Events;
 using Circus.Sessions;
 using Circus.Time;
 
@@ -13,7 +12,7 @@ public static class OrderBookExample
         var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
 
         var clock = new ManualClock(DateTime.Now);
-        IOrderBook book = new InMemoryOrderBook(sec, clock);
+        IOrderBook book = new OrderBook(sec, clock);
 
         var preOpen = new TimeSpan(1, 0, 0);
         var open = new TimeSpan(1, 10, 0);
@@ -32,7 +31,7 @@ public static class OrderBookExample
         var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
 
         var clock = new ManualClock(DateTime.Now);
-        IOrderBook book = new InMemoryOrderBook(sec, clock);
+        IOrderBook book = new OrderBook(sec, clock);
 
         var preOpen = new TimeSpan(1, 0, 0);
         var open = new TimeSpan(1, 10, 0);
@@ -64,7 +63,7 @@ public static class OrderBookExample
         var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
 
         var clock = new SystemClock();
-        IOrderBook book = new InMemoryOrderBook(sec, clock);
+        IOrderBook book = new OrderBook(sec, clock);
 
         var preOpen = new TimeSpan(1, 0, 0);
         var open = new TimeSpan(1, 10, 0);

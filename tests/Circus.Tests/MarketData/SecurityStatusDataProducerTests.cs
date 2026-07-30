@@ -1,7 +1,6 @@
+using Circus.Actions;
+using Circus.Events;
 using Circus.MarketData;
-using Circus.OrderBook;
-using Circus.OrderBook.Actions;
-using Circus.OrderBook.Events;
 using Circus.Time;
 using NUnit.Framework;
 
@@ -26,11 +25,11 @@ public class SecurityStatusDataProducerTests
         Producer.Process(book, bookEvents);
 
     private IOrderBook PlainBook() =>
-        new InMemoryOrderBook(new Security("GCZ6", SecurityType.Future, 10, 10), Clock);
+        new OrderBook(new Security("GCZ6", SecurityType.Future, 10, 10), Clock);
 
     // A 5-tick volatility range on a reference of 100, pausing for two minutes.
     private IOrderBook PausingBook() =>
-        new InMemoryOrderBook(
+        new OrderBook(
             new Security("GCZ6", SecurityType.Future, 10, 10,
                 PriceRestrictions: new PriceRestrictionConfig[] {new VolatilityBand(5, PauseFor)}),
             Clock);
@@ -112,7 +111,7 @@ public class SecurityStatusDataProducerTests
     public void OpenEndedInterruption_PublishesNoResumeTime()
     {
         // arrange - a range with no duration configured stands until something ends it
-        var book = new InMemoryOrderBook(
+        var book = new OrderBook(
             new Security("GCZ6", SecurityType.Future, 10, 10,
                 PriceRestrictions: new PriceRestrictionConfig[] {new VolatilityBand(5)}),
             Clock);
@@ -134,7 +133,7 @@ public class SecurityStatusDataProducerTests
         // arrange - a book holding a buy above the ceiling, reached by resting it while the
         // limit was wider and then moving the reference so the limit narrows under it. The
         // clock moves on so that buy is genuinely the older order when the sell arrives.
-        var book = new InMemoryOrderBook(
+        var book = new OrderBook(
             new Security("GCZ6", SecurityType.Future, 10, 10,
                 PriceRestrictions: new PriceRestrictionConfig[]
                 {

@@ -1,12 +1,11 @@
+using Circus.Actions;
+using Circus.Events;
 using Circus.MarketData;
-using Circus.OrderBook;
-using Circus.OrderBook.Actions;
-using Circus.OrderBook.Events;
 using Circus.Time;
 
 namespace Circus.Tests.Helpers;
 
-// An InMemoryOrderBook plus the level view a subscriber would keep beside it. The book
+// An OrderBook plus the level view a subscriber would keep beside it. The book
 // answers no questions about its own levels, so a test that needs to know where orders ended
 // up rebuilds them from the event stream - which also means these assertions are against what
 // a market data consumer can actually see, not the book's internals.
@@ -22,7 +21,7 @@ internal sealed class LevelTrackingOrderBook : IOrderBook
 
     public LevelTrackingOrderBook(Security security, IClock clock)
     {
-        _book = new InMemoryOrderBook(security, clock);
+        _book = new OrderBook(security, clock);
     }
 
     public Security Security => _book.Security;

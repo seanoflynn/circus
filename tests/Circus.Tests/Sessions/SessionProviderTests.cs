@@ -1,4 +1,3 @@
-using Circus.OrderBook;
 using Circus.Sessions;
 using NUnit.Framework;
 
