@@ -327,6 +327,30 @@ public class SessionProviderTests
     }
 
     [Test]
+    public void Constructor_FromSchedule_WalksThoseHours()
+    {
+        // arrange - the same day handed over as a schedule rather than described again, which is
+        // how anything already holding one registers a book
+        var sessionProvider = new SessionProvider(new MarketSchedule(new[] {Morning, Afternoon}));
+
+        var statuses = new List<SessionStatusChangedArgs>();
+        sessionProvider.Changed += (_, status) => statuses.Add(status);
+
+        var day = new DateTime(2000, 1, 1);
+
+        // act
+        sessionProvider.Update(day.Add(new TimeSpan(8, 30, 0)));
+
+        // assert
+        Assert.AreEqual(3, statuses.Count);
+        Assert.AreEqual(OrderBookStatus.Closed, statuses[0].Status);
+        Assert.AreEqual(OrderBookStatus.PreOpen, statuses[1].Status);
+        Assert.AreEqual(day.Add(Morning.PreOpen), statuses[1].Time);
+        Assert.AreEqual(OrderBookStatus.Open, statuses[2].Status);
+        Assert.AreEqual(day.Add(Morning.Open), statuses[2].Time);
+    }
+
+    [Test]
     public void Update_TwoSessions_FullDayCycle()
     {
         // arrange
