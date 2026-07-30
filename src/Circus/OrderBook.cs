@@ -2,7 +2,6 @@ using Circus.Actions;
 using Circus.Events;
 using Circus.Matching;
 using Circus.Restrictions;
-using Circus.Time;
 
 namespace Circus;
 
@@ -10,12 +9,19 @@ namespace Circus;
 // does and writes nothing down, which is what a book is rather than a limitation of this one:
 // durability belongs to whatever journals the action stream on the way in, and rebuilds a book
 // by replaying it rather than by asking this one what it holds.
+//
+// A pure function of the actions it is given: it reads no clock and consults nothing ambient,
+// so the same actions always produce the same events. Time arrives stamped on each action -
+// see TimestampingOrderBook for the boundary that does the stamping.
 public class OrderBook : IOrderBook
 {
     private readonly Security _security;
-    private readonly IClock _clock;
 
     private OrderBookStatus _status = OrderBookStatus.Closed;
+
+    // The last action's stamp, kept only to refuse one that moves time backwards. Set from the
+    // first action, so a book has no opinion about what time it is until something tells it.
+    private DateTime _lastActionTime;
     private long _nextSequenceNumber;
     private long? _lastTradedPrice;
 
@@ -94,8 +100,8 @@ public class OrderBook : IOrderBook
 
     private const int MaxClientOrderIdLength = 20;
 
-    public OrderBook(Security security, IClock clock)
-        : this(security, clock, Adapt(security.PriceRestrictions))
+    public OrderBook(Security security)
+        : this(security, Adapt(security.PriceRestrictions))
     {
     }
 
@@ -124,60 +130,78 @@ public class OrderBook : IOrderBook
     // Restrictions supplied outright rather than derived from the security. Internal because it
     // is a seam, not an API: it exists so combinations a Security cannot yet describe - two
     // trade-scoped restrictions disagreeing about severity, say - can still be exercised.
-    internal OrderBook(Security security, IClock clock,
-        IReadOnlyList<IPriceRestriction> priceRestrictions)
+    internal OrderBook(Security security, IReadOnlyList<IPriceRestriction> priceRestrictions)
     {
         _security = security;
-        _clock = clock;
         _priceRestrictions = priceRestrictions;
     }
-
-    private DateTime Now() => _clock.GetCurrentTime();
 
     public Security Security => _security;
     public OrderBookStatus Status => _status;
 
     public IReadOnlyList<OrderBookEvent> Process(OrderBookAction action)
     {
+        // The action's own stamp is the only time this book has, and every event below carries
+        // it. An unstamped action is a caller that has not decided when its action happened,
+        // which would otherwise land silently at DateTime.MinValue and expire every GTD order
+        // in the book.
+        var time = action.Time;
+        if (time == default)
+            throw new ArgumentException(
+                $"{action.GetType().Name} has no Time. Set it when constructing the action, or " +
+                "drive the book through a TimestampingOrderBook to have a clock stamp it.",
+                nameof(action));
+
+        // Refused rather than clamped: time running backwards means the caller has misordered
+        // its stream, and quietly carrying on would leave a book whose state no replay of those
+        // same actions could reproduce. Equal stamps are fine - a burst can share an instant.
+        if (time < _lastActionTime)
+            throw new ArgumentException(
+                $"{action.GetType().Name} is stamped {time:O}, behind the previous action's " +
+                $"{_lastActionTime:O}. Actions must arrive in time order.",
+                nameof(action));
+
+        _lastActionTime = time;
+
         // Before the action rather than after: an order arriving once the interruption has
         // elapsed should meet a resumed book, not the paused one it would otherwise land in.
         // Doing it here rather than only on AdvanceTime means a book being fed order flow
         // resumes on its own, without needing anything to poke it.
-        var events = ResumeIfDue();
-        events.AddRange(Handle(action));
+        var events = ResumeIfDue(time);
+        events.AddRange(Handle(action, time));
 
         // Last, so it reports where the action left the book rather than any state it passed
         // through - a pre-open cancel that uncrosses the book withdraws the quote, and the
         // opening print withdraws it after the trades it produced.
-        var quoteChange = TakeIndicativeQuoteChange();
+        var quoteChange = TakeIndicativeQuoteChange(time);
         if (quoteChange != null)
             events.Add(quoteChange);
 
         return events;
     }
 
-    private List<OrderBookEvent> Handle(OrderBookAction action)
+    private List<OrderBookEvent> Handle(OrderBookAction action, DateTime time)
     {
         return action switch
         {
             CreateLimitOrder o => CreateOrder(o.CompanyId, o.ClientOrderId, o.OrderValidity, o.Side, o.Quantity,
-                OrderType.Limit, o.Price, null, o.SelfMatchPrevention, o.MaxVisibleQuantity),
+                OrderType.Limit, o.Price, null, o.SelfMatchPrevention, o.MaxVisibleQuantity, time),
             CreateMarketOrder o => CreateOrder(o.CompanyId, o.ClientOrderId, o.OrderValidity, o.Side, o.Quantity,
-                OrderType.Market, null, null, o.SelfMatchPrevention, o.MaxVisibleQuantity),
+                OrderType.Market, null, null, o.SelfMatchPrevention, o.MaxVisibleQuantity, time),
             CreateMarketLimitOrder o => CreateOrder(o.CompanyId, o.ClientOrderId, o.OrderValidity, o.Side,
-                o.Quantity, OrderType.MarketLimit, null, null, o.SelfMatchPrevention, o.MaxVisibleQuantity),
+                o.Quantity, OrderType.MarketLimit, null, null, o.SelfMatchPrevention, o.MaxVisibleQuantity, time),
             CreateStopLimitOrder o => CreateOrder(o.CompanyId, o.ClientOrderId, o.OrderValidity, o.Side,
-                o.Quantity, OrderType.StopLimit, o.Price, o.TriggerPrice, o.SelfMatchPrevention, o.MaxVisibleQuantity),
+                o.Quantity, OrderType.StopLimit, o.Price, o.TriggerPrice, o.SelfMatchPrevention, o.MaxVisibleQuantity, time),
             CreateStopMarketOrder o => CreateOrder(o.CompanyId, o.ClientOrderId, o.OrderValidity, o.Side,
-                o.Quantity, OrderType.StopMarket, null, o.TriggerPrice, o.SelfMatchPrevention, o.MaxVisibleQuantity),
+                o.Quantity, OrderType.StopMarket, null, o.TriggerPrice, o.SelfMatchPrevention, o.MaxVisibleQuantity, time),
             UpdateOrder update => UpdateOrder(update.CompanyId, update.ClientOrderId,
-                update.PreviousClientOrderId, update.NewTotalQuantity, update.Price, update.TriggerPrice),
-            CancelOrder cancel => CancelOrder(cancel.CompanyId, cancel.ClientOrderId, cancel.PreviousClientOrderId),
-            PreOpenTrading s => UpdateStatus(OrderBookStatus.PreOpen, s.ReferencePrice),
-            OpenTrading s => UpdateStatus(OrderBookStatus.Open, s.ReferencePrice),
-            CloseTrading c => UpdateStatus(OrderBookStatus.Closed, null, c.EndsTradingDay),
-            PauseTrading => UpdateStatus(OrderBookStatus.Paused),
-            HaltTrading => UpdateStatus(OrderBookStatus.Halted),
+                update.PreviousClientOrderId, update.NewTotalQuantity, update.Price, update.TriggerPrice, time),
+            CancelOrder cancel => CancelOrder(cancel.CompanyId, cancel.ClientOrderId, cancel.PreviousClientOrderId, time),
+            PreOpenTrading s => UpdateStatus(OrderBookStatus.PreOpen, s.ReferencePrice, true, StatusChangeReason.Requested, time),
+            OpenTrading s => UpdateStatus(OrderBookStatus.Open, s.ReferencePrice, true, StatusChangeReason.Requested, time),
+            CloseTrading c => UpdateStatus(OrderBookStatus.Closed, null, c.EndsTradingDay, StatusChangeReason.Requested, time),
+            PauseTrading => UpdateStatus(OrderBookStatus.Paused, null, true, StatusChangeReason.Requested, time),
+            HaltTrading => UpdateStatus(OrderBookStatus.Halted, null, true, StatusChangeReason.Requested, time),
 
             // Carries nothing and does nothing: the work is the due-interruption check every
             // Process already runs, and this is how a caller with no order flow reaches it.
@@ -188,20 +212,20 @@ public class OrderBook : IOrderBook
 
     // A timed interruption returns the book to whatever it interrupted. Cleared by any explicit
     // status change, so a session closing over a pause ends it rather than being undone by it.
-    private List<OrderBookEvent> ResumeIfDue()
+    private List<OrderBookEvent> ResumeIfDue(DateTime time)
     {
-        if (_resumeAt == null || Now() < _resumeAt.Value)
+        if (_resumeAt == null || time < _resumeAt.Value)
             return new List<OrderBookEvent>();
 
         _resumeAt = null;
-        return UpdateStatus(_resumeTo, reason: StatusChangeReason.InterruptionElapsed);
+        return UpdateStatus(_resumeTo, null, true, StatusChangeReason.InterruptionElapsed, time);
     }
 
     // Asked of the phase's own algorithm, so a quote exists exactly when there is an auction
     // to report one for - the start-of-day session or a volatility pause. Continuous trading
     // declines (price-time prints at as many prices as a sweep touches, not one), as does an
     // uncrossed book and a phase with no algorithm at all.
-    private OrderBookEvent? TakeIndicativeQuoteChange()
+    private OrderBookEvent? TakeIndicativeQuoteChange(DateTime time)
     {
         var algorithm = CurrentPhase.Algorithm;
 
@@ -222,80 +246,80 @@ public class OrderBook : IOrderBook
         foreach (var restriction in _priceRestrictions)
             restriction.OnIndicativePrice(quote?.PriceTicks);
 
-        return new IndicativePriceChanged(_security, Now(),
+        return new IndicativePriceChanged(_security, time,
             quote.HasValue ? (decimal?) ToDecimal(quote.Value.PriceTicks) : null, quote?.Quantity ?? 0);
     }
 
     private List<OrderBookEvent> CreateOrder(string companyId, string clientOrderId, OrderValidity validity,
         Side side, int quantity, OrderType type, decimal? price = null, decimal? triggerPrice = null,
-        SelfMatchPrevention? selfMatchPrevention = null, int? maxVisibleQuantity = null)
+        SelfMatchPrevention? selfMatchPrevention = null, int? maxVisibleQuantity = null, DateTime time = default)
     {
         var selfMatchPreventionId = selfMatchPrevention?.Id;
         var selfMatchPreventionInstruction = selfMatchPrevention?.Instruction;
         var status = triggerPrice.HasValue ? OrderStatus.Hidden : OrderStatus.Working;
 
         if (!CurrentPhase.AcceptsOrderActions)
-            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.MarketClosed);
+            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.MarketClosed, time);
         if (type == OrderType.Market && !CurrentPhase.AcceptsMarketOrders)
-            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.MarketOrdersNotAccepted);
+            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.MarketOrdersNotAccepted, time);
         if (string.IsNullOrEmpty(clientOrderId))
-            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.ClientOrderIdRequired);
+            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.ClientOrderIdRequired, time);
         if (clientOrderId.Length > MaxClientOrderIdLength)
-            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.ClientOrderIdTooLong);
+            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.ClientOrderIdTooLong, time);
         if (string.IsNullOrEmpty(companyId))
-            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.CompanyIdRequired);
+            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.CompanyIdRequired, time);
         if (companyId.Length > MaxClientOrderIdLength)
-            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.CompanyIdTooLong);
+            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.CompanyIdTooLong, time);
         if (selfMatchPreventionId != null && selfMatchPreventionId.Length > MaxClientOrderIdLength)
-            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.SelfMatchPreventionIdTooLong);
+            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.SelfMatchPreventionIdTooLong, time);
         if (quantity < 1)
-            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.InvalidQuantity);
+            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.InvalidQuantity, time);
         if (!TryConvertToTicks(price, out var priceTicks))
-            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.InvalidPriceIncrement);
+            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.InvalidPriceIncrement, time);
         if (!TryConvertToTicks(triggerPrice, out var triggerTicks))
-            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.InvalidPriceIncrement);
+            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.InvalidPriceIncrement, time);
         if (triggerTicks != null && priceTicks != null && side == Side.Buy && priceTicks < triggerTicks)
-            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.TriggerPriceMustBeLessThanPrice);
+            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.TriggerPriceMustBeLessThanPrice, time);
         if (triggerTicks != null && priceTicks != null && side == Side.Sell && priceTicks > triggerTicks)
-            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.TriggerPriceMustBeGreaterThanPrice);
+            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.TriggerPriceMustBeGreaterThanPrice, time);
         if (triggerTicks != null && priceTicks != null &&
             !AllowsStopSpread(triggerTicks.Value, priceTicks.Value))
-            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.TriggerPriceTooFarFromPrice);
+            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.TriggerPriceTooFarFromPrice, time);
         if (triggerTicks != null && !_lastTradedPrice.HasValue)
-            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.NoLastTradedPrice);
+            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.NoLastTradedPrice, time);
         if (triggerTicks != null && side == Side.Buy && triggerTicks <= _lastTradedPrice)
-            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.TriggerPriceMustBeGreaterThanLastTradedPrice);
+            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.TriggerPriceMustBeGreaterThanLastTradedPrice, time);
         if (triggerTicks != null && side == Side.Sell && triggerTicks >= _lastTradedPrice)
-            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.TriggerPriceMustBeLessThanLastTradedPrice);
-        if (priceTicks.HasValue && FindOrderEntryRefusal(priceTicks.Value) is { } entryRefusal)
-            return RejectCreate(companyId, clientOrderId, entryRefusal);
+            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.TriggerPriceMustBeLessThanLastTradedPrice, time);
+        if (priceTicks.HasValue && FindOrderEntryRefusal(priceTicks.Value, time) is { } entryRefusal)
+            return RejectCreate(companyId, clientOrderId, entryRefusal, time);
         if (validity is OrderValidity.ImmediateOrCancel { MinQuantity: int minQty } && (minQty < 1 || minQty > quantity))
-            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.MinQuantityOutOfRange);
+            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.MinQuantityOutOfRange, time);
         if (maxVisibleQuantity.HasValue && (maxVisibleQuantity < 1 || maxVisibleQuantity > quantity))
-            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.MaxVisibleQuantityOutOfRange);
+            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.MaxVisibleQuantityOutOfRange, time);
         if (_clientOrderIndex.TryGetValue((companyId, clientOrderId), out var existingOrder))
         {
             return existingOrder.Status is OrderStatus.Working or OrderStatus.Hidden
-                ? RejectCreate(companyId, clientOrderId, OrderRejectedReason.OrderInBook)
-                : RejectCreate(companyId, clientOrderId, OrderRejectedReason.OrderIdAlreadyUsed);
+                ? RejectCreate(companyId, clientOrderId, OrderRejectedReason.OrderInBook, time)
+                : RejectCreate(companyId, clientOrderId, OrderRejectedReason.OrderIdAlreadyUsed, time);
         }
 
         if (type == OrderType.Market || type == OrderType.MarketLimit)
         {
             var protectionTicks = type == OrderType.MarketLimit ? 0 : _security.MarketOrderProtectionTicks;
             if(!TryGetLimitPrice(side, protectionTicks, out priceTicks))
-                return RejectCreate(companyId, clientOrderId, OrderRejectedReason.NoOrdersToMatchMarketOrder);
+                return RejectCreate(companyId, clientOrderId, OrderRejectedReason.NoOrdersToMatchMarketOrder, time);
         }
 
         if (validity is OrderValidity.ImmediateOrCancel { MinQuantity: int gateMinQty } && !triggerTicks.HasValue &&
             !_matcher.HasSufficientLiquidity(side, priceTicks!.Value, gateMinQty, selfMatchPreventionId,
                 selfMatchPreventionInstruction))
-            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.InsufficientLiquidityForMinQuantity);
-        if (validity is OrderValidity.GoodTilDate { Date: var goodTilDate } && goodTilDate < DateOnly.FromDateTime(Now()))
-            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.InvalidExpireDate);
+            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.InsufficientLiquidityForMinQuantity, time);
+        if (validity is OrderValidity.GoodTilDate { Date: var goodTilDate } && goodTilDate < DateOnly.FromDateTime(time))
+            return RejectCreate(companyId, clientOrderId, OrderRejectedReason.InvalidExpireDate, time);
 
         _nextSequenceNumber++;
-        var order = new InternalOrder(_nextSequenceNumber, companyId, clientOrderId, _security, Now(), status,
+        var order = new InternalOrder(_nextSequenceNumber, companyId, clientOrderId, _security, time, status,
             type, validity, side, quantity, priceTicks, triggerTicks, selfMatchPreventionId,
             selfMatchPreventionInstruction, maxVisibleQuantity);
 
@@ -304,11 +328,11 @@ public class OrderBook : IOrderBook
         _matcher.Rest(order);
 
         List<OrderBookEvent> events = new();
-        events.Add(new CreateOrderConfirmed(_security, Now(), companyId, order.ToOrder()));
-        Match(events);
+        events.Add(new CreateOrderConfirmed(_security, time, companyId, order.ToOrder()));
+        Match(events, time: time);
 
         if (order.Validity is OrderValidity.ImmediateOrCancel && order.Status == OrderStatus.Working)
-            events.Add(CancelRemainder(order, OrderCancelledReason.ImmediateOrCancelNotFilled));
+            events.Add(CancelRemainder(order, OrderCancelledReason.ImmediateOrCancelNotFilled, time));
 
         return events;
     }
@@ -354,9 +378,8 @@ public class OrderBook : IOrderBook
     // Null when every entry-scoped restriction allows the price, otherwise the rejection the
     // first refusing one asks for - a band and a daily limit turn an order away for reasons
     // that read differently to whoever sent it.
-    private OrderRejectedReason? FindOrderEntryRefusal(long priceTicks)
+    private OrderRejectedReason? FindOrderEntryRefusal(long priceTicks, DateTime time)
     {
-        var time = Now();
         foreach (var restriction in _priceRestrictions)
         {
             if (restriction.Scope.HasFlag(RestrictionScope.OrderEntry) &&
@@ -376,53 +399,53 @@ public class OrderBook : IOrderBook
 
     // Only ever called on an order currently resting in the working book (a FAK remainder or
     // a self-match-prevention cancel during Match()) - never a still-Hidden stop order.
-    private OrderBookEvent CancelRemainder(InternalOrder order, OrderCancelledReason reason)
+    private OrderBookEvent CancelRemainder(InternalOrder order, OrderCancelledReason reason, DateTime time)
     {
         var previousClientOrderId = order.ClientOrderId;
         var previousPrice = ToDecimal(order.Price!.Value);
         var previousQuantity = order.DisplayedQuantity;
-        order.Cancel(Now());
+        order.Cancel(time);
         CompleteOrder(order);
-        return new CancelOrderConfirmed(_security, Now(), order.CompanyId, order.ToOrder(), previousClientOrderId,
+        return new CancelOrderConfirmed(_security, time, order.CompanyId, order.ToOrder(), previousClientOrderId,
             reason, previousPrice, previousQuantity);
     }
 
     private List<OrderBookEvent> UpdateOrder(string companyId, string clientOrderId, string previousClientOrderId,
-        int? newTotalQuantity = null, decimal? price = null, decimal? triggerPrice = null)
+        int? newTotalQuantity = null, decimal? price = null, decimal? triggerPrice = null, DateTime time = default)
     {
         if (!CurrentPhase.AcceptsOrderActions)
-            return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.MarketClosed);
+            return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.MarketClosed, time: time);
         if (string.IsNullOrEmpty(clientOrderId))
-            return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.ClientOrderIdRequired);
+            return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.ClientOrderIdRequired, time: time);
         if (clientOrderId.Length > MaxClientOrderIdLength)
-            return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.ClientOrderIdTooLong);
+            return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.ClientOrderIdTooLong, time: time);
         if (string.IsNullOrEmpty(companyId))
-            return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.CompanyIdRequired);
+            return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.CompanyIdRequired, time: time);
         if (companyId.Length > MaxClientOrderIdLength)
-            return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.CompanyIdTooLong);
+            return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.CompanyIdTooLong, time: time);
         if (newTotalQuantity == null && price == null && triggerPrice == null)
-            return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.NoChange);
+            return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.NoChange, time: time);
         if (newTotalQuantity != null && newTotalQuantity < 1)
-            return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.InvalidQuantity);
+            return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.InvalidQuantity, time: time);
         if (!TryConvertToTicks(price, out var priceTicks))
-            return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.InvalidPriceIncrement);
+            return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.InvalidPriceIncrement, time: time);
         if (!TryConvertToTicks(triggerPrice, out var triggerTicks))
-            return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.InvalidPriceIncrement);
-        if (priceTicks.HasValue && FindOrderEntryRefusal(priceTicks.Value) is { } entryRefusal)
-            return RejectUpdate(companyId, clientOrderId, previousClientOrderId, entryRefusal);
+            return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.InvalidPriceIncrement, time: time);
+        if (priceTicks.HasValue && FindOrderEntryRefusal(priceTicks.Value, time) is { } entryRefusal)
+            return RejectUpdate(companyId, clientOrderId, previousClientOrderId, entryRefusal, time: time);
         if (!_clientOrderIndex.TryGetValue((companyId, previousClientOrderId), out var order) ||
             order.ClientOrderId != previousClientOrderId)
-            return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.OrderNotInBook);
+            return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.OrderNotInBook, time: time);
         if (order.Status is not (OrderStatus.Working or OrderStatus.Hidden))
             return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.TooLateToCancel,
-                order.ExchangeOrderId);
+                order.ExchangeOrderId, time);
         if (_clientOrderIndex.TryGetValue((companyId, clientOrderId), out var conflictingOrder))
         {
             return conflictingOrder.Status is OrderStatus.Working or OrderStatus.Hidden
                 ? RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.OrderInBook,
-                    order.ExchangeOrderId)
+                    order.ExchangeOrderId, time)
                 : RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.OrderIdAlreadyUsed,
-                    order.ExchangeOrderId);
+                    order.ExchangeOrderId, time);
         }
 
         if (order.Status == OrderStatus.Hidden)
@@ -432,21 +455,21 @@ public class OrderBook : IOrderBook
 
             if (newTriggerTicks != null && newPriceTicks != null && order.Side == Side.Buy && newPriceTicks < newTriggerTicks)
                 return RejectUpdate(companyId, clientOrderId, previousClientOrderId,
-                    OrderRejectedReason.TriggerPriceMustBeLessThanPrice, order.ExchangeOrderId);
+                    OrderRejectedReason.TriggerPriceMustBeLessThanPrice, order.ExchangeOrderId, time);
             if (newTriggerTicks != null && newPriceTicks != null && order.Side == Side.Sell && newPriceTicks > newTriggerTicks)
                 return RejectUpdate(companyId, clientOrderId, previousClientOrderId,
-                    OrderRejectedReason.TriggerPriceMustBeGreaterThanPrice, order.ExchangeOrderId);
+                    OrderRejectedReason.TriggerPriceMustBeGreaterThanPrice, order.ExchangeOrderId, time);
             if (newTriggerTicks != null && newPriceTicks != null &&
                 !AllowsStopSpread(newTriggerTicks.Value, newPriceTicks.Value))
                 return RejectUpdate(companyId, clientOrderId, previousClientOrderId,
-                    OrderRejectedReason.TriggerPriceTooFarFromPrice, order.ExchangeOrderId);
+                    OrderRejectedReason.TriggerPriceTooFarFromPrice, order.ExchangeOrderId, time);
 
             if (triggerTicks != null && order.Side == Side.Buy && triggerTicks <= _lastTradedPrice)
                 return RejectUpdate(companyId, clientOrderId, previousClientOrderId,
-                    OrderRejectedReason.TriggerPriceMustBeGreaterThanLastTradedPrice, order.ExchangeOrderId);
+                    OrderRejectedReason.TriggerPriceMustBeGreaterThanLastTradedPrice, order.ExchangeOrderId, time);
             if (triggerTicks != null && order.Side == Side.Sell && triggerTicks >= _lastTradedPrice)
                 return RejectUpdate(companyId, clientOrderId, previousClientOrderId,
-                    OrderRejectedReason.TriggerPriceMustBeLessThanLastTradedPrice, order.ExchangeOrderId);
+                    OrderRejectedReason.TriggerPriceMustBeLessThanLastTradedPrice, order.ExchangeOrderId, time);
         }
         else
         {
@@ -464,13 +487,13 @@ public class OrderBook : IOrderBook
 
         if (newTotalQuantity <= order.FilledQuantity)
         {
-            order.Cancel(Now(), clientOrderId);
+            order.Cancel(time, clientOrderId);
             _clientOrderIndex[(companyId, clientOrderId)] = order;
             CompleteOrder(order);
 
             return new List<OrderBookEvent>
             {
-                new CancelOrderConfirmed(_security, Now(), order.CompanyId, order.ToOrder(), previousClientOrderId,
+                new CancelOrderConfirmed(_security, time, order.CompanyId, order.ToOrder(), previousClientOrderId,
                     OrderCancelledReason.UpdatedQuantityLowerThanFilledQuantity, previousPrice, previousQuantity)
             };
         }
@@ -500,83 +523,83 @@ public class OrderBook : IOrderBook
         // captured before Update() below, which - since sequenceNumber may have just been
         // bumped above - is where ExchangeOrderId (derived from SequenceNumber) actually changes.
         var previousExchangeOrderId = order.ExchangeOrderId;
-        order.Update(sequenceNumber, Now(), newTotalQuantity, triggerTicks, priceTicks, clientOrderId);
+        order.Update(sequenceNumber, time, newTotalQuantity, triggerTicks, priceTicks, clientOrderId);
         _clientOrderIndex[(companyId, clientOrderId)] = order;
 
         List<OrderBookEvent> events = new();
-        events.Add(new UpdateOrderConfirmed(_security, Now(), order.CompanyId, order.ToOrder(), previousClientOrderId,
+        events.Add(new UpdateOrderConfirmed(_security, time, order.CompanyId, order.ToOrder(), previousClientOrderId,
             previousExchangeOrderId, previousPrice, previousQuantity));
-        Match(events);
+        Match(events, time: time);
         return events;
     }
 
-    private List<OrderBookEvent> CancelOrder(string companyId, string clientOrderId, string previousClientOrderId)
+    private List<OrderBookEvent> CancelOrder(string companyId, string clientOrderId, string previousClientOrderId, DateTime time)
     {
         if (!CurrentPhase.AcceptsOrderActions)
-            return RejectCancel(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.MarketClosed);
+            return RejectCancel(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.MarketClosed, time: time);
         if (string.IsNullOrEmpty(clientOrderId))
-            return RejectCancel(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.ClientOrderIdRequired);
+            return RejectCancel(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.ClientOrderIdRequired, time: time);
         if (clientOrderId.Length > MaxClientOrderIdLength)
-            return RejectCancel(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.ClientOrderIdTooLong);
+            return RejectCancel(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.ClientOrderIdTooLong, time: time);
         if (string.IsNullOrEmpty(companyId))
-            return RejectCancel(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.CompanyIdRequired);
+            return RejectCancel(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.CompanyIdRequired, time: time);
         if (companyId.Length > MaxClientOrderIdLength)
-            return RejectCancel(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.CompanyIdTooLong);
+            return RejectCancel(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.CompanyIdTooLong, time: time);
         if (!_clientOrderIndex.TryGetValue((companyId, previousClientOrderId), out var order) ||
             order.ClientOrderId != previousClientOrderId)
-            return RejectCancel(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.OrderNotInBook);
+            return RejectCancel(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.OrderNotInBook, time: time);
         if (order.Status is not (OrderStatus.Working or OrderStatus.Hidden))
             return RejectCancel(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.TooLateToCancel,
-                order.ExchangeOrderId);
+                order.ExchangeOrderId, time);
         if (_clientOrderIndex.TryGetValue((companyId, clientOrderId), out var conflictingOrder))
         {
             return conflictingOrder.Status is OrderStatus.Working or OrderStatus.Hidden
                 ? RejectCancel(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.OrderInBook,
-                    order.ExchangeOrderId)
+                    order.ExchangeOrderId, time)
                 : RejectCancel(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.OrderIdAlreadyUsed,
-                    order.ExchangeOrderId);
+                    order.ExchangeOrderId, time);
         }
 
         var previousPrice = order.Status == OrderStatus.Hidden ? (decimal?) null : ToDecimal(order.Price!.Value);
         var previousQuantity = order.DisplayedQuantity;
-        order.Cancel(Now(), clientOrderId);
+        order.Cancel(time, clientOrderId);
         _clientOrderIndex[(companyId, clientOrderId)] = order;
         CompleteOrder(order);
 
         return new List<OrderBookEvent>
         {
-            new CancelOrderConfirmed(_security, Now(), order.CompanyId, order.ToOrder(), previousClientOrderId,
+            new CancelOrderConfirmed(_security, time, order.CompanyId, order.ToOrder(), previousClientOrderId,
                 OrderCancelledReason.Cancelled, previousPrice, previousQuantity)
         };
     }
 
-    private List<OrderBookEvent> RejectCreate(string companyId, string clientOrderId, OrderRejectedReason reason) =>
-        new() {new CreateOrderRejected(_security, Now(), companyId, clientOrderId, reason)};
+    private List<OrderBookEvent> RejectCreate(string companyId, string clientOrderId, OrderRejectedReason reason, DateTime time) =>
+        new() {new CreateOrderRejected(_security, time, companyId, clientOrderId, reason)};
 
     private List<OrderBookEvent> RejectUpdate(string companyId, string clientOrderId, string previousClientOrderId,
-            OrderRejectedReason reason, string? exchangeOrderId = null) =>
+            OrderRejectedReason reason, string? exchangeOrderId = null, DateTime time = default) =>
         new()
         {
-            new UpdateOrderRejected(_security, Now(), companyId, clientOrderId, previousClientOrderId,
+            new UpdateOrderRejected(_security, time, companyId, clientOrderId, previousClientOrderId,
                 exchangeOrderId, reason)
         };
 
     private List<OrderBookEvent> RejectCancel(string companyId, string clientOrderId, string previousClientOrderId,
-            OrderRejectedReason reason, string? exchangeOrderId = null) =>
+            OrderRejectedReason reason, string? exchangeOrderId = null, DateTime time = default) =>
         new()
         {
-            new CancelOrderRejected(_security, Now(), companyId, clientOrderId, previousClientOrderId,
+            new CancelOrderRejected(_security, time, companyId, clientOrderId, previousClientOrderId,
                 exchangeOrderId, reason)
         };
 
-    private OrderBookEvent ExpireOrder(InternalOrder order)
+    private OrderBookEvent ExpireOrder(InternalOrder order, DateTime time)
     {
         var previousPrice = order.Status == OrderStatus.Hidden ? (decimal?) null : ToDecimal(order.Price!.Value);
         var previousQuantity = order.DisplayedQuantity;
-        order.Expire(Now());
+        order.Expire(time);
         CompleteOrder(order);
 
-        return new ExpireOrderConfirmed(_security, Now(), order.CompanyId, order.ToOrder(), previousPrice,
+        return new ExpireOrderConfirmed(_security, time, order.CompanyId, order.ToOrder(), previousPrice,
             previousQuantity);
     }
 
@@ -624,7 +647,7 @@ public class OrderBook : IOrderBook
     // The single gate on whether trading may happen right now, which is why an exiting
     // auction's print goes through it too: a phase left for one that does not trade abandons
     // the orders it accumulated rather than crossing them.
-    private void Match(List<OrderBookEvent> events, IMatchingAlgorithm? algorithm = null)
+    private void Match(List<OrderBookEvent> events, IMatchingAlgorithm? algorithm = null, DateTime time = default)
     {
         var phase = CurrentPhase;
         if (!phase.MatchesContinuously)
@@ -634,10 +657,13 @@ public class OrderBook : IOrderBook
 
         var continuous = phase.Algorithm ??
             throw new InvalidOperationException("a phase that matches continuously needs an algorithm");
-        var time = Now();
         var pendingImmediateOrCancelStops = new List<InternalOrder>();
 
-        foreach (var outcome in _matcher.Run(algorithm ?? continuous, continuous, CheckTradeRestrictionBreach))
+        // Closed over the action's instant rather than passed as a method group, so a sweep
+        // judges every price it touches against the same moment the events it emits are stamped
+        // with. A restriction reading a clock here instead would drift within a single action.
+        foreach (var outcome in _matcher.Run(algorithm ?? continuous, continuous,
+                     priceTicks => CheckTradeRestrictionBreach(priceTicks, time)))
             Apply(outcome, events, time, pendingImmediateOrCancelStops);
 
         // Deferred until the sweep is done: the loop only exits once nothing crosses anywhere,
@@ -645,7 +671,7 @@ public class OrderBook : IOrderBook
         foreach (var order in pendingImmediateOrCancelStops)
         {
             if (order.RemainingQuantity > 0)
-                events.Add(CancelRemainder(order, OrderCancelledReason.ImmediateOrCancelNotFilled));
+                events.Add(CancelRemainder(order, OrderCancelledReason.ImmediateOrCancelNotFilled, time));
         }
     }
 
@@ -653,9 +679,8 @@ public class OrderBook : IOrderBook
     // pure query, consulted by Matcher.Run only outside an auction uncrossing pass. Severest
     // rather than first, so the order these are declared in cannot decide whether a breach that
     // halts is served or shadowed by one that merely pauses.
-    private RestrictionBreach? CheckTradeRestrictionBreach(long priceTicks)
+    private RestrictionBreach? CheckTradeRestrictionBreach(long priceTicks, DateTime time)
     {
-        var time = Now();
         RestrictionBreach? worst = null;
 
         foreach (var restriction in _priceRestrictions)
@@ -694,7 +719,7 @@ public class OrderBook : IOrderBook
     // Only where a print is what would end it: a phase leaving for one that does not trade
     // abandons its orders rather than crossing them, so there is no price to hold to anything -
     // and a close must never be blocked by a price range.
-    private RestrictionBreach? CheckResumptionRefusal(OrderBookStatus arrivingStatus)
+    private RestrictionBreach? CheckResumptionRefusal(OrderBookStatus arrivingStatus, DateTime time)
     {
         var departing = CurrentPhase;
         if (!departing.PrintsOnExit || !_phases[arrivingStatus].MatchesContinuously)
@@ -703,7 +728,6 @@ public class OrderBook : IOrderBook
         if (!departing.Algorithm!.TryQuoteIndicative(_matcher.Working, out var priceTicks, out _))
             return null;
 
-        var time = Now();
         foreach (var restriction in _priceRestrictions)
         {
             // First refusal rather than the severest: every restriction refusing here is asking
@@ -736,9 +760,9 @@ public class OrderBook : IOrderBook
         {
             case SelfMatchDetected(var resting, var aggressor, var instruction):
                 if (instruction != SelfMatchPreventionInstruction.CancelAggressor)
-                    events.Add(CancelRemainder(resting, OrderCancelledReason.SelfMatchPrevention));
+                    events.Add(CancelRemainder(resting, OrderCancelledReason.SelfMatchPrevention, time));
                 if (instruction != SelfMatchPreventionInstruction.CancelResting)
-                    events.Add(CancelRemainder(aggressor, OrderCancelledReason.SelfMatchPrevention));
+                    events.Add(CancelRemainder(aggressor, OrderCancelledReason.SelfMatchPrevention, time));
                 break;
 
             case TradeExecuted(var resting, var aggressor, var priceTicks, var quantity, var usesFullRemainingQuantity):
@@ -749,7 +773,7 @@ public class OrderBook : IOrderBook
             // trade at the limit and back inside it. Only the status is spared - the run has
             // already ended, since Matcher.Run stops on any breach.
             case TradeRestrictionBreached(var blockedTicks, {Action: RestrictionBreachAction.Block}):
-                TakeLimitStateChange(blockedTicks, events);
+                TakeLimitStateChange(blockedTicks, events, time);
                 break;
 
             // Assigned directly rather than routed through UpdateStatus: this runs inside the
@@ -763,8 +787,8 @@ public class OrderBook : IOrderBook
                 _status = breach.Action == RestrictionBreachAction.Halt
                     ? OrderBookStatus.Halted
                     : OrderBookStatus.Paused;
-                _resumeAt = breach.ResumeAfter.HasValue ? Now() + breach.ResumeAfter.Value : null;
-                events.Add(new StatusChanged(_security, Now(), _status, StatusChangeReason.PriceRestriction,
+                _resumeAt = breach.ResumeAfter.HasValue ? time + breach.ResumeAfter.Value : null;
+                events.Add(new StatusChanged(_security, time, _status, StatusChangeReason.PriceRestriction,
                     _resumeAt));
                 break;
 
@@ -778,7 +802,7 @@ public class OrderBook : IOrderBook
     // every sweep that follows, and saying so once is enough. Direction comes from where the
     // blocked price sits against the last one that traded; with nothing traded yet there is
     // nothing to compare it to, and the price alone says where the limit is.
-    private void TakeLimitStateChange(long blockedTicks, List<OrderBookEvent> events)
+    private void TakeLimitStateChange(long blockedTicks, List<OrderBookEvent> events, DateTime time)
     {
         var side = _lastTradedPrice switch
         {
@@ -792,19 +816,19 @@ public class OrderBook : IOrderBook
             return;
 
         _limitState = side;
-        events.Add(new LimitStateChanged(_security, Now(), side, ToDecimal(blockedTicks)));
+        events.Add(new LimitStateChanged(_security, time, side, ToDecimal(blockedTicks)));
     }
 
     // A print means the market is trading again, wherever it is trading. Releasing on any trade
     // rather than on one strictly inside the limits is deliberate: trading at the limit is the
     // market working, not the market stuck.
-    private void ReleaseLimitState(List<OrderBookEvent> events)
+    private void ReleaseLimitState(List<OrderBookEvent> events, DateTime time)
     {
         if (_limitState == null)
             return;
 
         _limitState = null;
-        events.Add(new LimitStateChanged(_security, Now(), null, null));
+        events.Add(new LimitStateChanged(_security, time, null, null));
     }
 
     private void ApplyTrade(InternalOrder resting, InternalOrder aggressor, long priceTicks, int quantity,
@@ -845,7 +869,7 @@ public class OrderBook : IOrderBook
         if (aggressorReplenish != null)
             events.Add(aggressorReplenish);
 
-        ReleaseLimitState(events);
+        ReleaseLimitState(events, time);
 
         if (_lastTradedPrice != priceTicks)
         {
@@ -875,12 +899,12 @@ public class OrderBook : IOrderBook
             {
                 var previousClientOrderId = order.ClientOrderId;
                 var previousQuantity = order.DisplayedQuantity;
-                order.Cancel(Now());
+                order.Cancel(time);
                 FinishOrder(order);
 
                 // FinishOrder, not CompleteOrder: already unrested above and never reached the
                 // working book, which is also why previousPrice is null.
-                events.Add(new CancelOrderConfirmed(_security, Now(), order.CompanyId, order.ToOrder(),
+                events.Add(new CancelOrderConfirmed(_security, time, order.CompanyId, order.ToOrder(),
                     previousClientOrderId, OrderCancelledReason.NoOrdersToMatchMarketOrder, null,
                     previousQuantity));
                 continue;
@@ -892,10 +916,10 @@ public class OrderBook : IOrderBook
             {
                 var previousClientOrderId = order.ClientOrderId;
                 var previousQuantity = order.DisplayedQuantity;
-                order.Cancel(Now());
+                order.Cancel(time);
                 FinishOrder(order);
 
-                events.Add(new CancelOrderConfirmed(_security, Now(), order.CompanyId, order.ToOrder(),
+                events.Add(new CancelOrderConfirmed(_security, time, order.CompanyId, order.ToOrder(),
                     previousClientOrderId, OrderCancelledReason.ImmediateOrCancelNotFilled, null,
                     previousQuantity));
                 continue;
@@ -918,7 +942,7 @@ public class OrderBook : IOrderBook
     // last of them ends it. The phase table stays the authority on whether a phase expires day
     // orders at all - this only says whether this particular close is that day's last.
     private List<OrderBookEvent> UpdateStatus(OrderBookStatus status, decimal? referencePrice = null,
-        bool endsTradingDay = true, StatusChangeReason reason = StatusChangeReason.Requested)
+        bool endsTradingDay = true, StatusChangeReason reason = StatusChangeReason.Requested, DateTime time = default)
     {
         if (referencePrice.HasValue && TryConvertToTicks(referencePrice, out var referenceTicks))
         {
@@ -931,15 +955,15 @@ public class OrderBook : IOrderBook
         if (!_phases.ContainsKey(status))
             throw new ArgumentOutOfRangeException(nameof(status), status, "no phase configured for this status");
 
-        var extension = CheckResumptionRefusal(status);
+        var extension = CheckResumptionRefusal(status, time);
         if (extension != null)
         {
             // Nothing has moved yet, so refusing simply leaves the book where it was. The status
             // is unchanged and re-reported: what a subscriber needs to know is that the
             // interruption is still running and why, which is the same thing a fresh one says.
-            _resumeAt = extension.Value.ResumeAfter.HasValue ? Now() + extension.Value.ResumeAfter.Value : null;
+            _resumeAt = extension.Value.ResumeAfter.HasValue ? time + extension.Value.ResumeAfter.Value : null;
             return new List<OrderBookEvent>
-                {new StatusChanged(_security, Now(), _status, StatusChangeReason.PriceRestriction, _resumeAt)};
+                {new StatusChanged(_security, time, _status, StatusChangeReason.PriceRestriction, _resumeAt)};
         }
 
         // Any transition supersedes a pending one, so a session closing over a running pause
@@ -959,37 +983,38 @@ public class OrderBook : IOrderBook
             // hold, and _orders/_completedOrders are keyed on exactly that. Math.Max is also
             // what keeps a replay whose clock moves backwards from colliding - a run of ids
             // that no longer encodes its date beats one that repeats itself.
-            var date = Now();
-            var seed = ((date.Year * 10000) + (date.Month * 100) + date.Day) * 10000000000L;
+            var seed = ((time.Year * 10000) + (time.Month * 100) + time.Day) * 10000000000L;
             _nextSequenceNumber = Math.Max(_nextSequenceNumber, seed);
         }
 
         // _resumeAt was cleared above, so this reports nothing pending - which is what an
         // explicit transition means, having just superseded whatever was.
-        var events = new List<OrderBookEvent> {new StatusChanged(_security, Now(), _status, reason, _resumeAt)};
+        var events = new List<OrderBookEvent> {new StatusChanged(_security, time, _status, reason, _resumeAt)};
 
         // A quoting phase has been accumulating orders for a print, and leaving it is where
         // that print happens - so a second auction phase would need nothing changed here.
         // Match declines it if the phase just entered does not trade.
         if (departing.PrintsOnExit)
-            Match(events, departing.Algorithm);
+            Match(events, departing.Algorithm, time);
 
         // Then trading continues under whatever governs the phase just entered.
-        Match(events);
+        Match(events, time: time);
 
         if (arriving.ExpiresDayOrders && endsTradingDay)
-            events.AddRange(ExpireOrders());
+            events.AddRange(ExpireOrders(time));
 
         return events;
     }
 
-    private IEnumerable<OrderBookEvent> ExpireOrders()
+    private IEnumerable<OrderBookEvent> ExpireOrders(DateTime time)
     {
-        var today = DateOnly.FromDateTime(Now());
+        var today = DateOnly.FromDateTime(time);
         var orders = _orders.Values.Where(o =>
             o.Validity is OrderValidity.Day ||
-            (o.Validity is OrderValidity.GoodTilDate { Date: var date } && date <= today)).ToList();
+            (o.Validity is OrderValidity.GoodTilDate { Date: var date } && date <= today))
+            .OrderBy(o => o.InternalId)
+            .ToList();
 
-        return orders.Select(ExpireOrder).ToList();
+        return orders.Select(o => ExpireOrder(o, time)).ToList();
     }
 }

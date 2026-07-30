@@ -38,7 +38,7 @@ public class FullBookDataProducerTests
     public void SetUp()
     {
         Clock = new ManualClock(Now1);
-        Book = new OrderBook(Sec, Clock);
+        Book = new TimestampingOrderBook(Sec, Clock);
     }
 
     [Test]

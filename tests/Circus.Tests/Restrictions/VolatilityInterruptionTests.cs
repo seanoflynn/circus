@@ -42,7 +42,7 @@ public class VolatilityInterruptionTests
     {
         // arrange - referenced at 100, then a trade at 200 breaches the ordinary range and
         // pauses the book, leaving the two orders crossed and unfilled
-        var book = new OrderBook(ExtendingSecurity(), Clock);
+        var book = new TimestampingOrderBook(ExtendingSecurity(), Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 200);
         book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 200);
@@ -66,7 +66,7 @@ public class VolatilityInterruptionTests
     public void InterruptionEnds_OnceItWouldPrintInsideTheExtendedRange()
     {
         // arrange - as above, paused with a would-be print at 200
-        var book = new OrderBook(ExtendingSecurity(), Clock);
+        var book = new TimestampingOrderBook(ExtendingSecurity(), Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 200);
         book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 200);
@@ -106,7 +106,7 @@ public class VolatilityInterruptionTests
                 new VolatilityBand(3),
                 new StaticPriceRange(5)
             });
-        var book = new OrderBook(security, Clock);
+        var book = new TimestampingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
 
         // act + assert - 120 is 2 ticks from the reference, inside both

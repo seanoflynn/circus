@@ -34,7 +34,7 @@ public class TimedResumeTests
     {
         var security = new Security("GCZ6", SecurityType.Future, 10, 10,
             PriceRestrictions: new PriceRestrictionConfig[] {new VolatilityBand(5, duration)});
-        var book = new OrderBook(security, Clock);
+        var book = new TimestampingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
         return book;
     }
@@ -196,7 +196,7 @@ public class TimedResumeTests
             : new IPriceRestriction[] {pausing, halting};
 
         var security = new Security("GCZ6", SecurityType.Future, 10, 10);
-        var book = new OrderBook(security, Clock, restrictions);
+        var book = new TimestampingOrderBook(new OrderBook(security, restrictions), Clock);
         book.UpdateStatus(OrderBookStatus.Open);
 
         // act

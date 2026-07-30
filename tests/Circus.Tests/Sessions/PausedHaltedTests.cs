@@ -31,7 +31,7 @@ public class PausedHaltedTests
     public void SetUp()
     {
         Clock = new ManualClock(Now1);
-        Book = new OrderBook(Sec, Clock);
+        Book = new TimestampingOrderBook(Sec, Clock);
     }
 
     [TestCase(OrderBookStatus.Paused)]
@@ -201,7 +201,7 @@ public class PausedHaltedTests
         // arrange - a reference of 100 and a 5-tick volatility band
         var security = new Security("GCZ6", SecurityType.Future, 10, 10,
             PriceRestrictions: new PriceRestrictionConfig[] {new VolatilityBand(5)});
-        var book = new OrderBook(security, Clock);
+        var book = new TimestampingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 200);
 

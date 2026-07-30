@@ -16,7 +16,7 @@ public class TradeDataProducerTests
         var clock = new ManualClock(now);
         var producer = new TradeDataProducer();
 
-        var book = new OrderBook(sec, clock);
+        var book = new TimestampingOrderBook(sec, clock);
         book.UpdateStatus(OrderBookStatus.Open);
         book.CreateLimitOrder("Company1", "Order1", new OrderValidity.Day(), Side.Buy, 3, 100);
         var bookEvents =
