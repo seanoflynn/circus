@@ -217,8 +217,18 @@ public class OrderBook : IOrderBook
         if (_resumeAt == null || time < _resumeAt.Value)
             return new List<OrderBookEvent>();
 
+        // Stamped at the deadline rather than at the action that noticed it: a book paused until
+        // 10:05 that sees nothing until 10:47 resumed at 10:05, and the tape should say so. The
+        // state is the same either way - the resume runs before the arriving action, so the
+        // auction uncrosses against the book as of the deadline - and this only fixes what the
+        // events say about when. Poked punctually the two instants coincide, so it is a book
+        // driven directly, without anything ticking it, that this is for.
+        //
+        // An event stamped behind the action carrying it cannot trip the monotonicity guard,
+        // which checks inbound actions rather than emitted events.
+        var due = _resumeAt.Value;
         _resumeAt = null;
-        return UpdateStatus(_resumeTo, null, true, StatusChangeReason.InterruptionElapsed, time);
+        return UpdateStatus(_resumeTo, null, true, StatusChangeReason.InterruptionElapsed, due);
     }
 
     // Asked of the phase's own algorithm, so a quote exists exactly when there is an auction

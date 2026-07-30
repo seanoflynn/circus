@@ -63,6 +63,30 @@ public class VolatilityInterruptionTests
     }
 
     [Test]
+    public void InterruptionExtends_NoticedLate_FromTheDeadlineItServed()
+    {
+        // arrange - paused at 200, which the extended range still refuses
+        var book = new TimestampingOrderBook(ExtendingSecurity(), Clock);
+        book.UpdateStatus(OrderBookStatus.Open, 100);
+        book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 200);
+        book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 200);
+
+        // act - nothing pokes the book until three quarters of an hour past the deadline
+        Clock.SetCurrentTime(Now1 + PauseFor + TimeSpan.FromMinutes(45));
+        var events = book.AdvanceTime();
+
+        // assert - the refusal belongs to the deadline that elapsed, so it is stamped there and
+        // extends from there. Which leaves a deadline already in the past for a book noticed this
+        // late: it steps forward one poke at a time rather than jumping to the present, and a
+        // book poked punctually never sees any of this
+        Assert.AreEqual(OrderBookStatus.Paused, book.Status);
+        var stillPaused = events.OfType<StatusChanged>().Single();
+        Assert.AreEqual(StatusChangeReason.PriceRestriction, stillPaused.Reason);
+        Assert.AreEqual(Now1 + PauseFor, stillPaused.Time);
+        Assert.AreEqual(Now1 + PauseFor + PauseFor, stillPaused.ResumesAt);
+    }
+
+    [Test]
     public void InterruptionEnds_OnceItWouldPrintInsideTheExtendedRange()
     {
         // arrange - as above, paused with a would-be print at 200

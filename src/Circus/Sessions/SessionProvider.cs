@@ -3,9 +3,13 @@ namespace Circus.Sessions;
 // Drives an order book's status off a clock, given a day's schedule. Update() is pushed the
 // current time and fires whatever boundaries have been passed since it was last called, so a
 // caller that goes quiet for a day catches up rather than replaying every boundary it missed.
+//
+// The hours themselves live in MarketSchedule, which answers what is due without being walked.
+// What is left here is the walk: the status this provider believes the book is in, the session
+// that status belongs to, and the one boundary it is waiting on.
 public class SessionProvider : ISessionProvider
 {
-    private readonly IReadOnlyList<TradingSession> _sessions;
+    private readonly MarketSchedule _schedule;
     public event EventHandler<SessionStatusChangedArgs>? Changed;
 
     private OrderBookStatus? _status;
@@ -21,27 +25,18 @@ public class SessionProvider : ISessionProvider
 
     // A single continuous session, the common case.
     public SessionProvider(TimeSpan preOpenTime, TimeSpan openTime, TimeSpan closeTime)
-        : this(new[] {new TradingSession(preOpenTime, openTime, closeTime)})
+        : this(new MarketSchedule(preOpenTime, openTime, closeTime))
     {
     }
 
     public SessionProvider(IReadOnlyList<TradingSession> sessions)
+        : this(new MarketSchedule(sessions))
     {
-        if (sessions.Count == 0) throw new ArgumentException("at least one session is required");
+    }
 
-        for (var i = 0; i < sessions.Count; i++)
-        {
-            var session = sessions[i];
-            if (session.PreOpen > session.Open) throw new ArgumentException("pre-open must be before open");
-            if (session.Open > session.Close) throw new ArgumentException("open must be before close");
-
-            // Ordered and non-overlapping in one check: a session may begin the moment the
-            // previous one closes, but not before.
-            if (i > 0 && session.PreOpen < sessions[i - 1].Close)
-                throw new ArgumentException("sessions must be ordered and must not overlap");
-        }
-
-        _sessions = sessions;
+    public SessionProvider(MarketSchedule schedule)
+    {
+        _schedule = schedule;
     }
 
     public void Update(DateTime time)
@@ -65,7 +60,10 @@ public class SessionProvider : ISessionProvider
     }
 
     // Every boundary is anchored on the caller's own date rather than walked forward from the
-    // last one, which is what lets an idle day be skipped instead of replayed.
+    // last one, which is what lets an idle day be skipped instead of replayed. That anchoring is
+    // why this asks the schedule which session to head for and reads the times off it, rather
+    // than asking MarketSchedule.NextAfter what comes next: the boundary this fires can be one
+    // the caller's clock has already passed.
     private void SetNextTime(DateTime time)
     {
         _nextEndsTradingDay = true;
@@ -74,45 +72,21 @@ public class SessionProvider : ISessionProvider
         {
             case OrderBookStatus.Closed:
             {
-                var (index, dayOffset) = ResolveNextSession(time.TimeOfDay);
+                var (index, dayOffset) = _schedule.NextSessionAt(time.TimeOfDay);
                 _nextSessionIndex = index;
                 _nextStatus = OrderBookStatus.PreOpen;
-                _nextTime = time.Date.AddDays(dayOffset).Add(_sessions[index].PreOpen);
+                _nextTime = time.Date.AddDays(dayOffset).Add(_schedule.Sessions[index].PreOpen);
                 break;
             }
             case OrderBookStatus.PreOpen:
                 _nextStatus = OrderBookStatus.Open;
-                _nextTime = time.Date.Add(_sessions[_sessionIndex].Open);
+                _nextTime = time.Date.Add(_schedule.Sessions[_sessionIndex].Open);
                 break;
             default:
                 _nextStatus = OrderBookStatus.Closed;
-                _nextTime = time.Date.Add(_sessions[_sessionIndex].Close);
-
-                // Only the day's last session ends the trading day; closing for a break leaves
-                // Day orders resting for the session still to come.
-                _nextEndsTradingDay = _sessionIndex == _sessions.Count - 1;
+                _nextTime = time.Date.Add(_schedule.Sessions[_sessionIndex].Close);
+                _nextEndsTradingDay = _schedule.EndsTradingDay(_sessionIndex);
                 break;
         }
-    }
-
-    // Which session to head for from Closed, and whether it falls on the next day. A session
-    // already in progress wins, so a provider started (or woken) mid-session catches up into
-    // it rather than waiting for the next one.
-    private (int Index, int DayOffset) ResolveNextSession(TimeSpan timeOfDay)
-    {
-        for (var i = 0; i < _sessions.Count; i++)
-        {
-            if (timeOfDay >= _sessions[i].PreOpen && timeOfDay < _sessions[i].Close)
-                return (i, 0);
-        }
-
-        for (var i = 0; i < _sessions.Count; i++)
-        {
-            if (_sessions[i].PreOpen > timeOfDay)
-                return (i, 0);
-        }
-
-        // Past the last close of the day - start again with tomorrow's first session.
-        return (0, 1);
     }
 }
