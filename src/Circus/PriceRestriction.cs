@@ -1,8 +1,8 @@
 namespace Circus;
 
-// What restrictions a security trades under, as data. The book turns each of these into the
+// What restrictions an instrument trades under, as data. The book turns each of these into the
 // adapter that enforces it, so adding a restriction is adding a case here rather than another
-// optional parameter on Security - which is what these replaced.
+// optional parameter on Instrument - which is what these replaced.
 //
 // A restriction that does not apply is left out of the list rather than configured with no
 // width: absence is modelled by absence.
@@ -11,10 +11,10 @@ namespace Circus;
 // OrderBook/Restrictions: this is part of describing an instrument, so a caller building an
 // Instrument should not have to reach into the book to say what it trades under. Each adapter is
 // named for the config it enforces - VolatilityBand is enforced by VolatilityBandRestriction.
-public abstract record PriceRestrictionConfig;
+public abstract record PriceRestriction;
 
 // Rejects an order priced too far from the reference, at entry. CME's price banding.
-public sealed record OrderPriceBand(int BandTicks) : PriceRestrictionConfig;
+public sealed record OrderPriceBand(int BandTicks) : PriceRestriction;
 
 // Interrupts trading when a prospective trade price falls too far from where the market has
 // recently traded, rather than rejecting the order that would have caused it. Eurex's dynamic
@@ -29,12 +29,12 @@ public sealed record VolatilityBand(
     int RangeTicks,
     TimeSpan? PauseFor = null,
     TimeSpan? Window = null,
-    int? ExtendedRangeTicks = null) : PriceRestrictionConfig;
+    int? ExtendedRangeTicks = null) : PriceRestriction;
 
 // Interrupts trading on distance from a fixed reference rather than from recent trades, so it
 // catches a whole day's drift that a range following the market never notices. Eurex's static
 // volatility interruption. Anchored only by the reference prices supplied at status changes.
-public sealed record StaticPriceRange(int RangeTicks, TimeSpan? PauseFor = null) : PriceRestrictionConfig;
+public sealed record StaticPriceRange(int RangeTicks, TimeSpan? PauseFor = null) : PriceRestriction;
 
 // "Too far, too fast": the same windowed range a dynamic volatility interruption uses, at the
 // short timescale that catches a run of steps each unremarkable next to the last. CME's
@@ -48,7 +48,7 @@ public sealed record StaticPriceRange(int RangeTicks, TimeSpan? PauseFor = null)
 // Window is required, unlike VolatilityBand's - a velocity limit without one would just be a
 // range around the last trade, which is the other config.
 public sealed record VelocityLimit(int RangeTicks, TimeSpan Window, TimeSpan? PauseFor = null)
-    : PriceRestrictionConfig;
+    : PriceRestriction;
 
 // How wide a limit is. Every restriction above measures in ticks because it tracks a market
 // that has already moved; the ones below are set against a settlement price before the day
@@ -64,7 +64,7 @@ public abstract record PriceLimitWidth
 // A session-long ceiling and floor. Trading continues at the limit price but nothing prints
 // through it and no order may be entered beyond it - CME's limit-lock, which is not a halt: the
 // market stays open, quotes, and can trade back inside.
-public sealed record DailyPriceLimit(PriceLimitWidth Width) : PriceRestrictionConfig;
+public sealed record DailyPriceLimit(PriceLimitWidth Width) : PriceRestriction;
 
 // A threshold that stops trading outright rather than capping it. Several are ordinarily
 // configured together - CME's equity index breakers halt at 7 and 13 percent and end the day at
@@ -73,4 +73,4 @@ public sealed record DailyPriceLimit(PriceLimitWidth Width) : PriceRestrictionCo
 //
 // HaltFor null never resumes on its own, which is what the level that ends a trading day wants:
 // whoever drives the book closes it.
-public sealed record CircuitBreaker(PriceLimitWidth Width, TimeSpan? HaltFor = null) : PriceRestrictionConfig;
+public sealed record CircuitBreaker(PriceLimitWidth Width, TimeSpan? HaltFor = null) : PriceRestriction;

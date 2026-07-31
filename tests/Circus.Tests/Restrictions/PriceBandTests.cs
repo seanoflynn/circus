@@ -54,7 +54,7 @@ public class PriceBandTests
         // two could be crossed over. A wide entry band must not reject, and a narrow volatility
         // band must still pause on the resulting trade.
         var security = new Instrument("GCZ6", 10, 10,
-            PriceRestrictions: new PriceRestrictionConfig[]
+            PriceRestrictions: new PriceRestriction[]
             {
                 new OrderPriceBand(1000),
                 new VolatilityBand(5)
@@ -80,7 +80,7 @@ public class PriceBandTests
     {
         // arrange - band is configured, but there's no anchor to check against yet
         var security = new Instrument("GCZ6", 10, 10,
-            PriceRestrictions: new PriceRestrictionConfig[] {new OrderPriceBand(5)});
+            PriceRestrictions: new PriceRestriction[] {new OrderPriceBand(5)});
         var book = new LevelTrackingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open);
 
@@ -96,7 +96,7 @@ public class PriceBandTests
     {
         // arrange - band of 5 ticks (50) around a seeded reference of 100, so [50, 150]
         var security = new Instrument("GCZ6", 10, 10,
-            PriceRestrictions: new PriceRestrictionConfig[] {new OrderPriceBand(5)});
+            PriceRestrictions: new PriceRestriction[] {new OrderPriceBand(5)});
         var book = new LevelTrackingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
 
@@ -120,7 +120,7 @@ public class PriceBandTests
     {
         // arrange - reference seeded at 100, band [50, 150]
         var security = new Instrument("GCZ6", 10, 10,
-            PriceRestrictions: new PriceRestrictionConfig[] {new OrderPriceBand(5)});
+            PriceRestrictions: new PriceRestriction[] {new OrderPriceBand(5)});
         var book = new LevelTrackingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
 
@@ -147,7 +147,7 @@ public class PriceBandTests
     {
         // arrange - reference seeded at 100, band [50, 150]
         var security = new Instrument("GCZ6", 10, 10,
-            PriceRestrictions: new PriceRestrictionConfig[] {new OrderPriceBand(5)});
+            PriceRestrictions: new PriceRestriction[] {new OrderPriceBand(5)});
         var book = new LevelTrackingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100);
@@ -169,7 +169,7 @@ public class PriceBandTests
     // A band of 5 ticks on a tick size of 10 is 50 either side of wherever the reference is.
     private static Instrument BandedSecurity() =>
         new("GCZ6", 10, 10,
-            PriceRestrictions: new PriceRestrictionConfig[] {new OrderPriceBand(5)});
+            PriceRestrictions: new PriceRestriction[] {new OrderPriceBand(5)});
 
     [Test]
     public void PreOpen_ReferenceMovesFromTheSettlementPriceToTheIndicativePrice()

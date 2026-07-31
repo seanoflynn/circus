@@ -5,7 +5,7 @@ namespace Circus.Matching;
 // the time-priority rule - at that order's own limit price, so an aggressor whose limit was
 // better than the touch gets the improvement. Sized off displayed quantity, since an iceberg
 // shows one peak at a time.
-internal sealed class PriceTime : IMatchingAlgorithm
+internal sealed class PriceTimeMatchingAlgorithm : IMatchingAlgorithm
 {
     public bool TryBegin(IReadOnlyDictionary<Side, IReadOnlyPriceLadder> working) => true;
 

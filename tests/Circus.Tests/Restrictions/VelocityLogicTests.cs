@@ -29,7 +29,7 @@ public class VelocityLogicTests
     private IOrderBook VelocityBook(TimeSpan? pauseFor = null) =>
         new TimestampingOrderBook(
             new Instrument("GCZ6", 10, 10,
-                PriceRestrictions: new PriceRestrictionConfig[]
+                PriceRestrictions: new PriceRestriction[]
                 {
                     new VelocityLimit(5, Window, pauseFor)
                 }),
@@ -85,7 +85,7 @@ public class VelocityLogicTests
         // arrange - a wide volatility band with no window of its own alongside the velocity
         // limit. The band is four times the width, so nothing below comes close to it.
         var security = new Instrument("GCZ6", 10, 10,
-            PriceRestrictions: new PriceRestrictionConfig[]
+            PriceRestrictions: new PriceRestriction[]
             {
                 new VolatilityBand(20),
                 new VelocityLimit(5, Window)

@@ -7,5 +7,5 @@ public record Instrument(
     string Symbol,
     decimal TickSize,
     int MarketOrderProtectionTicks = 10,
-    IReadOnlyList<PriceRestrictionConfig>? PriceRestrictions = null
+    IReadOnlyList<PriceRestriction>? PriceRestrictions = null
 );

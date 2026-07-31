@@ -3,7 +3,7 @@ namespace Circus.Matching;
 // A call-auction print: every trade clears at one price, sized off each side's full remaining
 // quantity. The print is a single atomic allocation, not a sequence of continuous touches an
 // iceberg would have to ration its displayed size across.
-internal sealed class Auction : IMatchingAlgorithm
+internal sealed class AuctionMatchingAlgorithm : IMatchingAlgorithm
 {
     // Feeds the tie-break below and nothing else. Seeded from an explicit reference price
     // (CME's settlement price, pre-open) and thereafter tracks the last trade.

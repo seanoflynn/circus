@@ -26,7 +26,7 @@ public class SequencerTests
     // A 5-tick volatility band on a reference of 100, so a trade at 200 breaches it and pauses the
     // book for two minutes.
     private static readonly Instrument PausingSec = new("GCZ6", 10, 10,
-        PriceRestrictions: new PriceRestrictionConfig[] {new VolatilityBand(5, PauseFor)});
+        PriceRestrictions: new PriceRestriction[] {new VolatilityBand(5, PauseFor)});
 
     private static MarketSchedule TradingDay() => new(PreOpenAt, OpenAt, CloseAt);
 
@@ -181,7 +181,7 @@ public class SequencerTests
         Assert.IsInstanceOf<AdvanceTime>(dispatched[3].Action);
         var resumed = dispatched[3].Events.OfType<StatusChanged>().Single();
         Assert.AreEqual(OrderBookStatus.Open, resumed.Status);
-        Assert.AreEqual(StatusChangeReason.InterruptionElapsed, resumed.Reason);
+        Assert.AreEqual(OrderBookStatusChangeReason.InterruptionElapsed, resumed.Reason);
 
         Assert.IsInstanceOf<CreateLimitOrder>(dispatched[4].Action);
         Assert.AreEqual(OrderBookStatus.Open, book.Status);
@@ -225,7 +225,7 @@ public class SequencerTests
         // poked punctually, the deadline and the poke are the same instant - which is what stops
         // the resume being stamped anywhere else
         var resumed = tick.Events.OfType<StatusChanged>().Single();
-        Assert.AreEqual(StatusChangeReason.InterruptionElapsed, resumed.Reason);
+        Assert.AreEqual(OrderBookStatusChangeReason.InterruptionElapsed, resumed.Reason);
         Assert.AreEqual(Deadline, resumed.Time);
 
         // and the pause resolves into one uncrossing print, stamped there too

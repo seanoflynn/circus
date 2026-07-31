@@ -53,12 +53,12 @@ public class OrderBook : IOrderBook
         {
             {
                 OrderBookStatus.PreOpen,
-                new TradingPhase(new Auction(), AcceptsOrderActions: true, AcceptsMarketOrders: false,
+                new TradingPhase(new AuctionMatchingAlgorithm(), AcceptsOrderActions: true, AcceptsMarketOrders: false,
                     MatchesContinuously: false, StartsSession: true, ExpiresDayOrders: false)
             },
             {
                 OrderBookStatus.Open,
-                new TradingPhase(new PriceTime(), AcceptsOrderActions: true, AcceptsMarketOrders: true,
+                new TradingPhase(new PriceTimeMatchingAlgorithm(), AcceptsOrderActions: true, AcceptsMarketOrders: true,
                     MatchesContinuously: true, StartsSession: false, ExpiresDayOrders: false)
             },
             {
@@ -72,7 +72,7 @@ public class OrderBook : IOrderBook
                 // an interruption within a session and not the start of one, though, so unlike
                 // pre-open it neither reseeds sequence numbers nor retires anything.
                 OrderBookStatus.Paused,
-                new TradingPhase(new Auction(), AcceptsOrderActions: true, AcceptsMarketOrders: false,
+                new TradingPhase(new AuctionMatchingAlgorithm(), AcceptsOrderActions: true, AcceptsMarketOrders: false,
                     MatchesContinuously: false, StartsSession: false, ExpiresDayOrders: false)
             },
             {
@@ -108,10 +108,10 @@ public class OrderBook : IOrderBook
     // Config in, enforcement out. The instrument describes what it trades under; this is the only
     // place that knows which adapter each description means, so a new restriction is a new arm
     // rather than a change to how books are constructed.
-    private static IReadOnlyList<IPriceRestriction> Adapt(IReadOnlyList<PriceRestrictionConfig>? configs) =>
+    private static IReadOnlyList<IPriceRestriction> Adapt(IReadOnlyList<PriceRestriction>? configs) =>
         configs == null
             ? Array.Empty<IPriceRestriction>()
-            : configs.Select<PriceRestrictionConfig, IPriceRestriction>(config => config switch
+            : configs.Select<PriceRestriction, IPriceRestriction>(config => config switch
             {
                 OrderPriceBand band => new OrderPriceRestriction(band.BandTicks),
                 VolatilityBand band => new VolatilityBandRestriction(band.RangeTicks, band.PauseFor,
@@ -197,11 +197,11 @@ public class OrderBook : IOrderBook
             UpdateOrder update => UpdateOrder(update.CompanyId, update.ClientOrderId,
                 update.PreviousClientOrderId, update.NewTotalQuantity, update.Price, update.TriggerPrice, time),
             CancelOrder cancel => CancelOrder(cancel.CompanyId, cancel.ClientOrderId, cancel.PreviousClientOrderId, time),
-            PreOpenTrading s => UpdateStatus(OrderBookStatus.PreOpen, s.ReferencePrice, true, StatusChangeReason.Requested, time),
-            OpenTrading s => UpdateStatus(OrderBookStatus.Open, s.ReferencePrice, true, StatusChangeReason.Requested, time),
-            CloseTrading c => UpdateStatus(OrderBookStatus.Closed, null, c.EndsTradingDay, StatusChangeReason.Requested, time),
-            PauseTrading => UpdateStatus(OrderBookStatus.Paused, null, true, StatusChangeReason.Requested, time),
-            HaltTrading => UpdateStatus(OrderBookStatus.Halted, null, true, StatusChangeReason.Requested, time),
+            PreOpenTrading s => UpdateStatus(OrderBookStatus.PreOpen, s.ReferencePrice, true, OrderBookStatusChangeReason.Requested, time),
+            OpenTrading s => UpdateStatus(OrderBookStatus.Open, s.ReferencePrice, true, OrderBookStatusChangeReason.Requested, time),
+            CloseTrading c => UpdateStatus(OrderBookStatus.Closed, null, c.EndsTradingDay, OrderBookStatusChangeReason.Requested, time),
+            PauseTrading => UpdateStatus(OrderBookStatus.Paused, null, true, OrderBookStatusChangeReason.Requested, time),
+            HaltTrading => UpdateStatus(OrderBookStatus.Halted, null, true, OrderBookStatusChangeReason.Requested, time),
 
             // Carries nothing and does nothing: the work is the due-interruption check every
             // Process already runs, and this is how a caller with no order flow reaches it.
@@ -228,7 +228,7 @@ public class OrderBook : IOrderBook
         // which checks inbound actions rather than emitted events.
         var due = _resumeAt.Value;
         _resumeAt = null;
-        return UpdateStatus(_resumeTo, null, true, StatusChangeReason.InterruptionElapsed, due);
+        return UpdateStatus(_resumeTo, null, true, OrderBookStatusChangeReason.InterruptionElapsed, due);
     }
 
     // Asked of the phase's own algorithm, so a quote exists exactly when there is an auction
@@ -798,7 +798,7 @@ public class OrderBook : IOrderBook
                     ? OrderBookStatus.Halted
                     : OrderBookStatus.Paused;
                 _resumeAt = breach.ResumeAfter.HasValue ? time + breach.ResumeAfter.Value : null;
-                events.Add(new StatusChanged(_instrument.Symbol, time, _status, StatusChangeReason.PriceRestriction,
+                events.Add(new StatusChanged(_instrument.Symbol, time, _status, OrderBookStatusChangeReason.PriceRestriction,
                     _resumeAt));
                 break;
 
@@ -952,7 +952,7 @@ public class OrderBook : IOrderBook
     // last of them ends it. The phase table stays the authority on whether a phase expires day
     // orders at all - this only says whether this particular close is that day's last.
     private List<OrderBookEvent> UpdateStatus(OrderBookStatus status, decimal? referencePrice = null,
-        bool endsTradingDay = true, StatusChangeReason reason = StatusChangeReason.Requested, DateTime time = default)
+        bool endsTradingDay = true, OrderBookStatusChangeReason reason = OrderBookStatusChangeReason.Requested, DateTime time = default)
     {
         if (referencePrice.HasValue && TryConvertToTicks(referencePrice, out var referenceTicks))
         {
@@ -973,7 +973,7 @@ public class OrderBook : IOrderBook
             // interruption is still running and why, which is the same thing a fresh one says.
             _resumeAt = extension.Value.ResumeAfter.HasValue ? time + extension.Value.ResumeAfter.Value : null;
             return new List<OrderBookEvent>
-                {new StatusChanged(_instrument.Symbol, time, _status, StatusChangeReason.PriceRestriction, _resumeAt)};
+                {new StatusChanged(_instrument.Symbol, time, _status, OrderBookStatusChangeReason.PriceRestriction, _resumeAt)};
         }
 
         // Any transition supersedes a pending one, so a session closing over a running pause

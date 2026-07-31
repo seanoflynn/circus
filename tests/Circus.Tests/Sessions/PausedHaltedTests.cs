@@ -200,7 +200,7 @@ public class PausedHaltedTests
     {
         // arrange - a reference of 100 and a 5-tick volatility band
         var security = new Instrument("GCZ6", 10, 10,
-            PriceRestrictions: new PriceRestrictionConfig[] {new VolatilityBand(5)});
+            PriceRestrictions: new PriceRestriction[] {new VolatilityBand(5)});
         var book = new TimestampingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 200);

@@ -4,7 +4,7 @@ namespace Circus;
 // infer from context - a session opening looks nothing like a volatility pause on a feed, but
 // both are just a status. Only what the book itself can tell apart: which restriction fired is
 // not yet part of this, since the book sees a breach action rather than a named restriction.
-public enum StatusChangeReason
+public enum OrderBookStatusChangeReason
 {
     // Driven from outside - a session schedule, or an operator.
     Requested,
