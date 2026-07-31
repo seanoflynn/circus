@@ -16,8 +16,8 @@ public class ReplayTests
 {
     private static readonly DateTime Day = new(2000, 1, 1);
 
-    private static readonly Security Gold = new("GCZ6", SecurityType.Future, 10, 10);
-    private static readonly Security Silver = new("SIZ6", SecurityType.Future, 10, 10);
+    private static readonly Security Gold = new("GCZ6", 10, 10);
+    private static readonly Security Silver = new("SIZ6", 10, 10);
 
     private static MarketSchedule TradingDay() => new(new(9, 0, 0), new(9, 30, 0), new(17, 0, 0));
 

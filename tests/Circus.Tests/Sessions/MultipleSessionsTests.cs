@@ -12,7 +12,7 @@ namespace Circus.Tests.Sessions;
 [TestFixture]
 public class MultipleSessionsTests
 {
-    private static readonly Security Sec = new("GCZ6", SecurityType.Future, 10, 10);
+    private static readonly Security Sec = new("GCZ6", 10, 10);
 
     private static readonly DateTime MorningSession = new(2000, 1, 1, 9, 0, 0);
     private static readonly DateTime AfternoonSession = new(2000, 1, 1, 14, 0, 0);

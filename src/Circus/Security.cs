@@ -5,7 +5,6 @@ namespace Circus;
 // of its own may sweep.
 public record Security(
     string Name,
-    SecurityType Type,
     decimal TickSize,
     decimal TickValue,
     int MarketOrderProtectionTicks = 10,

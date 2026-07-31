@@ -16,8 +16,8 @@ public class ChannelFromDispatchTests
 {
     private static readonly DateTime Day = new(2000, 1, 1);
 
-    private static readonly Security Gold = new("GCZ6", SecurityType.Future, 10, 10);
-    private static readonly Security Silver = new("SIZ6", SecurityType.Future, 10, 10);
+    private static readonly Security Gold = new("GCZ6", 10, 10);
+    private static readonly Security Silver = new("SIZ6", 10, 10);
 
     // Open before the trace starts and closed long after it ends, so the books actually trade
     // for the whole of it. A schedule with boundaries inside the trace would leave most of the

@@ -28,7 +28,7 @@ public class VelocityLogicTests
     // 5 ticks on a tick size of 10, so 50 of price movement inside ten seconds is too fast.
     private IOrderBook VelocityBook(TimeSpan? pauseFor = null) =>
         new TimestampingOrderBook(
-            new Security("GCZ6", SecurityType.Future, 10, 10,
+            new Security("GCZ6", 10, 10,
                 PriceRestrictions: new PriceRestrictionConfig[]
                 {
                     new VelocityLimit(5, Window, pauseFor)
@@ -84,7 +84,7 @@ public class VelocityLogicTests
     {
         // arrange - a wide volatility band with no window of its own alongside the velocity
         // limit. The band is four times the width, so nothing below comes close to it.
-        var security = new Security("GCZ6", SecurityType.Future, 10, 10,
+        var security = new Security("GCZ6", 10, 10,
             PriceRestrictions: new PriceRestrictionConfig[]
             {
                 new VolatilityBand(20),

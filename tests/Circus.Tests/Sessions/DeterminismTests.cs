@@ -12,7 +12,7 @@ namespace Circus.Tests.Sessions;
 [TestFixture]
 public class DeterminismTests
 {
-    private static readonly Security Sec = new("GCZ6", SecurityType.Future, 10, 10);
+    private static readonly Security Sec = new("GCZ6", 10, 10);
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
 
     [Test]

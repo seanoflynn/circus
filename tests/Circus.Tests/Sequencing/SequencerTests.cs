@@ -21,11 +21,11 @@ public class SequencerTests
 
     private static readonly TimeSpan PauseFor = TimeSpan.FromMinutes(2);
 
-    private static readonly Security Sec = new("GCZ6", SecurityType.Future, 10, 10);
+    private static readonly Security Sec = new("GCZ6", 10, 10);
 
     // A 5-tick volatility band on a reference of 100, so a trade at 200 breaches it and pauses the
     // book for two minutes.
-    private static readonly Security PausingSec = new("GCZ6", SecurityType.Future, 10, 10,
+    private static readonly Security PausingSec = new("GCZ6", 10, 10,
         PriceRestrictions: new PriceRestrictionConfig[] {new VolatilityBand(5, PauseFor)});
 
     private static MarketSchedule TradingDay() => new(PreOpenAt, OpenAt, CloseAt);
@@ -391,7 +391,7 @@ public class SequencerTests
         // arrange
         var sequencer = new Sequencer(Day);
         sequencer.Add(new OrderBook(Sec), TradingDay());
-        var unregistered = new Security("SIZ6", SecurityType.Future, 10, 10);
+        var unregistered = new Security("SIZ6", 10, 10);
 
         // assert - heard about where the routing mistake was made, not mid-dispatch
         Assert.Catch<ArgumentException>(

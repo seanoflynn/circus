@@ -14,7 +14,7 @@ namespace Circus.Tests.Orders;
 [TestFixture]
 public class ImmediateOrCancelTests
 {
-    private static readonly Security Sec = new("GCZ6", SecurityType.Future, 10, 10);
+    private static readonly Security Sec = new("GCZ6", 10, 10);
 
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
     private static readonly DateTime Now2 = new(2000, 1, 1, 12, 1, 0);
@@ -145,7 +145,7 @@ public class ImmediateOrCancelTests
     public void MarketOrder_PartialFillWithinProtection_RemainderCancelled()
     {
         // arrange
-        var sec = new Security("GCZ6", SecurityType.Future, 10, 10, 20);
+        var sec = new Security("GCZ6", 10, 10, 20);
         var book = new LevelTrackingOrderBook(sec, Clock);
         book.UpdateStatus(OrderBookStatus.Open);
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 2, 500);

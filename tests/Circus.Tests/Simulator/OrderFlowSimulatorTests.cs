@@ -10,9 +10,9 @@ namespace Circus.Tests.Simulator;
 [TestFixture]
 public class OrderFlowSimulatorTests
 {
-    private static readonly Security Gold = new("GCZ6", SecurityType.Future, 10, 10);
-    private static readonly Security Silver = new("SIZ6", SecurityType.Future, 10, 10);
-    private static readonly Security Copper = new("HGZ6", SecurityType.Future, 10, 10);
+    private static readonly Security Gold = new("GCZ6", 10, 10);
+    private static readonly Security Silver = new("SIZ6", 10, 10);
+    private static readonly Security Copper = new("HGZ6", 10, 10);
 
     [Test]
     public void Generate_SameSeed_SameTrace()

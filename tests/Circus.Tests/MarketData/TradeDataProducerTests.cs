@@ -11,7 +11,7 @@ public class TradeDataProducerTests
     public void TradeDataProducer_Traded_FiresEvent()
     {
         // arrange
-        var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
+        var sec = new Security("GCZ6", 10, 10);
         var now = new DateTime(2000, 1, 1, 12, 0, 0);
         var clock = new ManualClock(now);
         var producer = new TradeDataProducer();
