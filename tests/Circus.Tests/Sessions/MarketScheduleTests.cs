@@ -5,7 +5,7 @@ namespace Circus.Tests.Sessions;
 
 // The schedule as a question rather than a walk: given an instant, what is due next. Nothing here
 // holds state, so the same question asked twice - or asked out of order - answers the same way,
-// which is the property SessionProvider cannot offer and a queue in front of many books needs.
+// which is the property a stateful walker cannot offer and a queue in front of many books needs.
 [TestFixture]
 public class MarketScheduleTests
 {

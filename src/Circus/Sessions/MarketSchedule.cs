@@ -1,10 +1,10 @@
 namespace Circus.Sessions;
 
 // A day's trading hours as a pure function of time: given an instant, what the schedule does
-// next. Stateless, so one instance serves every book trading the same hours, and a caller asks
-// rather than being told - the opposite shape to SessionProvider, which walks forward and reports
-// the boundaries it has passed. A queue in front of several books needs the asking shape: it
-// holds one pending transition per book and wants the next one, not a catch-up.
+// next. Stateless, so one instance serves every book trading the same hours. A caller asks
+// rather than being told - the opposite shape to a walker that holds state and reports the
+// boundaries it has passed. A queue in front of several books needs the asking shape: it holds
+// one pending transition per book and wants the next one, not a catch-up.
 //
 // The session list describes one day, repeated: past the day's last close the schedule rolls into
 // tomorrow's first session. Holidays, half-days and a session spanning midnight are not modelled
@@ -47,8 +47,8 @@ public sealed class MarketSchedule
     // one that follows rather than handed the same one back. The corollary is that two boundaries
     // sharing an instant - a session closing exactly as the next pre-opens, which the constructor
     // permits - cannot both be reached this way: the close is returned, and asking again from
-    // there steps over the pre-open. SessionProvider drives such a day correctly because it walks
-    // by status rather than by time. Anything iterating by time alone wants either distinct
+    // there steps over the pre-open. A stateful walker that iterates by status rather than by time
+    // handles such a day correctly. Anything iterating by time alone wants either distinct
     // instants or a query carrying where it left off, and which of those is right is a question
     // for whatever ends up consuming this.
     public ScheduledTransition? NextAfter(DateTime time)
@@ -72,7 +72,7 @@ public sealed class MarketSchedule
             OrderBookStatus.PreOpen);
     }
 
-    // The day's sessions, in order. Read by SessionProvider, which anchors boundaries on its
+    // The day's sessions, in order. Read by a stateful walker that anchors boundaries on its
     // caller's own date rather than walking them from the last one.
     internal IReadOnlyList<TradingSession> Sessions => _sessions;
 

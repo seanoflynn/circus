@@ -14,13 +14,9 @@ public static class OrderBookExample
         var clock = new ManualClock(DateTime.Now);
         IOrderBook book = new TimestampingOrderBook(sec, clock);
 
-        var preOpen = new TimeSpan(1, 0, 0);
-        var open = new TimeSpan(1, 10, 0);
-        var close = new TimeSpan(22, 10, 0);
-        var sessionProvider = new SessionProvider(preOpen, open, close);
-        sessionProvider.Changed += (_, args) =>
-            book.UpdateStatus(args.Status, endsTradingDay: args.EndsTradingDay);
-        sessionProvider.Update(new DateTime(2020, 1, 1, 1, 30, 0));
+        // Open the book for trading before placing orders.
+        book.PreOpenTrading(referencePrice: 100);
+        book.OpenTrading(referencePrice: 100);
 
         Print(book.CreateLimitOrder("Buyer", "Order1", new OrderValidity.Day(), Side.Buy, 3, 100));
         Print(book.CreateLimitOrder("Seller", "Order2", new OrderValidity.Day(), Side.Sell, 5, 100));
@@ -34,25 +30,17 @@ public static class OrderBookExample
         // each action with the data's own time rather than moving a clock the book would read.
         IOrderBook book = new OrderBook(sec);
 
-        var preOpen = new TimeSpan(1, 0, 0);
-        var open = new TimeSpan(1, 10, 0);
-        var close = new TimeSpan(22, 10, 0);
-        var sessionProvider = new SessionProvider(preOpen, open, close);
+        var schedule = new MarketSchedule(new TimeSpan(1, 0, 0), new TimeSpan(1, 10, 0),
+            new TimeSpan(22, 10, 0));
 
-        // Stamped at the data's time rather than args.Time. A provider catching up reports
-        // boundaries it has already passed, so args.Time can run behind the data being fed -
-        // and the book refuses actions that move time backwards.
+        // Advance the book through the schedule to the data's first timestamp.
         var dataTime = new DateTime(2020, 1, 1, 1, 30, 0);
-        sessionProvider.Changed += (_, args) =>
-            book.UpdateStatus(args.Status, endsTradingDay: args.EndsTradingDay, time: dataTime);
+        DriveTo(book, schedule, dataTime);
 
         // loop through data
         for (var i = 0; i < 100; i++)
         {
             var time = dataTime;
-
-            // fires any session boundary the data has passed
-            sessionProvider.Update(time);
 
             // pass in data - each order needs its own ClientOrderId, since Buyer's ids are
             // permanently reserved once used
@@ -68,19 +56,16 @@ public static class OrderBookExample
         var clock = new SystemClock();
         IOrderBook book = new TimestampingOrderBook(sec, clock);
 
-        var preOpen = new TimeSpan(1, 0, 0);
-        var open = new TimeSpan(1, 10, 0);
-        var close = new TimeSpan(22, 10, 0);
-        var sessionProvider = new SessionProvider(preOpen, open, close);
-        sessionProvider.Changed += (_, args) =>
-            book.UpdateStatus(args.Status, endsTradingDay: args.EndsTradingDay);
+        var schedule = new MarketSchedule(new TimeSpan(1, 0, 0), new TimeSpan(1, 10, 0),
+            new TimeSpan(22, 10, 0));
+
         Task.Run(() =>
         {
             var i = 0;
             while (i < 100)
             {
                 // this needs to happen on same thread as book is updated
-                sessionProvider.Update(clock.GetCurrentTime());
+                DriveTo(book, schedule, clock.GetCurrentTime());
                 Thread.Sleep(100);
                 i++;
             }
@@ -88,6 +73,21 @@ public static class OrderBookExample
 
         Print(book.CreateLimitOrder("Buyer", "Order1", new OrderValidity.Day(), Side.Buy, 3, 100));
         Print(book.CreateLimitOrder("Seller", "Order2", new OrderValidity.Day(), Side.Sell, 5, 100));
+    }
+
+    // Walk the schedule from the start of the day to the given time, applying every transition
+    // the book has passed. Idempotent: calling again with the same or earlier time is a no-op.
+    private static void DriveTo(IOrderBook book, MarketSchedule schedule, DateTime time)
+    {
+        var t = time.Date;
+        while (true)
+        {
+            var next = schedule.NextAfter(t);
+            if (next == null || next.Value.Time > time) break;
+            book.UpdateStatus(next.Value.Status, endsTradingDay: next.Value.EndsTradingDay,
+                time: next.Value.Time);
+            t = next.Value.Time;
+        }
     }
 
     private static void Print(IEnumerable<OrderBookEvent> events)
