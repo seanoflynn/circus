@@ -8,7 +8,7 @@ public record OrderBookEvent(string Symbol, DateTime Time);
 // includes an interruption configured to last until told otherwise, and every ordinary
 // transition, since an explicit one supersedes whatever was pending.
 public record StatusChanged(string Symbol, DateTime Time, OrderBookStatus Status,
-        StatusChangeReason Reason = StatusChangeReason.Requested, DateTime? ResumesAt = null)
+        OrderBookStatusChangeReason Reason = OrderBookStatusChangeReason.Requested, DateTime? ResumesAt = null)
     : OrderBookEvent(Symbol, Time);
 
 public record OrderEvent(string Symbol, DateTime Time, string CompanyId, string ClientOrderId,

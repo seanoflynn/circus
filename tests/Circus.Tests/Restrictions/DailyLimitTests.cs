@@ -28,7 +28,7 @@ public class DailyLimitTests
     private IOrderBook LimitedBook()
     {
         var security = new Instrument("GCZ6", 10, 10,
-            PriceRestrictions: new PriceRestrictionConfig[]
+            PriceRestrictions: new PriceRestriction[]
             {
                 new DailyPriceLimit(new PriceLimitWidth.Ticks(5))
             });
@@ -78,7 +78,7 @@ public class DailyLimitTests
     private IOrderBook BookWithRestingOrderAboveTheLimit()
     {
         var security = new Instrument("GCZ6", 10, 10,
-            PriceRestrictions: new PriceRestrictionConfig[]
+            PriceRestrictions: new PriceRestriction[]
             {
                 new DailyPriceLimit(new PriceLimitWidth.Ticks(5))
             });
@@ -148,7 +148,7 @@ public class DailyLimitTests
     {
         // arrange - 7 percent of a reference of 1000, so 70 either side
         var security = new Instrument("GCZ6", 10, 10,
-            PriceRestrictions: new PriceRestrictionConfig[]
+            PriceRestrictions: new PriceRestriction[]
             {
                 new DailyPriceLimit(new PriceLimitWidth.Percent(7))
             });
@@ -168,7 +168,7 @@ public class DailyLimitTests
     {
         // arrange - a percentage of nothing is not a width
         var security = new Instrument("GCZ6", 10, 10,
-            PriceRestrictions: new PriceRestrictionConfig[]
+            PriceRestrictions: new PriceRestriction[]
             {
                 new DailyPriceLimit(new PriceLimitWidth.Percent(7))
             });

@@ -31,7 +31,7 @@ public class SecurityStatusDataProducerTests
     private IOrderBook PausingBook() =>
         new TimestampingOrderBook(
             new Instrument("GCZ6", 10, 10,
-                PriceRestrictions: new PriceRestrictionConfig[] {new VolatilityBand(5, PauseFor)}),
+                PriceRestrictions: new PriceRestriction[] {new VolatilityBand(5, PauseFor)}),
             Clock);
 
     [Test]
@@ -47,7 +47,7 @@ public class SecurityStatusDataProducerTests
         Assert.AreEqual(1, events.Count);
         Assert.AreEqual(Now1, events[0].Time);
         Assert.AreEqual(OrderBookStatus.Open, events[0].Status);
-        Assert.AreEqual(StatusChangeReason.Requested, events[0].Reason);
+        Assert.AreEqual(OrderBookStatusChangeReason.Requested, events[0].Reason);
         Assert.IsNull(events[0].ResumesAt);
         Assert.IsNull(events[0].LimitState);
     }
@@ -83,7 +83,7 @@ public class SecurityStatusDataProducerTests
         // could not be published at all before this producer existed
         Assert.AreEqual(1, events.Count);
         Assert.AreEqual(OrderBookStatus.Paused, events[0].Status);
-        Assert.AreEqual(StatusChangeReason.PriceRestriction, events[0].Reason);
+        Assert.AreEqual(OrderBookStatusChangeReason.PriceRestriction, events[0].Reason);
         Assert.AreEqual(Now1 + PauseFor, events[0].ResumesAt);
     }
 
@@ -103,7 +103,7 @@ public class SecurityStatusDataProducerTests
         // assert
         Assert.AreEqual(1, events.Count);
         Assert.AreEqual(OrderBookStatus.Open, events[0].Status);
-        Assert.AreEqual(StatusChangeReason.InterruptionElapsed, events[0].Reason);
+        Assert.AreEqual(OrderBookStatusChangeReason.InterruptionElapsed, events[0].Reason);
         Assert.IsNull(events[0].ResumesAt, "back to trading, so nothing is pending");
     }
 
@@ -113,7 +113,7 @@ public class SecurityStatusDataProducerTests
         // arrange - a range with no duration configured stands until something ends it
         var book = new TimestampingOrderBook(
             new Instrument("GCZ6", 10, 10,
-                PriceRestrictions: new PriceRestrictionConfig[] {new VolatilityBand(5)}),
+                PriceRestrictions: new PriceRestriction[] {new VolatilityBand(5)}),
             Clock);
         Publish(book, book.UpdateStatus(OrderBookStatus.Open, 100));
         book.CreateLimitOrder("Company1", "Order1", new OrderValidity.Day(), Side.Sell, 5, 200);
@@ -135,7 +135,7 @@ public class SecurityStatusDataProducerTests
         // clock moves on so that buy is genuinely the older order when the sell arrives.
         var book = new TimestampingOrderBook(
             new Instrument("GCZ6", 10, 10,
-                PriceRestrictions: new PriceRestrictionConfig[]
+                PriceRestrictions: new PriceRestriction[]
                 {
                     new DailyPriceLimit(new PriceLimitWidth.Ticks(5))
                 }),
@@ -158,7 +158,7 @@ public class SecurityStatusDataProducerTests
         Assert.AreEqual(1, events.Count);
         Assert.AreEqual(Side.Buy, events[0].LimitState);
         Assert.AreEqual(OrderBookStatus.Open, events[0].Status);
-        Assert.AreEqual(StatusChangeReason.Requested, events[0].Reason,
+        Assert.AreEqual(OrderBookStatusChangeReason.Requested, events[0].Reason,
             "the last status change is still what put it here");
 
         // act - the order out beyond the ceiling is pulled and the book trades inside the limit

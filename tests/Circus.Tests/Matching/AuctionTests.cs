@@ -7,7 +7,7 @@ using NUnit.Framework;
 namespace Circus.Tests.Matching;
 
 [TestFixture]
-public class AuctionTests
+public class AuctionMatchingAlgorithmTests
 {
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
     private static readonly DateTime Now2 = new(2000, 1, 1, 12, 1, 0);
@@ -362,7 +362,7 @@ public class AuctionTests
         // pause the book. This order doesn't cross anything (isolated at 200, nothing on the
         // opposing side), so it must not trigger a pause just for being entered.
         var security = new Instrument("GCZ6", 10, 10,
-            PriceRestrictions: new PriceRestrictionConfig[] {new VolatilityBand(5)});
+            PriceRestrictions: new PriceRestriction[] {new VolatilityBand(5)});
         var book = new LevelTrackingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
 
@@ -382,7 +382,7 @@ public class AuctionTests
         // sell stop (trigger 90) is added, plus a resting sell at 200 that hasn't crossed
         // anything yet (so hasn't paused anything, per the test above)
         var security = new Instrument("GCZ6", 10, 10,
-            PriceRestrictions: new PriceRestrictionConfig[] {new VolatilityBand(5)});
+            PriceRestrictions: new PriceRestriction[] {new VolatilityBand(5)});
         var book = new LevelTrackingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open);
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100);
@@ -438,7 +438,7 @@ public class AuctionTests
         // arrange - #23's hard-reject band still works exactly as before with no volatility
         // band alongside it
         var security = new Instrument("GCZ6", 10, 10,
-            PriceRestrictions: new PriceRestrictionConfig[] {new OrderPriceBand(5)});
+            PriceRestrictions: new PriceRestriction[] {new OrderPriceBand(5)});
         var book = new LevelTrackingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
 

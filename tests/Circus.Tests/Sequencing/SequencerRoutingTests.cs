@@ -32,7 +32,7 @@ public class SequencerRoutingTests
     // A 5-tick volatility band on a reference of 100, so a trade at 200 breaches it and pauses
     // that book for two minutes. Only gold gets one, so the others carry on regardless.
     private static readonly Instrument PausingGold = new("GCZ6", 10, 10,
-        PriceRestrictions: new PriceRestrictionConfig[] {new VolatilityBand(5, PauseFor)});
+        PriceRestrictions: new PriceRestriction[] {new VolatilityBand(5, PauseFor)});
 
     private static MarketSchedule TradingDay() => new(PreOpenAt, OpenAt, CloseAt);
 
@@ -191,7 +191,7 @@ public class SequencerRoutingTests
 
         // and only gold was told anything about a status change
         var statuses = dispatched.SelectMany(d => d.Events).OfType<StatusChanged>()
-            .Where(s => s.Reason == StatusChangeReason.PriceRestriction)
+            .Where(s => s.Reason == OrderBookStatusChangeReason.PriceRestriction)
             .ToList();
         Assert.AreEqual(1, statuses.Count);
         Assert.AreEqual(Gold.Symbol, statuses[0].Symbol);

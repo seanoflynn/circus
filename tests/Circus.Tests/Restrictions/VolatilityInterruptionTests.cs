@@ -32,7 +32,7 @@ public class VolatilityInterruptionTests
     // that is 50 and 80 either side of the reference.
     private static Instrument ExtendingSecurity() =>
         new("GCZ6", 10, 10,
-            PriceRestrictions: new PriceRestrictionConfig[]
+            PriceRestrictions: new PriceRestriction[]
             {
                 new VolatilityBand(5, PauseFor: PauseFor, ExtendedRangeTicks: 8)
             });
@@ -59,7 +59,7 @@ public class VolatilityInterruptionTests
 
         var stillPaused = events.OfType<StatusChanged>().Single();
         Assert.AreEqual(OrderBookStatus.Paused, stillPaused.Status);
-        Assert.AreEqual(StatusChangeReason.PriceRestriction, stillPaused.Reason);
+        Assert.AreEqual(OrderBookStatusChangeReason.PriceRestriction, stillPaused.Reason);
     }
 
     [Test]
@@ -81,7 +81,7 @@ public class VolatilityInterruptionTests
         // book poked punctually never sees any of this
         Assert.AreEqual(OrderBookStatus.Paused, book.Status);
         var stillPaused = events.OfType<StatusChanged>().Single();
-        Assert.AreEqual(StatusChangeReason.PriceRestriction, stillPaused.Reason);
+        Assert.AreEqual(OrderBookStatusChangeReason.PriceRestriction, stillPaused.Reason);
         Assert.AreEqual(Now1 + PauseFor, stillPaused.Time);
         Assert.AreEqual(Now1 + PauseFor + PauseFor, stillPaused.ResumesAt);
     }
@@ -125,7 +125,7 @@ public class VolatilityInterruptionTests
         // Each step below is well inside the dynamic range; it is the distance from where the
         // day started that eventually trips.
         var security = new Instrument("GCZ6", 10, 10,
-            PriceRestrictions: new PriceRestrictionConfig[]
+            PriceRestrictions: new PriceRestriction[]
             {
                 new VolatilityBand(3),
                 new StaticPriceRange(5)

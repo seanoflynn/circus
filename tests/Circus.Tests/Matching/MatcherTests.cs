@@ -74,7 +74,7 @@ public class MatcherTests
         var matcher = BookWithThreeRestingBuys(out var first, out _, out _);
 
         // act
-        var outcome = FirstOutcome(matcher, new PriceTime());
+        var outcome = FirstOutcome(matcher, new PriceTimeMatchingAlgorithm());
 
         // assert
         var trade = outcome as TradeExecuted;
@@ -93,7 +93,7 @@ public class MatcherTests
         var matcher = BookWithThreeRestingBuys(out _, out _, out _);
 
         // act
-        var outcomes = matcher.Run(new DeclinesToMatch(), new PriceTime(), _ => null).ToList();
+        var outcomes = matcher.Run(new DeclinesToMatch(), new PriceTimeMatchingAlgorithm(), _ => null).ToList();
 
         // assert
         Assert.IsEmpty(outcomes);
@@ -106,7 +106,7 @@ public class MatcherTests
         var matcher = BookWithThreeRestingBuys(out _, out _, out _);
 
         // act
-        var outcomes = matcher.Run(new DeclinesToBegin(), new PriceTime(), _ => null).ToList();
+        var outcomes = matcher.Run(new DeclinesToBegin(), new PriceTimeMatchingAlgorithm(), _ => null).ToList();
 
         // assert
         Assert.IsEmpty(outcomes);

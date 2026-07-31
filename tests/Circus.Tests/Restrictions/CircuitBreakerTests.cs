@@ -30,7 +30,7 @@ public class CircuitBreakerTests
     private IOrderBook LeveledBook()
     {
         var security = new Instrument("GCZ6", 10, 10,
-            PriceRestrictions: new PriceRestrictionConfig[]
+            PriceRestrictions: new PriceRestriction[]
             {
                 new CircuitBreaker(new PriceLimitWidth.Percent(7), HaltFor),
                 new CircuitBreaker(new PriceLimitWidth.Percent(13), HaltFor),
@@ -67,7 +67,7 @@ public class CircuitBreakerTests
         var events = book.AdvanceTime();
 
         Assert.AreEqual(OrderBookStatus.Open, book.Status);
-        Assert.AreEqual(StatusChangeReason.InterruptionElapsed,
+        Assert.AreEqual(OrderBookStatusChangeReason.InterruptionElapsed,
             events.OfType<StatusChanged>().Single().Reason);
     }
 
@@ -98,7 +98,7 @@ public class CircuitBreakerTests
         // arrange - a volatility band far narrower than the breaker, so any price tripping the
         // breaker trips the band too. The severer consequence has to win.
         var security = new Instrument("GCZ6", 10, 10,
-            PriceRestrictions: new PriceRestrictionConfig[]
+            PriceRestrictions: new PriceRestriction[]
             {
                 new VolatilityBand(2, PauseFor: TimeSpan.FromMinutes(2)),
                 new CircuitBreaker(new PriceLimitWidth.Percent(7), HaltFor)

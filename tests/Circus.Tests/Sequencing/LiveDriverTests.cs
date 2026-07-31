@@ -22,7 +22,7 @@ public class LiveDriverTests
 
     // A 5-tick volatility band on a reference of 100, so a trade at 200 breaches it.
     private static readonly Instrument PausingGold = new("GCZ6", 10, 10,
-        PriceRestrictions: new PriceRestrictionConfig[] {new VolatilityBand(5, PauseFor)});
+        PriceRestrictions: new PriceRestriction[] {new VolatilityBand(5, PauseFor)});
 
     private static MarketSchedule TradingDay() => new(new(9, 0, 0), new(9, 30, 0), new(17, 0, 0));
 

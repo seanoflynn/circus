@@ -38,7 +38,7 @@ public class TimedResumeTests
     private IOrderBook PausingBook(TimeSpan? duration)
     {
         var security = new Instrument("GCZ6", 10, 10,
-            PriceRestrictions: new PriceRestrictionConfig[] {new VolatilityBand(5, duration)});
+            PriceRestrictions: new PriceRestriction[] {new VolatilityBand(5, duration)});
         var book = new TimestampingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
         return book;
@@ -68,7 +68,7 @@ public class TimedResumeTests
         Assert.AreEqual(OrderBookStatus.Open, book.Status);
         var resumed = events.OfType<StatusChanged>().Single();
         Assert.AreEqual(OrderBookStatus.Open, resumed.Status);
-        Assert.AreEqual(StatusChangeReason.InterruptionElapsed, resumed.Reason);
+        Assert.AreEqual(OrderBookStatusChangeReason.InterruptionElapsed, resumed.Reason);
     }
 
     [Test]
@@ -133,7 +133,7 @@ public class TimedResumeTests
 
         // assert - resumed first, so the order arrived into an open book
         Assert.AreEqual(OrderBookStatus.Open, book.Status);
-        Assert.AreEqual(StatusChangeReason.InterruptionElapsed,
+        Assert.AreEqual(OrderBookStatusChangeReason.InterruptionElapsed,
             events.OfType<StatusChanged>().Single().Reason);
         Assert.AreEqual(1, events.OfType<CreateOrderConfirmed>().Count());
     }
@@ -152,7 +152,7 @@ public class TimedResumeTests
         // assert - the interruption ended when it elapsed, not when something got round to asking
         Assert.AreEqual(OrderBookStatus.Open, book.Status);
         var resumed = events.OfType<StatusChanged>().Single();
-        Assert.AreEqual(StatusChangeReason.InterruptionElapsed, resumed.Reason);
+        Assert.AreEqual(OrderBookStatusChangeReason.InterruptionElapsed, resumed.Reason);
         Assert.AreEqual(Now1 + PauseFor, resumed.Time);
     }
 
@@ -235,8 +235,8 @@ public class TimedResumeTests
         var breached = book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 200);
 
         // assert
-        Assert.AreEqual(StatusChangeReason.Requested, opened.OfType<StatusChanged>().Single().Reason);
-        Assert.AreEqual(StatusChangeReason.PriceRestriction,
+        Assert.AreEqual(OrderBookStatusChangeReason.Requested, opened.OfType<StatusChanged>().Single().Reason);
+        Assert.AreEqual(OrderBookStatusChangeReason.PriceRestriction,
             breached.OfType<StatusChanged>().Single().Reason);
     }
 

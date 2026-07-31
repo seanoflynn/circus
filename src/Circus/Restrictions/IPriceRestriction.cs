@@ -3,7 +3,7 @@ using Circus.Events;
 namespace Circus.Restrictions;
 
 // The enforcement half of price restrictions. The declarations these are built from are
-// PriceRestrictionConfig and its subtypes, which live beside Instrument because they describe an
+// PriceRestriction and its subtypes, which live beside Instrument because they describe an
 // instrument rather than the book; each adapter here is named for the config it enforces.
 // OrderBook.Adapt is what turns one into the other.
 

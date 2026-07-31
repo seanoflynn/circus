@@ -18,7 +18,7 @@ namespace Circus.MarketData;
 public class SecurityStatusDataProducer : IDataProducer<SecurityStatusDataEvent>
 {
     private OrderBookStatus _status = OrderBookStatus.Closed;
-    private StatusChangeReason _reason = StatusChangeReason.Requested;
+    private OrderBookStatusChangeReason _reason = OrderBookStatusChangeReason.Requested;
     private DateTime? _resumesAt;
     private Side? _limitState;
 
