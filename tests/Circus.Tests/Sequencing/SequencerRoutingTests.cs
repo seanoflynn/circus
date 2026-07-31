@@ -25,13 +25,13 @@ public class SequencerRoutingTests
 
     private static readonly TimeSpan PauseFor = TimeSpan.FromMinutes(2);
 
-    private static readonly Security Gold = new("GCZ6", 10, 10);
-    private static readonly Security Silver = new("SIZ6", 10, 10);
-    private static readonly Security Copper = new("HGZ6", 10, 10);
+    private static readonly Instrument Gold = new("GCZ6", 10, 10);
+    private static readonly Instrument Silver = new("SIZ6", 10, 10);
+    private static readonly Instrument Copper = new("HGZ6", 10, 10);
 
     // A 5-tick volatility band on a reference of 100, so a trade at 200 breaches it and pauses
     // that book for two minutes. Only gold gets one, so the others carry on regardless.
-    private static readonly Security PausingGold = new("GCZ6", 10, 10,
+    private static readonly Instrument PausingGold = new("GCZ6", 10, 10,
         PriceRestrictions: new PriceRestrictionConfig[] {new VolatilityBand(5, PauseFor)});
 
     private static MarketSchedule TradingDay() => new(PreOpenAt, OpenAt, CloseAt);
@@ -46,11 +46,11 @@ public class SequencerRoutingTests
     private static DateTime At(int hour, int minute, int second) =>
         Day.Add(new TimeSpan(hour, minute, second));
 
-    private static CreateLimitOrder Order(Security security, string clientOrderId, Side side,
+    private static CreateLimitOrder Order(string symbol, string clientOrderId, Side side,
         decimal price, DateTime time) =>
         new()
         {
-            Security = security, Time = time, CompanyId = "Company1", ClientOrderId = clientOrderId,
+            Symbol = symbol, Time = time, CompanyId = "Company1", ClientOrderId = clientOrderId,
             OrderValidity = new OrderValidity.Day(), Side = side, Quantity = 5, Price = price
         };
 
@@ -64,12 +64,12 @@ public class SequencerRoutingTests
         sequencer.Add(gold, Quiet());
         sequencer.Add(silver, Quiet());
 
-        sequencer.Submit(new OpenTrading {Security = Gold, Time = At(12, 0)});
-        sequencer.Submit(new OpenTrading {Security = Silver, Time = At(12, 0)});
+        sequencer.Submit(new OpenTrading {Symbol = Gold.Symbol, Time = At(12, 0)});
+        sequencer.Submit(new OpenTrading {Symbol = Silver.Symbol, Time = At(12, 0)});
 
         // act - one order each, at prices that would cross if they ever met in one book
-        sequencer.Submit(Order(Gold, "Gold1", Side.Buy, 100, At(12, 1)));
-        sequencer.Submit(Order(Silver, "Silver1", Side.Sell, 100, At(12, 2)));
+        sequencer.Submit(Order(Gold.Symbol, "Gold1", Side.Buy, 100, At(12, 1)));
+        sequencer.Submit(Order(Silver.Symbol, "Silver1", Side.Sell, 100, At(12, 2)));
         var dispatched = sequencer.AdvanceTo(At(13, 0));
 
         // assert - each order confirmed against its own security, and neither book saw the other's
@@ -79,9 +79,9 @@ public class SequencerRoutingTests
             .ToList();
 
         Assert.AreEqual(2, confirmed.Count);
-        Assert.AreEqual(Gold.Name, confirmed[0].Security.Name);
+        Assert.AreEqual(Gold.Symbol, confirmed[0].Symbol);
         Assert.AreEqual("Gold1", confirmed[0].Order.ClientOrderId);
-        Assert.AreEqual(Silver.Name, confirmed[1].Security.Name);
+        Assert.AreEqual(Silver.Symbol, confirmed[1].Symbol);
         Assert.AreEqual("Silver1", confirmed[1].Order.ClientOrderId);
 
         // nothing crossed: two resting orders in two books are not a trade
@@ -98,14 +98,14 @@ public class SequencerRoutingTests
         sequencer.Add(gold, Quiet());
         sequencer.Add(silver, Quiet());
 
-        sequencer.Submit(new OpenTrading {Security = Gold, Time = At(12, 0)});
-        sequencer.Submit(new OpenTrading {Security = Silver, Time = At(12, 0)});
+        sequencer.Submit(new OpenTrading {Symbol = Gold.Symbol, Time = At(12, 0)});
+        sequencer.Submit(new OpenTrading {Symbol = Silver.Symbol, Time = At(12, 0)});
 
         // act - submitted grouped by security, and deliberately not in time order within either
-        sequencer.Submit(Order(Gold, "Gold1", Side.Buy, 100, At(12, 0, 30)));
-        sequencer.Submit(Order(Gold, "Gold2", Side.Buy, 100, At(12, 0, 50)));
-        sequencer.Submit(Order(Silver, "Silver1", Side.Buy, 100, At(12, 0, 20)));
-        sequencer.Submit(Order(Silver, "Silver2", Side.Buy, 100, At(12, 0, 40)));
+        sequencer.Submit(Order(Gold.Symbol, "Gold1", Side.Buy, 100, At(12, 0, 30)));
+        sequencer.Submit(Order(Gold.Symbol, "Gold2", Side.Buy, 100, At(12, 0, 50)));
+        sequencer.Submit(Order(Silver.Symbol, "Silver1", Side.Buy, 100, At(12, 0, 20)));
+        sequencer.Submit(Order(Silver.Symbol, "Silver2", Side.Buy, 100, At(12, 0, 40)));
 
         var dispatched = sequencer.AdvanceTo(At(13, 0));
 
@@ -129,14 +129,14 @@ public class SequencerRoutingTests
             sequencer.Add(book, Quiet());
 
         foreach (var book in books)
-            sequencer.Submit(new OpenTrading {Security = book.Security, Time = At(12, 0)});
+            sequencer.Submit(new OpenTrading {Symbol = book.Symbol, Time = At(12, 0)});
 
         // act - flow for all three, interleaved and submitted out of time order
         var random = new Random(7);
         for (var i = 0; i < 200; i++)
         {
-            var security = books[random.Next(books.Count)].Security;
-            sequencer.Submit(Order(security, $"o{i}", random.Next(2) == 0 ? Side.Buy : Side.Sell,
+            var instrument = books[random.Next(books.Count)];
+            sequencer.Submit(Order(instrument.Symbol, $"o{i}", random.Next(2) == 0 ? Side.Buy : Side.Sell,
                 10 * random.Next(8, 13), At(12, 0).AddMilliseconds(random.Next(60_000))));
         }
 
@@ -145,7 +145,7 @@ public class SequencerRoutingTests
         // assert - per book, the actions it was handed never step backwards. Nothing enforces this
         // per book; it follows from one queue dispatching in global time order, and OrderBook
         // would have thrown during dispatch if it did not hold.
-        foreach (var group in dispatched.GroupBy(d => d.Action.Security.Name))
+        foreach (var group in dispatched.GroupBy(d => d.Action.Symbol))
         {
             var times = group.Select(d => d.Action.Time).ToList();
             Assert.AreEqual(times.OrderBy(t => t).ToList(), times,
@@ -167,15 +167,15 @@ public class SequencerRoutingTests
         sequencer.Add(gold, Quiet());
         sequencer.Add(silver, Quiet());
 
-        sequencer.Submit(new OpenTrading {Security = PausingGold, Time = At(12, 0), ReferencePrice = 100});
-        sequencer.Submit(new OpenTrading {Security = Silver, Time = At(12, 0)});
+        sequencer.Submit(new OpenTrading {Symbol = PausingGold.Symbol, Time = At(12, 0), ReferencePrice = 100});
+        sequencer.Submit(new OpenTrading {Symbol = Silver.Symbol, Time = At(12, 0)});
 
         // act - gold trades through its band and pauses; silver trades at the same price and does
         // not, having no band to breach
-        sequencer.Submit(Order(PausingGold, "Gold1", Side.Sell, 200, At(12, 1)));
-        sequencer.Submit(Order(PausingGold, "Gold2", Side.Buy, 200, At(12, 1)));
-        sequencer.Submit(Order(Silver, "Silver1", Side.Sell, 200, At(12, 2)));
-        sequencer.Submit(Order(Silver, "Silver2", Side.Buy, 200, At(12, 2)));
+        sequencer.Submit(Order(PausingGold.Symbol, "Gold1", Side.Sell, 200, At(12, 1)));
+        sequencer.Submit(Order(PausingGold.Symbol, "Gold2", Side.Buy, 200, At(12, 1)));
+        sequencer.Submit(Order(Silver.Symbol, "Silver1", Side.Sell, 200, At(12, 2)));
+        sequencer.Submit(Order(Silver.Symbol, "Silver2", Side.Buy, 200, At(12, 2)));
 
         var dispatched = sequencer.AdvanceTo(At(12, 2, 30));
 
@@ -186,7 +186,7 @@ public class SequencerRoutingTests
         // silver printed while gold was paused, at the price that stopped gold
         var trades = dispatched.SelectMany(d => d.Events).OfType<OrdersMatched>().ToList();
         Assert.AreEqual(1, trades.Count);
-        Assert.AreEqual(Silver.Name, trades[0].Security.Name);
+        Assert.AreEqual(Silver.Symbol, trades[0].Symbol);
         Assert.AreEqual(200, trades[0].Price);
 
         // and only gold was told anything about a status change
@@ -194,7 +194,7 @@ public class SequencerRoutingTests
             .Where(s => s.Reason == StatusChangeReason.PriceRestriction)
             .ToList();
         Assert.AreEqual(1, statuses.Count);
-        Assert.AreEqual(Gold.Name, statuses[0].Security.Name);
+        Assert.AreEqual(Gold.Symbol, statuses[0].Symbol);
     }
 
     [Test]
@@ -207,10 +207,10 @@ public class SequencerRoutingTests
         sequencer.Add(gold, Quiet());
         sequencer.Add(silver, Quiet());
 
-        sequencer.Submit(new OpenTrading {Security = PausingGold, Time = At(12, 0), ReferencePrice = 100});
-        sequencer.Submit(new OpenTrading {Security = Silver, Time = At(12, 0)});
-        sequencer.Submit(Order(PausingGold, "Gold1", Side.Sell, 200, At(12, 1)));
-        sequencer.Submit(Order(PausingGold, "Gold2", Side.Buy, 200, At(12, 1)));
+        sequencer.Submit(new OpenTrading {Symbol = PausingGold.Symbol, Time = At(12, 0), ReferencePrice = 100});
+        sequencer.Submit(new OpenTrading {Symbol = Silver.Symbol, Time = At(12, 0)});
+        sequencer.Submit(Order(PausingGold.Symbol, "Gold1", Side.Sell, 200, At(12, 1)));
+        sequencer.Submit(Order(PausingGold.Symbol, "Gold2", Side.Buy, 200, At(12, 1)));
 
         // act - past the deadline
         var dispatched = sequencer.AdvanceTo(At(12, 4));
@@ -218,7 +218,7 @@ public class SequencerRoutingTests
         // assert - exactly one poke, carrying gold's security and nobody else's
         var ticks = dispatched.Select(d => d.Action).OfType<AdvanceTime>().ToList();
         Assert.AreEqual(1, ticks.Count);
-        Assert.AreEqual(Gold.Name, ticks[0].Security.Name);
+        Assert.AreEqual(Gold.Symbol, ticks[0].Symbol);
         Assert.AreEqual(At(12, 1) + PauseFor, ticks[0].Time);
 
         Assert.AreEqual(OrderBookStatus.Open, gold.Status, "gold came back");
@@ -244,16 +244,16 @@ public class SequencerRoutingTests
         Assert.AreEqual(OrderBookStatus.PreOpen, silver.Status);
 
         var order = dispatched
-            .Select(d => (d.Action.Security.Name, Kind: d.Action.GetType().Name, d.Action.Time))
+            .Select(d => (d.Action.Symbol, Kind: d.Action.GetType().Name, d.Action.Time))
             .ToList();
 
         Assert.AreEqual(
             new[]
             {
-                (Gold.Name, nameof(PreOpenTrading), At(9, 0)),
-                (Gold.Name, nameof(OpenTrading), At(9, 30)),
-                (Gold.Name, nameof(CloseTrading), At(17, 0)),
-                (Silver.Name, nameof(PreOpenTrading), At(18, 0))
+                (Gold.Symbol, nameof(PreOpenTrading), At(9, 0)),
+                (Gold.Symbol, nameof(OpenTrading), At(9, 30)),
+                (Gold.Symbol, nameof(CloseTrading), At(17, 0)),
+                (Silver.Symbol, nameof(PreOpenTrading), At(18, 0))
             },
             order);
     }
@@ -275,8 +275,8 @@ public class SequencerRoutingTests
         // assert - a tie at one instant resolves the same way every run, which is the property
         // that matters; that it falls to registration order is how, not why
         Assert.AreEqual(2, dispatched.Count);
-        Assert.AreEqual(Gold.Name, dispatched[0].Action.Security.Name);
-        Assert.AreEqual(Silver.Name, dispatched[1].Action.Security.Name);
+        Assert.AreEqual(Gold.Symbol, dispatched[0].Action.Symbol);
+        Assert.AreEqual(Silver.Symbol, dispatched[1].Action.Symbol);
         Assert.AreEqual(dispatched[0].Action.Time, dispatched[1].Action.Time);
     }
 
@@ -290,10 +290,10 @@ public class SequencerRoutingTests
         sequencer.Add(gold, Quiet());
         sequencer.Add(silver, Quiet());
 
-        sequencer.Submit(new OpenTrading {Security = Gold, Time = At(12, 0)});
-        sequencer.Submit(new OpenTrading {Security = Silver, Time = At(12, 0)});
-        sequencer.Submit(Order(Gold, "Gold1", Side.Buy, 100, At(12, 1)));
-        sequencer.Submit(Order(Silver, "Silver1", Side.Buy, 100, At(12, 2)));
+        sequencer.Submit(new OpenTrading {Symbol = Gold.Symbol, Time = At(12, 0)});
+        sequencer.Submit(new OpenTrading {Symbol = Silver.Symbol, Time = At(12, 0)});
+        sequencer.Submit(Order(Gold.Symbol, "Gold1", Side.Buy, 100, At(12, 1)));
+        sequencer.Submit(Order(Silver.Symbol, "Silver1", Side.Buy, 100, At(12, 2)));
 
         // act
         var dispatched = sequencer.AdvanceTo(At(13, 0));
@@ -334,22 +334,22 @@ public class SequencerRoutingTests
             new TimeSpan(16, 0, 0)));
 
         sequencer.Submit(new OpenTrading
-            {Security = PausingGold, Time = At(9, 45), ReferencePrice = 100});
+            {Symbol = PausingGold.Symbol, Time = At(9, 45), ReferencePrice = 100});
 
         var random = new Random(11);
         for (var i = 0; i < 300; i++)
         {
-            var security = books[random.Next(books.Length)].Security;
+            var instrument = books[random.Next(books.Length)];
 
             // A price that will breach gold's band now and then, so an interruption tick joins the
             // mix rather than every dispatch being client flow.
             var price = 10 * random.Next(8, 21);
-            sequencer.Submit(Order(security, $"o{i}", random.Next(2) == 0 ? Side.Buy : Side.Sell,
+            sequencer.Submit(Order(instrument.Symbol, $"o{i}", random.Next(2) == 0 ? Side.Buy : Side.Sell,
                 price, At(10, 0).AddMilliseconds(random.Next(3_600_000))));
         }
 
         return sequencer.AdvanceTo(At(23, 0))
-            .Select(d => $"{d.Sequence} {d.Action.Security.Name} {d.Action.GetType().Name} " +
+            .Select(d => $"{d.Sequence} {d.Action.Symbol} {d.Action.GetType().Name} " +
                          $"{d.Action.Time:O} -> {d.Events.Count}")
             .ToList();
     }

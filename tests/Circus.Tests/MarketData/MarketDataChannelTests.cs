@@ -11,8 +11,8 @@ namespace Circus.Tests.MarketData;
 [TestFixture]
 public class MarketDataChannelTests
 {
-    private static readonly Security Gold = new("GCZ6", 10, 10);
-    private static readonly Security Silver = new("SIZ6", 10, 10);
+    private static readonly Instrument Gold = new("GCZ6", 10, 10);
+    private static readonly Instrument Silver = new("SIZ6", 10, 10);
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
 
     [Test]
@@ -54,9 +54,9 @@ public class MarketDataChannelTests
         // assert - filtered to the status messages, since a level producer republishes its
         // ladders on any non-empty batch and so contributes one of its own here too
         Assert.AreEqual(
-            new[] {Gold.Name, Silver.Name},
+            new[] {Gold.Symbol, Silver.Symbol},
             messages.Where(m => m.Data is SecurityStatusDataEvent)
-                .Select(m => m.Data.Security.Name).ToArray());
+                .Select(m => m.Data.Symbol).ToArray());
     }
 
     [Test]
@@ -93,9 +93,9 @@ public class MarketDataChannelTests
 
         var mixed = new OrderBookEvent[]
         {
-            new StatusChanged(Gold, Now1, OrderBookStatus.Open),
-            new StatusChanged(Silver, Now1, OrderBookStatus.Halted),
-            new StatusChanged(Gold, Now1, OrderBookStatus.Closed)
+            new StatusChanged(Gold.Symbol, Now1, OrderBookStatus.Open),
+            new StatusChanged(Silver.Symbol, Now1, OrderBookStatus.Halted),
+            new StatusChanged(Gold.Symbol, Now1, OrderBookStatus.Closed)
         };
 
         // act
@@ -106,15 +106,15 @@ public class MarketDataChannelTests
         var statuses = messages
             .Select(m => m.Data)
             .OfType<SecurityStatusDataEvent>()
-            .Select(d => (d.Security.Name, d.Status))
+            .Select(d => (d.Symbol, d.Status))
             .ToList();
 
         Assert.AreEqual(
             new[]
             {
-                (Gold.Name, OrderBookStatus.Open),
-                (Gold.Name, OrderBookStatus.Closed),
-                (Silver.Name, OrderBookStatus.Halted)
+                (Gold.Symbol, OrderBookStatus.Open),
+                (Gold.Symbol, OrderBookStatus.Closed),
+                (Silver.Symbol, OrderBookStatus.Halted)
             },
             statuses);
     }
@@ -133,18 +133,18 @@ public class MarketDataChannelTests
     {
         var channel = Channel(Gold);
 
-        Assert.Throws<ArgumentException>(() => channel.Add(new SecurityFeed(Gold, maxLevels: 10)));
+        Assert.Throws<ArgumentException>(() => channel.Add(new SecurityFeed(Gold.Symbol, maxLevels: 10)));
     }
 
-    private static MarketDataChannel Channel(params Security[] securities)
+    private static MarketDataChannel Channel(params Instrument[] instruments)
     {
         var channel = new MarketDataChannel();
-        foreach (var security in securities)
-            channel.Add(new SecurityFeed(security, maxLevels: 10));
+        foreach (var instrument in instruments)
+            channel.Add(new SecurityFeed(instrument.Symbol, maxLevels: 10));
 
         return channel;
     }
 
-    private static IOrderBook Book(Security security) =>
-        new TimestampingOrderBook(security, new ManualClock(Now1));
+    private static IOrderBook Book(Instrument instrument) =>
+        new TimestampingOrderBook(instrument, new ManualClock(Now1));
 }

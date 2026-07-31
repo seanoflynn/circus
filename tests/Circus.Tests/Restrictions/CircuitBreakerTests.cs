@@ -29,7 +29,7 @@ public class CircuitBreakerTests
     // reference of 1000 with a tick size of 10 that is 7, 13 and 20 ticks either side.
     private IOrderBook LeveledBook()
     {
-        var security = new Security("GCZ6", 10, 10,
+        var security = new Instrument("GCZ6", 10, 10,
             PriceRestrictions: new PriceRestrictionConfig[]
             {
                 new CircuitBreaker(new PriceLimitWidth.Percent(7), HaltFor),
@@ -97,7 +97,7 @@ public class CircuitBreakerTests
     {
         // arrange - a volatility band far narrower than the breaker, so any price tripping the
         // breaker trips the band too. The severer consequence has to win.
-        var security = new Security("GCZ6", 10, 10,
+        var security = new Instrument("GCZ6", 10, 10,
             PriceRestrictions: new PriceRestrictionConfig[]
             {
                 new VolatilityBand(2, PauseFor: TimeSpan.FromMinutes(2)),

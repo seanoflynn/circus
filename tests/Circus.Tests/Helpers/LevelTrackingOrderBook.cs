@@ -19,13 +19,13 @@ internal sealed class LevelTrackingOrderBook : IOrderBook
     private readonly LevelDataProducer _levelDataProducer = new(MaxLevels);
     private LevelsDataEvent _levels;
 
-    public LevelTrackingOrderBook(Security security, IClock clock)
+    public LevelTrackingOrderBook(Instrument instrument, IClock clock)
     {
-        _book = new TimestampingOrderBook(security, clock);
-        _levels = new LevelsDataEvent(security, default, Array.Empty<Level>(), Array.Empty<Level>());
+        _book = new TimestampingOrderBook(instrument, clock);
+        _levels = new LevelsDataEvent(instrument.Symbol, default, Array.Empty<Level>(), Array.Empty<Level>());
     }
 
-    public Security Security => _book.Security;
+    public string Symbol => _book.Symbol;
 
     public OrderBookStatus Status => _book.Status;
 

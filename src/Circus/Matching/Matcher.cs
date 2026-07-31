@@ -10,7 +10,7 @@ namespace Circus.Matching;
 // OrderBook.Apply does both, between calls into Run's enumerator.
 internal sealed class Matcher
 {
-    // Array-backed, indexed by tick count (price / Security.TickSize) rather than decimal —
+    // Array-backed, indexed by tick count (price / Instrument.TickSize) rather than decimal —
     // see InternalOrder and PriceLadder for why.
     private readonly Dictionary<Side, PriceLadder> _working = new()
     {

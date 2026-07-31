@@ -13,7 +13,7 @@ public class TradeDataProducer : IDataProducer<TradedDataEvent>
             if (ev is OrdersMatched matched)
             {
                 output ??= new List<TradedDataEvent>();
-                output.Add(new TradedDataEvent(matched.Security, matched.Time, matched.Price, matched.Quantity));
+                output.Add(new TradedDataEvent(matched.Symbol, matched.Time, matched.Price, matched.Quantity));
             }
         }
 

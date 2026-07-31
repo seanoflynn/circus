@@ -49,7 +49,7 @@ public class SecurityStatusDataProducer : IDataProducer<SecurityStatusDataEvent>
             // One per contributing event, carrying that event's own time rather than a time
             // chosen for a batch. Each is a complete picture, so a consumer never needs two.
             output ??= new List<SecurityStatusDataEvent>();
-            output.Add(new SecurityStatusDataEvent(ev.Security, ev.Time, _status, _reason, _resumesAt, _limitState));
+            output.Add(new SecurityStatusDataEvent(ev.Symbol, ev.Time, _status, _reason, _resumesAt, _limitState));
         }
 
         return output ?? (IList<SecurityStatusDataEvent>) Array.Empty<SecurityStatusDataEvent>();

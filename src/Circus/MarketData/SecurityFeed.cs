@@ -25,13 +25,13 @@ public sealed class SecurityFeed
     private readonly IndicativePriceDataProducer _indicative = new();
     private readonly SecurityStatusDataProducer _status = new();
 
-    public SecurityFeed(Security security, int maxLevels)
+    public SecurityFeed(string symbol, int maxLevels)
     {
-        Security = security ?? throw new ArgumentNullException(nameof(security));
+        Symbol = symbol ?? throw new ArgumentNullException(nameof(symbol));
         _levels = new LevelDataProducer(maxLevels);
     }
 
-    public Security Security { get; }
+    public string Symbol { get; }
 
     // Ordering within one call is by producer, in the fixed order below, rather than interleaved
     // by time: every event in a single dispatch shares an instant, so there is no time order

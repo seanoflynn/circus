@@ -7,9 +7,9 @@ namespace Circus;
 // A restriction that does not apply is left out of the list rather than configured with no
 // width: absence is modelled by absence.
 //
-// Declarations only, and deliberately alongside Security rather than with the adapters in
-// OrderBook/Restrictions: this is part of describing an instrument, so a caller building a
-// Security should not have to reach into the book to say what it trades under. Each adapter is
+// Declarations only, and deliberately alongside Instrument rather than with the adapters in
+// OrderBook/Restrictions: this is part of describing an instrument, so a caller building an
+// Instrument should not have to reach into the book to say what it trades under. Each adapter is
 // named for the config it enforces - VolatilityBand is enforced by VolatilityBandRestriction.
 public abstract record PriceRestrictionConfig;
 

@@ -17,8 +17,8 @@ public class ExchangeOrderIdScopeTests
 {
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
 
-    private static readonly Security Gold = new("GCZ6", 10, 10);
-    private static readonly Security Silver = new("SIZ6", 10, 10);
+    private static readonly Instrument Gold = new("GCZ6", 10, 10);
+    private static readonly Instrument Silver = new("SIZ6", 10, 10);
 
     [Test]
     public void TwoBooksOpeningOnTheSameDay_IssueTheSameIds()
@@ -33,8 +33,8 @@ public class ExchangeOrderIdScopeTests
 
         // and the pair is what tells them apart
         Assert.AreNotEqual(
-            (gold.Security.Name, gold.ExchangeOrderId),
-            (silver.Security.Name, silver.ExchangeOrderId));
+            (gold.Instrument.Symbol, gold.ExchangeOrderId),
+            (silver.Instrument.Symbol, silver.ExchangeOrderId));
     }
 
     [Test]
@@ -68,27 +68,27 @@ public class ExchangeOrderIdScopeTests
         Assert.AreEqual(alone.ExchangeOrderId, alongside.ExchangeOrderId);
     }
 
-    private static Order FirstOrder(Security security, DateTime? time = null)
+    private static Order FirstOrder(Instrument instrument, DateTime? time = null)
     {
         var at = time ?? Now1;
-        return Rest(Opened(security, at), security, "Order1", at);
+        return Rest(Opened(instrument, at), instrument, "Order1", at);
     }
 
     // Through pre-open rather than straight to open: starting a session is what seeds the id
     // counter from the date, and a book taken directly to Open never does it.
-    private static OrderBook Opened(Security security, DateTime at)
+    private static OrderBook Opened(Instrument instrument, DateTime at)
     {
-        var book = new OrderBook(security);
-        book.Process(new PreOpenTrading {Security = security, Time = at});
-        book.Process(new OpenTrading {Security = security, Time = at});
+        var book = new OrderBook(instrument);
+        book.Process(new PreOpenTrading {Symbol = instrument.Symbol, Time = at});
+        book.Process(new OpenTrading {Symbol = instrument.Symbol, Time = at});
         return book;
     }
 
-    private static Order Rest(IOrderBook book, Security security, string clientOrderId, DateTime time)
+    private static Order Rest(IOrderBook book, Instrument instrument, string clientOrderId, DateTime time)
     {
         var events = book.Process(new CreateLimitOrder
         {
-            Security = security, Time = time, CompanyId = "Company1", ClientOrderId = clientOrderId,
+            Symbol = instrument.Symbol, Time = time, CompanyId = "Company1", ClientOrderId = clientOrderId,
             OrderValidity = new OrderValidity.Day(), Side = Side.Buy, Quantity = 5, Price = 100
         });
 

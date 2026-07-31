@@ -20,7 +20,7 @@ public class IndicativePriceDataProducer : IDataProducer<IndicativePriceDataEven
             if (ev is IndicativePriceChanged changed)
             {
                 output ??= new List<IndicativePriceDataEvent>();
-                output.Add(new IndicativePriceDataEvent(changed.Security, changed.Time, changed.Price, changed.Quantity));
+                output.Add(new IndicativePriceDataEvent(changed.Symbol, changed.Time, changed.Price, changed.Quantity));
             }
         }
 

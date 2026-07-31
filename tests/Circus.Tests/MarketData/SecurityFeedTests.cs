@@ -12,7 +12,7 @@ namespace Circus.Tests.MarketData;
 [TestFixture]
 public class SecurityFeedTests
 {
-    private static readonly Security Sec = new("GCZ6", 10, 10);
+    private static readonly Instrument Sec = new("GCZ6", 10, 10);
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
 
     [Test]
@@ -62,7 +62,7 @@ public class SecurityFeedTests
         // assert - this is what lets several instruments share a channel
         Assert.IsNotEmpty(all);
         Assert.IsNotEmpty(all.OfType<IndicativePriceDataEvent>(), "expected an auction quote");
-        Assert.IsTrue(all.All(d => ReferenceEquals(d.Security, Sec)),
+        Assert.IsTrue(all.All(d => d.Symbol == Sec.Symbol),
             "every message must say which instrument it is about");
     }
 
@@ -98,6 +98,6 @@ public class SecurityFeedTests
     private static (SecurityFeed Feed, IOrderBook Book) Feed()
     {
         var book = new TimestampingOrderBook(Sec, new ManualClock(Now1));
-        return (new SecurityFeed(Sec, maxLevels: 10), book);
+        return (new SecurityFeed(Sec.Symbol, maxLevels: 10), book);
     }
 }
