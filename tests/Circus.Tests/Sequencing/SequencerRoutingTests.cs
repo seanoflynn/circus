@@ -25,13 +25,13 @@ public class SequencerRoutingTests
 
     private static readonly TimeSpan PauseFor = TimeSpan.FromMinutes(2);
 
-    private static readonly Security Gold = new("GCZ6", SecurityType.Future, 10, 10);
-    private static readonly Security Silver = new("SIZ6", SecurityType.Future, 10, 10);
-    private static readonly Security Copper = new("HGZ6", SecurityType.Future, 10, 10);
+    private static readonly Security Gold = new("GCZ6", 10, 10);
+    private static readonly Security Silver = new("SIZ6", 10, 10);
+    private static readonly Security Copper = new("HGZ6", 10, 10);
 
     // A 5-tick volatility band on a reference of 100, so a trade at 200 breaches it and pauses
     // that book for two minutes. Only gold gets one, so the others carry on regardless.
-    private static readonly Security PausingGold = new("GCZ6", SecurityType.Future, 10, 10,
+    private static readonly Security PausingGold = new("GCZ6", 10, 10,
         PriceRestrictions: new PriceRestrictionConfig[] {new VolatilityBand(5, PauseFor)});
 
     private static MarketSchedule TradingDay() => new(PreOpenAt, OpenAt, CloseAt);

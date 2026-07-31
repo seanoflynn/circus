@@ -27,7 +27,7 @@ public class DailyLimitTests
     // 5 ticks on a tick size of 10, referenced at 100, so the limits are 50 and 150.
     private IOrderBook LimitedBook()
     {
-        var security = new Security("GCZ6", SecurityType.Future, 10, 10,
+        var security = new Security("GCZ6", 10, 10,
             PriceRestrictions: new PriceRestrictionConfig[]
             {
                 new DailyPriceLimit(new PriceLimitWidth.Ticks(5))
@@ -77,7 +77,7 @@ public class DailyLimitTests
     // refuse: it traded at 200, holds a buy at 240, and is now referenced at 100.
     private IOrderBook BookWithRestingOrderAboveTheLimit()
     {
-        var security = new Security("GCZ6", SecurityType.Future, 10, 10,
+        var security = new Security("GCZ6", 10, 10,
             PriceRestrictions: new PriceRestrictionConfig[]
             {
                 new DailyPriceLimit(new PriceLimitWidth.Ticks(5))
@@ -147,7 +147,7 @@ public class DailyLimitTests
     public void PercentageWidth_ResolvesAgainstTheReference()
     {
         // arrange - 7 percent of a reference of 1000, so 70 either side
-        var security = new Security("GCZ6", SecurityType.Future, 10, 10,
+        var security = new Security("GCZ6", 10, 10,
             PriceRestrictions: new PriceRestrictionConfig[]
             {
                 new DailyPriceLimit(new PriceLimitWidth.Percent(7))
@@ -167,7 +167,7 @@ public class DailyLimitTests
     public void NoReferenceYet_LimitInactive()
     {
         // arrange - a percentage of nothing is not a width
-        var security = new Security("GCZ6", SecurityType.Future, 10, 10,
+        var security = new Security("GCZ6", 10, 10,
             PriceRestrictions: new PriceRestrictionConfig[]
             {
                 new DailyPriceLimit(new PriceLimitWidth.Percent(7))

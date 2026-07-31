@@ -17,8 +17,8 @@ public class ExchangeOrderIdScopeTests
 {
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
 
-    private static readonly Security Gold = new("GCZ6", SecurityType.Future, 10, 10);
-    private static readonly Security Silver = new("SIZ6", SecurityType.Future, 10, 10);
+    private static readonly Security Gold = new("GCZ6", 10, 10);
+    private static readonly Security Silver = new("SIZ6", 10, 10);
 
     [Test]
     public void TwoBooksOpeningOnTheSameDay_IssueTheSameIds()

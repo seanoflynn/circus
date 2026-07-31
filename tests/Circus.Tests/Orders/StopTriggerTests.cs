@@ -8,7 +8,7 @@ namespace Circus.Tests.Orders;
 [TestFixture]
 public class StopTriggerTests
 {
-    private static readonly Security Sec = new("GCZ6", SecurityType.Future, 10, 10);
+    private static readonly Security Sec = new("GCZ6", 10, 10);
 
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
     private static readonly DateTime Now2 = new(2000, 1, 1, 12, 1, 0);

@@ -8,7 +8,7 @@ namespace Circus.Tests.Orders;
 [TestFixture]
 public class CreateOrderTests
 {
-    private static readonly Security Sec = new("GCZ6", SecurityType.Future, 10, 10);
+    private static readonly Security Sec = new("GCZ6", 10, 10);
 
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
     private static readonly DateTime Now2 = new(2000, 1, 1, 12, 1, 0);
@@ -77,7 +77,7 @@ public class CreateOrderTests
     public void MarketOrder_Success(Side side, decimal limitPrice)
     {
         // arrange
-        var sec = new Security("GCZ6", SecurityType.Future, 10, 10, 20);
+        var sec = new Security("GCZ6", 10, 10, 20);
         var book = new TimestampingOrderBook(sec, Clock);
         book.UpdateStatus(OrderBookStatus.Open);
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), side == Side.Buy ? Side.Sell : Side.Buy, 3, 500);

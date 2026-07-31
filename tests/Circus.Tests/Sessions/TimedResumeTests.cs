@@ -37,7 +37,7 @@ public class TimedResumeTests
     // A 5-tick volatility band on a reference of 100, so a trade at 200 breaches it.
     private IOrderBook PausingBook(TimeSpan? duration)
     {
-        var security = new Security("GCZ6", SecurityType.Future, 10, 10,
+        var security = new Security("GCZ6", 10, 10,
             PriceRestrictions: new PriceRestrictionConfig[] {new VolatilityBand(5, duration)});
         var book = new TimestampingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
@@ -253,7 +253,7 @@ public class TimedResumeTests
             ? new IPriceRestriction[] {halting, pausing}
             : new IPriceRestriction[] {pausing, halting};
 
-        var security = new Security("GCZ6", SecurityType.Future, 10, 10);
+        var security = new Security("GCZ6", 10, 10);
         var book = new TimestampingOrderBook(new OrderBook(security, restrictions), Clock);
         book.UpdateStatus(OrderBookStatus.Open);
 

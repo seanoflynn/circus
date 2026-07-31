@@ -9,7 +9,7 @@ public static class OrderBookExample
 {
     public static void TestExample()
     {
-        var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
+        var sec = new Security("GCZ6", 10, 10);
 
         var clock = new ManualClock(DateTime.Now);
         IOrderBook book = new TimestampingOrderBook(sec, clock);
@@ -28,7 +28,7 @@ public static class OrderBookExample
 
     public static void BackTestExample()
     {
-        var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
+        var sec = new Security("GCZ6", 10, 10);
 
         // No clock anywhere: a backtest already knows when everything happened, so it stamps
         // each action with the data's own time rather than moving a clock the book would read.
@@ -63,7 +63,7 @@ public static class OrderBookExample
 
     public static void LiveExample()
     {
-        var sec = new Security("GCZ6", SecurityType.Future, 10, 10);
+        var sec = new Security("GCZ6", 10, 10);
 
         var clock = new SystemClock();
         IOrderBook book = new TimestampingOrderBook(sec, clock);

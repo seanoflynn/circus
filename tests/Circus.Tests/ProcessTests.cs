@@ -9,7 +9,7 @@ namespace Circus.Tests;
 [TestFixture]
 public class ProcessTests
 {
-    private static readonly Security Sec = new("GCZ6", SecurityType.Future, 10, 10);
+    private static readonly Security Sec = new("GCZ6", 10, 10);
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
     private static readonly string CompanyId1 = "Company1";
     private static readonly string OrderId1 = "Order1";

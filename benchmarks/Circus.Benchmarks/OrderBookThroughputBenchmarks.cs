@@ -25,7 +25,7 @@ public class OrderBookThroughputBenchmarks
     [GlobalSetup]
     public void Setup()
     {
-        _security = new Security("BENCH", SecurityType.Future, 1m, 10m);
+        _security = new Security("BENCH", 1m, 10m);
         var simulator = new OrderFlowSimulator(_security, seed: 12345);
         _trace = simulator.Generate(ActionCount);
     }

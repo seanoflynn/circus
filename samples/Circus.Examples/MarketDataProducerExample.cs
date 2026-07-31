@@ -9,8 +9,8 @@ public class MarketDataProducerExample
     {
         var time = new SystemClock();
 
-        var sec1 = new Security("GCZ6", SecurityType.Future, 10, 10);
-        var sec2 = new Security("SIZ6", SecurityType.Future, 10, 10);
+        var sec1 = new Security("GCZ6", 10, 10);
+        var sec2 = new Security("SIZ6", 10, 10);
 
         IOrderBook book1 = new TimestampingOrderBook(sec1, time);
         IOrderBook book2 = new TimestampingOrderBook(sec2, time);
