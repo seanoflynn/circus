@@ -15,7 +15,7 @@ namespace Circus;
 // see TimestampingOrderBook for the boundary that does the stamping.
 public class OrderBook : IOrderBook
 {
-    private readonly Security _security;
+    private readonly Instrument _instrument;
 
     private OrderBookStatus _status = OrderBookStatus.Closed;
 
@@ -100,12 +100,12 @@ public class OrderBook : IOrderBook
 
     private const int MaxClientOrderIdLength = 20;
 
-    public OrderBook(Security security)
-        : this(security, Adapt(security.PriceRestrictions))
+    public OrderBook(Instrument instrument)
+        : this(instrument, Adapt(instrument.PriceRestrictions))
     {
     }
 
-    // Config in, enforcement out. The security describes what it trades under; this is the only
+    // Config in, enforcement out. The instrument describes what it trades under; this is the only
     // place that knows which adapter each description means, so a new restriction is a new arm
     // rather than a change to how books are constructed.
     private static IReadOnlyList<IPriceRestriction> Adapt(IReadOnlyList<PriceRestrictionConfig>? configs) =>
@@ -130,13 +130,13 @@ public class OrderBook : IOrderBook
     // Restrictions supplied outright rather than derived from the security. Internal because it
     // is a seam, not an API: it exists so combinations a Security cannot yet describe - two
     // trade-scoped restrictions disagreeing about severity, say - can still be exercised.
-    internal OrderBook(Security security, IReadOnlyList<IPriceRestriction> priceRestrictions)
+    internal OrderBook(Instrument instrument, IReadOnlyList<IPriceRestriction> priceRestrictions)
     {
-        _security = security;
+        _instrument = instrument;
         _priceRestrictions = priceRestrictions;
     }
 
-    public Security Security => _security;
+    public string Symbol => _instrument.Symbol;
     public OrderBookStatus Status => _status;
 
     public IReadOnlyList<OrderBookEvent> Process(OrderBookAction action)
@@ -256,7 +256,7 @@ public class OrderBook : IOrderBook
         foreach (var restriction in _priceRestrictions)
             restriction.OnIndicativePrice(quote?.PriceTicks);
 
-        return new IndicativePriceChanged(_security, time,
+        return new IndicativePriceChanged(_instrument.Symbol, time,
             quote.HasValue ? (decimal?) ToDecimal(quote.Value.PriceTicks) : null, quote?.Quantity ?? 0);
     }
 
@@ -316,7 +316,7 @@ public class OrderBook : IOrderBook
 
         if (type == OrderType.Market || type == OrderType.MarketLimit)
         {
-            var protectionTicks = type == OrderType.MarketLimit ? 0 : _security.MarketOrderProtectionTicks;
+            var protectionTicks = type == OrderType.MarketLimit ? 0 : _instrument.MarketOrderProtectionTicks;
             if(!TryGetLimitPrice(side, protectionTicks, out priceTicks))
                 return RejectCreate(companyId, clientOrderId, OrderRejectedReason.NoOrdersToMatchMarketOrder, time);
         }
@@ -329,7 +329,7 @@ public class OrderBook : IOrderBook
             return RejectCreate(companyId, clientOrderId, OrderRejectedReason.InvalidExpireDate, time);
 
         _nextSequenceNumber++;
-        var order = new InternalOrder(_nextSequenceNumber, companyId, clientOrderId, _security, time, status,
+        var order = new InternalOrder(_nextSequenceNumber, companyId, clientOrderId, _instrument, time, status,
             type, validity, side, quantity, priceTicks, triggerTicks, selfMatchPreventionId,
             selfMatchPreventionInstruction, maxVisibleQuantity);
 
@@ -338,7 +338,7 @@ public class OrderBook : IOrderBook
         _matcher.Rest(order);
 
         List<OrderBookEvent> events = new();
-        events.Add(new CreateOrderConfirmed(_security, time, companyId, order.ToOrder()));
+        events.Add(new CreateOrderConfirmed(_instrument.Symbol, time, companyId, order.ToOrder()));
         Match(events, time: time);
 
         if (order.Validity is OrderValidity.ImmediateOrCancel && order.Status == OrderStatus.Working)
@@ -355,7 +355,7 @@ public class OrderBook : IOrderBook
             return true;
         }
 
-        var rawTicks = price.Value / _security.TickSize;
+        var rawTicks = price.Value / _instrument.TickSize;
         var truncatedTicks = Math.Truncate(rawTicks);
         if (rawTicks != truncatedTicks)
         {
@@ -367,7 +367,7 @@ public class OrderBook : IOrderBook
         return true;
     }
 
-    private decimal ToDecimal(long ticks) => ticks * _security.TickSize;
+    private decimal ToDecimal(long ticks) => ticks * _instrument.TickSize;
 
     private bool TryGetLimitPrice(Side side, int protectionTicks, out long? priceTicks)
     {
@@ -416,7 +416,7 @@ public class OrderBook : IOrderBook
         var previousQuantity = order.DisplayedQuantity;
         order.Cancel(time);
         CompleteOrder(order);
-        return new CancelOrderConfirmed(_security, time, order.CompanyId, order.ToOrder(), previousClientOrderId,
+        return new CancelOrderConfirmed(_instrument.Symbol, time, order.CompanyId, order.ToOrder(), previousClientOrderId,
             reason, previousPrice, previousQuantity);
     }
 
@@ -503,7 +503,7 @@ public class OrderBook : IOrderBook
 
             return new List<OrderBookEvent>
             {
-                new CancelOrderConfirmed(_security, time, order.CompanyId, order.ToOrder(), previousClientOrderId,
+                new CancelOrderConfirmed(_instrument.Symbol, time, order.CompanyId, order.ToOrder(), previousClientOrderId,
                     OrderCancelledReason.UpdatedQuantityLowerThanFilledQuantity, previousPrice, previousQuantity)
             };
         }
@@ -537,7 +537,7 @@ public class OrderBook : IOrderBook
         _clientOrderIndex[(companyId, clientOrderId)] = order;
 
         List<OrderBookEvent> events = new();
-        events.Add(new UpdateOrderConfirmed(_security, time, order.CompanyId, order.ToOrder(), previousClientOrderId,
+        events.Add(new UpdateOrderConfirmed(_instrument.Symbol, time, order.CompanyId, order.ToOrder(), previousClientOrderId,
             previousExchangeOrderId, previousPrice, previousQuantity));
         Match(events, time: time);
         return events;
@@ -578,19 +578,19 @@ public class OrderBook : IOrderBook
 
         return new List<OrderBookEvent>
         {
-            new CancelOrderConfirmed(_security, time, order.CompanyId, order.ToOrder(), previousClientOrderId,
+            new CancelOrderConfirmed(_instrument.Symbol, time, order.CompanyId, order.ToOrder(), previousClientOrderId,
                 OrderCancelledReason.Cancelled, previousPrice, previousQuantity)
         };
     }
 
     private List<OrderBookEvent> RejectCreate(string companyId, string clientOrderId, OrderRejectedReason reason, DateTime time) =>
-        new() {new CreateOrderRejected(_security, time, companyId, clientOrderId, reason)};
+        new() {new CreateOrderRejected(_instrument.Symbol, time, companyId, clientOrderId, reason)};
 
     private List<OrderBookEvent> RejectUpdate(string companyId, string clientOrderId, string previousClientOrderId,
             OrderRejectedReason reason, string? exchangeOrderId = null, DateTime time = default) =>
         new()
         {
-            new UpdateOrderRejected(_security, time, companyId, clientOrderId, previousClientOrderId,
+            new UpdateOrderRejected(_instrument.Symbol, time, companyId, clientOrderId, previousClientOrderId,
                 exchangeOrderId, reason)
         };
 
@@ -598,7 +598,7 @@ public class OrderBook : IOrderBook
             OrderRejectedReason reason, string? exchangeOrderId = null, DateTime time = default) =>
         new()
         {
-            new CancelOrderRejected(_security, time, companyId, clientOrderId, previousClientOrderId,
+            new CancelOrderRejected(_instrument.Symbol, time, companyId, clientOrderId, previousClientOrderId,
                 exchangeOrderId, reason)
         };
 
@@ -609,7 +609,7 @@ public class OrderBook : IOrderBook
         order.Expire(time);
         CompleteOrder(order);
 
-        return new ExpireOrderConfirmed(_security, time, order.CompanyId, order.ToOrder(), previousPrice,
+        return new ExpireOrderConfirmed(_instrument.Symbol, time, order.CompanyId, order.ToOrder(), previousPrice,
             previousQuantity);
     }
 
@@ -647,7 +647,7 @@ public class OrderBook : IOrderBook
             order.Replenish(_nextSequenceNumber, time);
             _matcher.Rest(order);
 
-            return new UpdateOrderConfirmed(_security, time, order.CompanyId, order.ToOrder(),
+            return new UpdateOrderConfirmed(_instrument.Symbol, time, order.CompanyId, order.ToOrder(),
                 order.ClientOrderId, previousExchangeOrderId, ToDecimal(priceTicks), 0);
         }
 
@@ -798,7 +798,7 @@ public class OrderBook : IOrderBook
                     ? OrderBookStatus.Halted
                     : OrderBookStatus.Paused;
                 _resumeAt = breach.ResumeAfter.HasValue ? time + breach.ResumeAfter.Value : null;
-                events.Add(new StatusChanged(_security, time, _status, StatusChangeReason.PriceRestriction,
+                events.Add(new StatusChanged(_instrument.Symbol, time, _status, StatusChangeReason.PriceRestriction,
                     _resumeAt));
                 break;
 
@@ -826,7 +826,7 @@ public class OrderBook : IOrderBook
             return;
 
         _limitState = side;
-        events.Add(new LimitStateChanged(_security, time, side, ToDecimal(blockedTicks)));
+        events.Add(new LimitStateChanged(_instrument.Symbol, time, side, ToDecimal(blockedTicks)));
     }
 
     // A print means the market is trading again, wherever it is trading. Releasing on any trade
@@ -838,7 +838,7 @@ public class OrderBook : IOrderBook
             return;
 
         _limitState = null;
-        events.Add(new LimitStateChanged(_security, time, null, null));
+        events.Add(new LimitStateChanged(_instrument.Symbol, time, null, null));
     }
 
     private void ApplyTrade(InternalOrder resting, InternalOrder aggressor, long priceTicks, int quantity,
@@ -864,12 +864,12 @@ public class OrderBook : IOrderBook
         var aggressorSnapshot = aggressor.ToOrder();
         var aggressorReplenish = FinishFill(aggressor, time);
 
-        events.Add(new OrdersMatched(_security, time, price, quantity,
+        events.Add(new OrdersMatched(_instrument.Symbol, time, price, quantity,
             new[]
             {
-                new FillOrderConfirmed(_security, time, resting.CompanyId, restingSnapshot, price, quantity,
+                new FillOrderConfirmed(_instrument.Symbol, time, resting.CompanyId, restingSnapshot, price, quantity,
                     restingDisplayed, true),
-                new FillOrderConfirmed(_security, time, aggressor.CompanyId, aggressorSnapshot, price,
+                new FillOrderConfirmed(_instrument.Symbol, time, aggressor.CompanyId, aggressorSnapshot, price,
                     quantity, aggressorDisplayed, false)
             }
         ));
@@ -905,7 +905,7 @@ public class OrderBook : IOrderBook
             // calculate price for stop market orders
             long? newPriceTicks = order.Price;
             if (order.Type == OrderType.StopMarket &&
-                !TryGetLimitPrice(order.Side, _security.MarketOrderProtectionTicks, out newPriceTicks))
+                !TryGetLimitPrice(order.Side, _instrument.MarketOrderProtectionTicks, out newPriceTicks))
             {
                 var previousClientOrderId = order.ClientOrderId;
                 var previousQuantity = order.DisplayedQuantity;
@@ -914,7 +914,7 @@ public class OrderBook : IOrderBook
 
                 // FinishOrder, not CompleteOrder: already unrested above and never reached the
                 // working book, which is also why previousPrice is null.
-                events.Add(new CancelOrderConfirmed(_security, time, order.CompanyId, order.ToOrder(),
+                events.Add(new CancelOrderConfirmed(_instrument.Symbol, time, order.CompanyId, order.ToOrder(),
                     previousClientOrderId, OrderCancelledReason.NoOrdersToMatchMarketOrder, null,
                     previousQuantity));
                 continue;
@@ -929,7 +929,7 @@ public class OrderBook : IOrderBook
                 order.Cancel(time);
                 FinishOrder(order);
 
-                events.Add(new CancelOrderConfirmed(_security, time, order.CompanyId, order.ToOrder(),
+                events.Add(new CancelOrderConfirmed(_instrument.Symbol, time, order.CompanyId, order.ToOrder(),
                     previousClientOrderId, OrderCancelledReason.ImmediateOrCancelNotFilled, null,
                     previousQuantity));
                 continue;
@@ -943,7 +943,7 @@ public class OrderBook : IOrderBook
             _matcher.Rest(order);
 
             // previousPrice null - an arrival, not a move between working-book levels.
-            events.Add(new UpdateOrderConfirmed(_security, time, order.CompanyId, order.ToOrder(),
+            events.Add(new UpdateOrderConfirmed(_instrument.Symbol, time, order.CompanyId, order.ToOrder(),
                 order.ClientOrderId, previousExchangeOrderId, null, order.DisplayedQuantity));
         }
     }
@@ -973,7 +973,7 @@ public class OrderBook : IOrderBook
             // interruption is still running and why, which is the same thing a fresh one says.
             _resumeAt = extension.Value.ResumeAfter.HasValue ? time + extension.Value.ResumeAfter.Value : null;
             return new List<OrderBookEvent>
-                {new StatusChanged(_security, time, _status, StatusChangeReason.PriceRestriction, _resumeAt)};
+                {new StatusChanged(_instrument.Symbol, time, _status, StatusChangeReason.PriceRestriction, _resumeAt)};
         }
 
         // Any transition supersedes a pending one, so a session closing over a running pause
@@ -999,7 +999,7 @@ public class OrderBook : IOrderBook
 
         // _resumeAt was cleared above, so this reports nothing pending - which is what an
         // explicit transition means, having just superseded whatever was.
-        var events = new List<OrderBookEvent> {new StatusChanged(_security, time, _status, reason, _resumeAt)};
+        var events = new List<OrderBookEvent> {new StatusChanged(_instrument.Symbol, time, _status, reason, _resumeAt)};
 
         // A quoting phase has been accumulating orders for a print, and leaving it is where
         // that print happens - so a second auction phase would need nothing changed here.

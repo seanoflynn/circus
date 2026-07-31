@@ -16,12 +16,12 @@ public class LiveDriverTests
 {
     private static readonly DateTime Day = new(2000, 1, 1);
 
-    private static readonly Security Gold = new("GCZ6", 10, 10);
+    private static readonly Instrument Gold = new("GCZ6", 10, 10);
 
     private static readonly TimeSpan PauseFor = TimeSpan.FromMinutes(2);
 
     // A 5-tick volatility band on a reference of 100, so a trade at 200 breaches it.
-    private static readonly Security PausingGold = new("GCZ6", 10, 10,
+    private static readonly Instrument PausingGold = new("GCZ6", 10, 10,
         PriceRestrictions: new PriceRestrictionConfig[] {new VolatilityBand(5, PauseFor)});
 
     private static MarketSchedule TradingDay() => new(new(9, 0, 0), new(9, 30, 0), new(17, 0, 0));
@@ -36,7 +36,7 @@ public class LiveDriverTests
         // arrange
         var clock = new ManualClock(At(12, 0));
         var (driver, _) = Venue(Gold, clock, Quiet());
-        driver.Submit(new OpenTrading {Security = Gold});
+        driver.Submit(new OpenTrading {Symbol = Gold.Symbol});
 
         // act - the order arrives a minute later
         clock.SetCurrentTime(At(12, 1));
@@ -54,7 +54,7 @@ public class LiveDriverTests
         // arrange
         var clock = new ManualClock(At(12, 0));
         var (driver, _) = Venue(Gold, clock, Quiet());
-        driver.Submit(new OpenTrading {Security = Gold});
+        driver.Submit(new OpenTrading {Symbol = Gold.Symbol});
 
         // act - a client claiming its order arrived an hour ago
         var backdated = Order("Buy1", Side.Buy, 100) with {Time = At(11, 0)};
@@ -106,7 +106,7 @@ public class LiveDriverTests
         var clock = new ManualClock(At(12, 0));
         var (driver, book) = Venue(PausingGold, clock, Quiet());
 
-        driver.Submit(new OpenTrading {Security = PausingGold, ReferencePrice = 100});
+        driver.Submit(new OpenTrading {Symbol = PausingGold.Symbol, ReferencePrice = 100});
         clock.SetCurrentTime(At(12, 1));
         driver.Submit(Order("Sell1", Side.Sell, 200));
         driver.Submit(Order("Buy1", Side.Buy, 200));
@@ -147,7 +147,7 @@ public class LiveDriverTests
         // arrange
         var clock = new ManualClock(At(12, 0));
         var (driver, _) = Venue(Gold, clock, Quiet());
-        driver.Submit(new OpenTrading {Security = Gold});
+        driver.Submit(new OpenTrading {Symbol = Gold.Symbol});
         driver.Tick();
 
         // act - an NTP correction, or a clock nobody guaranteed was monotonic
@@ -157,10 +157,10 @@ public class LiveDriverTests
         Assert.Throws<ArgumentException>(() => driver.Submit(Order("Buy1", Side.Buy, 100)));
     }
 
-    private static (LiveDriver Driver, OrderBook Book) Venue(Security security, IClock clock,
+    private static (LiveDriver Driver, OrderBook Book) Venue(Instrument instrument, IClock clock,
         MarketSchedule schedule)
     {
-        var book = new OrderBook(security);
+        var book = new OrderBook(instrument);
         var sequencer = new Sequencer(clock.GetCurrentTime());
         sequencer.Add(book, schedule);
         return (new LiveDriver(sequencer, clock), book);
@@ -170,7 +170,7 @@ public class LiveDriverTests
     private static CreateLimitOrder Order(string clientOrderId, Side side, decimal price) =>
         new()
         {
-            Security = Gold, CompanyId = "Company1", ClientOrderId = clientOrderId,
+            Symbol = Gold.Symbol, CompanyId = "Company1", ClientOrderId = clientOrderId,
             OrderValidity = new OrderValidity.Day(), Side = side, Quantity = 5, Price = price
         };
 }

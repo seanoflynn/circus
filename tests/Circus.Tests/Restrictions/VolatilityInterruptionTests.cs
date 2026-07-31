@@ -30,7 +30,7 @@ public class VolatilityInterruptionTests
 
     // Ordinary range 5 ticks, extended range 8, pausing for two minutes. On a tick size of 10
     // that is 50 and 80 either side of the reference.
-    private static Security ExtendingSecurity() =>
+    private static Instrument ExtendingSecurity() =>
         new("GCZ6", 10, 10,
             PriceRestrictions: new PriceRestrictionConfig[]
             {
@@ -124,7 +124,7 @@ public class VolatilityInterruptionTests
         // arrange - a dynamic range of 3 ticks alongside a static range of 5, referenced at 100.
         // Each step below is well inside the dynamic range; it is the distance from where the
         // day started that eventually trips.
-        var security = new Security("GCZ6", 10, 10,
+        var security = new Instrument("GCZ6", 10, 10,
             PriceRestrictions: new PriceRestrictionConfig[]
             {
                 new VolatilityBand(3),

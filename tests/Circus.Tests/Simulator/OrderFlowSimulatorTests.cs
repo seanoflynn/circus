@@ -10,9 +10,9 @@ namespace Circus.Tests.Simulator;
 [TestFixture]
 public class OrderFlowSimulatorTests
 {
-    private static readonly Security Gold = new("GCZ6", 10, 10);
-    private static readonly Security Silver = new("SIZ6", 10, 10);
-    private static readonly Security Copper = new("HGZ6", 10, 10);
+    private static readonly Instrument Gold = new("GCZ6", 10, 10);
+    private static readonly Instrument Silver = new("SIZ6", 10, 10);
+    private static readonly Instrument Copper = new("HGZ6", 10, 10);
 
     [Test]
     public void Generate_SameSeed_SameTrace()
@@ -38,10 +38,10 @@ public class OrderFlowSimulatorTests
         var trace = new OrderFlowSimulator(new[] {Gold, Silver, Copper}, seed: 7).Generate(600);
 
         // every security represented, and mixed rather than generated in blocks
-        var names = trace.Select(a => a.Security.Name).ToList();
+        var names = trace.Select(a => a.Symbol).ToList();
         Assert.That(
             names.Distinct().OrderBy(n => n).ToList(),
-            Is.EqualTo(new[] {Gold.Name, Copper.Name, Silver.Name}.OrderBy(n => n).ToList()));
+            Is.EqualTo(new[] {Gold.Symbol, Copper.Symbol, Silver.Symbol}.OrderBy(n => n).ToList()));
 
         var switches = names.Zip(names.Skip(1)).Count(pair => pair.First != pair.Second);
         Assert.Greater(switches, 100, "expected the securities to be interleaved, not blocked");
@@ -70,7 +70,7 @@ public class OrderFlowSimulatorTests
 
         foreach (var action in trace)
         {
-            var name = action.Security.Name;
+            var name = action.Symbol;
 
             switch (action)
             {
@@ -104,9 +104,9 @@ public class OrderFlowSimulatorTests
     [Test]
     public void Generate_NoSecurities_ArgumentException()
     {
-        Assert.Throws<ArgumentException>(() => new OrderFlowSimulator(Array.Empty<Security>()));
+        Assert.Throws<ArgumentException>(() => new OrderFlowSimulator(Array.Empty<Instrument>()));
     }
 
     private static List<string> Describe(IReadOnlyList<OrderBookAction> trace) =>
-        trace.Select(a => $"{a.Security.Name} {a.Time:O} {a}").ToList();
+        trace.Select(a => $"{a.Symbol} {a.Time:O} {a}").ToList();
 }

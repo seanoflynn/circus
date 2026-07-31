@@ -25,12 +25,12 @@ public class SecurityStatusDataProducerTests
         Producer.Process(bookEvents);
 
     private IOrderBook PlainBook() =>
-        new TimestampingOrderBook(new Security("GCZ6", 10, 10), Clock);
+        new TimestampingOrderBook(new Instrument("GCZ6", 10, 10), Clock);
 
     // A 5-tick volatility range on a reference of 100, pausing for two minutes.
     private IOrderBook PausingBook() =>
         new TimestampingOrderBook(
-            new Security("GCZ6", 10, 10,
+            new Instrument("GCZ6", 10, 10,
                 PriceRestrictions: new PriceRestrictionConfig[] {new VolatilityBand(5, PauseFor)}),
             Clock);
 
@@ -112,7 +112,7 @@ public class SecurityStatusDataProducerTests
     {
         // arrange - a range with no duration configured stands until something ends it
         var book = new TimestampingOrderBook(
-            new Security("GCZ6", 10, 10,
+            new Instrument("GCZ6", 10, 10,
                 PriceRestrictions: new PriceRestrictionConfig[] {new VolatilityBand(5)}),
             Clock);
         Publish(book, book.UpdateStatus(OrderBookStatus.Open, 100));
@@ -134,7 +134,7 @@ public class SecurityStatusDataProducerTests
         // limit was wider and then moving the reference so the limit narrows under it. The
         // clock moves on so that buy is genuinely the older order when the sell arrives.
         var book = new TimestampingOrderBook(
-            new Security("GCZ6", 10, 10,
+            new Instrument("GCZ6", 10, 10,
                 PriceRestrictions: new PriceRestrictionConfig[]
                 {
                     new DailyPriceLimit(new PriceLimitWidth.Ticks(5))
@@ -185,7 +185,7 @@ public class SecurityStatusDataProducerTests
         // act - a limit event arriving on its own carries the remembered status with it, which
         // is what holding state is for
         var events = Producer.Process(
-            new OrderBookEvent[] {new LimitStateChanged(book.Security, Now1, Side.Sell, 90)});
+            new OrderBookEvent[] {new LimitStateChanged(book.Symbol, Now1, Side.Sell, 90)});
 
         // assert
         Assert.AreEqual(OrderBookStatus.Paused, events.Single().Status);

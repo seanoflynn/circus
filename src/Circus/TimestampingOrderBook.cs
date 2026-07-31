@@ -28,12 +28,12 @@ public sealed class TimestampingOrderBook : IOrderBook
         _clock = clock;
     }
 
-    public TimestampingOrderBook(Security security, IClock clock)
-        : this(new OrderBook(security), clock)
+    public TimestampingOrderBook(Instrument instrument, IClock clock)
+        : this(new OrderBook(instrument), clock)
     {
     }
 
-    public Security Security => _book.Security;
+    public string Symbol => _book.Symbol;
 
     public OrderBookStatus Status => _book.Status;
 

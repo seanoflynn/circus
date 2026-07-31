@@ -9,7 +9,7 @@ namespace Circus.Tests;
 [TestFixture]
 public class ProcessTests
 {
-    private static readonly Security Sec = new("GCZ6", 10, 10);
+    private static readonly Instrument Sec = new("GCZ6", 10, 10);
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
     private static readonly string CompanyId1 = "Company1";
     private static readonly string OrderId1 = "Order1";
@@ -36,7 +36,7 @@ public class ProcessTests
         // order, not get misrouted into the TriggerPrice slot as a hidden stop order
         var events = Book.Process(new CreateLimitOrder
         {
-            Security = Sec, CompanyId = CompanyId1, ClientOrderId = OrderId1, OrderValidity = new OrderValidity.Day(),
+            Symbol = Sec.Symbol, CompanyId = CompanyId1, ClientOrderId = OrderId1, OrderValidity = new OrderValidity.Day(),
             Side = Side.Buy, Quantity = 3, Price = 100
         });
 
@@ -61,7 +61,7 @@ public class ProcessTests
         // act - only Price set, no TriggerPrice: this must actually reprice the order
         var events = Book.Process(new UpdateOrder
         {
-            Security = Sec, CompanyId = CompanyId1, ClientOrderId = OrderId2, PreviousClientOrderId = OrderId1,
+            Symbol = Sec.Symbol, CompanyId = CompanyId1, ClientOrderId = OrderId2, PreviousClientOrderId = OrderId1,
             Price = 110
         });
 
@@ -79,7 +79,7 @@ public class ProcessTests
         // act
         Book.Process(new CancelOrder
         {
-            Security = Sec, CompanyId = CompanyId1, ClientOrderId = OrderId3, PreviousClientOrderId = OrderId1
+            Symbol = Sec.Symbol, CompanyId = CompanyId1, ClientOrderId = OrderId3, PreviousClientOrderId = OrderId1
         });
     }
 
@@ -87,6 +87,6 @@ public class ProcessTests
     public void Process_UpdateStatus_Success()
     {
         // act
-        Book.Process(new OpenTrading { Security = Sec });
+        Book.Process(new OpenTrading { Symbol = Sec.Symbol });
     }
 }

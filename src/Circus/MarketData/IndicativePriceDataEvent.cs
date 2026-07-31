@@ -1,4 +1,4 @@
 namespace Circus.MarketData;
 
-public record IndicativePriceDataEvent(Security Security, DateTime Time, decimal? Price, int Quantity)
-    : MarketDataEvent(Security, Time);
+public record IndicativePriceDataEvent(string Symbol, DateTime Time, decimal? Price, int Quantity)
+    : MarketDataEvent(Symbol, Time);

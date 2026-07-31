@@ -33,7 +33,7 @@ public class FullBookDataProducer : IDataProducer<OrderBookDeltaEvent>
             {
                 foreach (var fill in matched.Fills)
                 {
-                    Add(ref output, new OrderBookDeltaEvent(fill.Security, fill.Time, fill.Order.Side,
+                    Add(ref output, new OrderBookDeltaEvent(fill.Symbol, fill.Time, fill.Order.Side,
                         fill.Order.ExchangeOrderId, fill.Order.Price!.Value, fill.Quantity,
                         OrderBookDeltaAction.Filled));
                 }
@@ -45,16 +45,16 @@ public class FullBookDataProducer : IDataProducer<OrderBookDeltaEvent>
             {
                 if (moved.PreviousExchangeOrderId != moved.Order.ExchangeOrderId)
                 {
-                    Add(ref output, new OrderBookDeltaEvent(moved.Security, moved.Time, moved.Order.Side,
+                    Add(ref output, new OrderBookDeltaEvent(moved.Symbol, moved.Time, moved.Order.Side,
                         moved.PreviousExchangeOrderId, movedFromPrice, moved.PreviousQuantity,
                         OrderBookDeltaAction.Removed));
-                    Add(ref output, new OrderBookDeltaEvent(moved.Security, moved.Time, moved.Order.Side,
+                    Add(ref output, new OrderBookDeltaEvent(moved.Symbol, moved.Time, moved.Order.Side,
                         moved.Order.ExchangeOrderId, moved.Order.Price!.Value, moved.Order.DisplayedQuantity,
                         OrderBookDeltaAction.Added));
                 }
                 else
                 {
-                    Add(ref output, new OrderBookDeltaEvent(moved.Security, moved.Time, moved.Order.Side,
+                    Add(ref output, new OrderBookDeltaEvent(moved.Symbol, moved.Time, moved.Order.Side,
                         moved.Order.ExchangeOrderId, moved.Order.Price!.Value, moved.Order.DisplayedQuantity,
                         OrderBookDeltaAction.Modified));
                 }
@@ -65,24 +65,24 @@ public class FullBookDataProducer : IDataProducer<OrderBookDeltaEvent>
             OrderBookDeltaEvent? delta = ev switch
             {
                 CreateOrderConfirmed {Order.Status: not OrderStatus.Hidden} create =>
-                    new OrderBookDeltaEvent(create.Security, create.Time, create.Order.Side,
+                    new OrderBookDeltaEvent(create.Symbol, create.Time, create.Order.Side,
                         create.Order.ExchangeOrderId, create.Order.Price!.Value,
                         create.Order.DisplayedQuantity, OrderBookDeltaAction.Added),
 
                 UpdateOrderConfirmed {PreviousPrice: null, Order.Status: OrderStatus.Hidden} => null,
 
                 UpdateOrderConfirmed {PreviousPrice: null} update =>
-                    new OrderBookDeltaEvent(update.Security, update.Time, update.Order.Side,
+                    new OrderBookDeltaEvent(update.Symbol, update.Time, update.Order.Side,
                         update.Order.ExchangeOrderId, update.Order.Price!.Value,
                         update.Order.DisplayedQuantity, OrderBookDeltaAction.Added),
 
                 CancelOrderConfirmed {PreviousPrice: {} previousPrice} cancel =>
-                    new OrderBookDeltaEvent(cancel.Security, cancel.Time, cancel.Order.Side,
+                    new OrderBookDeltaEvent(cancel.Symbol, cancel.Time, cancel.Order.Side,
                         cancel.Order.ExchangeOrderId, previousPrice, cancel.PreviousQuantity,
                         OrderBookDeltaAction.Removed),
 
                 ExpireOrderConfirmed {PreviousPrice: {} previousPrice} expire =>
-                    new OrderBookDeltaEvent(expire.Security, expire.Time, expire.Order.Side,
+                    new OrderBookDeltaEvent(expire.Symbol, expire.Time, expire.Order.Side,
                         expire.Order.ExchangeOrderId, previousPrice, expire.PreviousQuantity,
                         OrderBookDeltaAction.Removed),
 

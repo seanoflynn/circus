@@ -9,7 +9,7 @@ namespace Circus.Tests.Orders;
 [TestFixture]
 public class MarketLimitOrderTests
 {
-    private static readonly Security Sec = new("GCZ6", 10, 10);
+    private static readonly Instrument Sec = new("GCZ6", 10, 10);
 
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
     private static readonly DateTime Now2 = new(2000, 1, 1, 12, 1, 0);
@@ -100,7 +100,7 @@ public class MarketLimitOrderTests
     {
         // arrange - a wide protection-tick band so a plain Market order provably reaches
         // the second level, contrasted against a MarketLimit order in the identical setup
-        var sec = new Security("GCZ6", 10, 10, 20);
+        var sec = new Instrument("GCZ6", 10, 20);
 
         var marketBook = new LevelTrackingOrderBook(sec, Clock);
         marketBook.UpdateStatus(OrderBookStatus.Open);
@@ -232,7 +232,7 @@ public class MarketLimitOrderTests
         // act
         var events = Book.Process(new CreateMarketLimitOrder
         {
-            Security = Sec, CompanyId = CompanyId2, ClientOrderId = OrderId2, OrderValidity = new OrderValidity.Day(),
+            Symbol = Sec.Symbol, CompanyId = CompanyId2, ClientOrderId = OrderId2, OrderValidity = new OrderValidity.Day(),
             Side = Side.Buy, Quantity = 3
         });
 

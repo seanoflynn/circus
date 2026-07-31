@@ -11,7 +11,7 @@ namespace Circus.Tests.Matching;
 [TestFixture]
 public class MatcherTests
 {
-    private static readonly Security Sec = new("GCZ6", 10, 10);
+    private static readonly Instrument Sec = new("GCZ6", 10, 10);
 
     private static readonly DateTime Early = new(2000, 1, 1, 12, 0, 0);
     private static readonly DateTime Late = new(2000, 1, 1, 12, 1, 0);

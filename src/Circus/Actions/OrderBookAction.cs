@@ -2,7 +2,7 @@ namespace Circus.Actions;
 
 public abstract record OrderBookAction
 {
-    public required Security Security { get; init; }
+    public required string Symbol { get; init; }
 
     // When the exchange accepted this action, stamped on the way in by whatever owns the clock
     // - a gateway, a session driver, TimestampingOrderBook. The book reads no clock of its own,
