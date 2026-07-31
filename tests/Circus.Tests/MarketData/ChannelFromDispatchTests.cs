@@ -30,19 +30,14 @@ public class ChannelFromDispatchTests
     public void MarketDataFollowsTheOrderTheVenueDispatchedIn()
     {
         // arrange
-        var sequencer = new Sequencer(Day);
-        sequencer.Add(new OrderBook(Gold), OpenThroughout());
-        sequencer.Add(new OrderBook(Silver), OpenThroughout());
-
-        var channel = new MarketDataChannel();
-        channel.Add(new SecurityFeed(Gold.Symbol, maxLevels: 10));
-        channel.Add(new SecurityFeed(Silver.Symbol, maxLevels: 10));
+        var group = new InstrumentGroup(Day);
+        group.Add(Gold, OpenThroughout());
+        group.Add(Silver, OpenThroughout());
 
         var trace = new OrderFlowSimulator(new[] {Gold, Silver}, seed: 21).Generate(400);
 
-        // act - publish each dispatch's events as they come out
-        var published = new List<ChannelMessage>();
-        Replay.Run(sequencer, trace, d => published.AddRange(channel.Publish(d.Events)));
+        // act - the group wires sequencer dispatch to channel publish automatically
+        var published = Replay.Run(group, trace);
 
         // assert
         Assert.IsNotEmpty(published);
@@ -123,20 +118,13 @@ public class ChannelFromDispatchTests
 
     private static List<string> PublishAll(IReadOnlyList<OrderBookAction> trace)
     {
-        var sequencer = new Sequencer(Day);
-        sequencer.Add(new OrderBook(Gold), OpenThroughout());
-        sequencer.Add(new OrderBook(Silver), OpenThroughout());
-
-        var channel = new MarketDataChannel();
-        channel.Add(new SecurityFeed(Gold.Symbol, maxLevels: 10));
-        channel.Add(new SecurityFeed(Silver.Symbol, maxLevels: 10));
+        var group = new InstrumentGroup(Day);
+        group.Add(Gold, OpenThroughout());
+        group.Add(Silver, OpenThroughout());
 
         var rendered = new List<string>();
-        Replay.Run(sequencer, trace, d =>
-        {
-            foreach (var message in channel.Publish(d.Events))
-                rendered.Add($"{message.Sequence} {message.Data.Symbol} {Describe(message.Data)}");
-        });
+        foreach (var message in Replay.Run(group, trace))
+            rendered.Add($"{message.Sequence} {message.Data.Symbol} {Describe(message.Data)}");
 
         return rendered;
     }

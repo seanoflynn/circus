@@ -1,4 +1,5 @@
 using Circus.Actions;
+using Circus.MarketData;
 
 namespace Circus.Sequencing;
 
@@ -41,6 +42,20 @@ public static class Replay
 
         if (until is { } end && end > sequencer.LogicalNow)
             Report(sequencer.AdvanceTo(end), onDispatched);
+    }
+
+    // Runs a trace through an InstrumentGroup's sequencer, publishing every dispatch through the
+    // group's channel, and returns the channel messages in order. A convenience that replaces the
+    // manual wiring of Run(group.Sequencer, trace, d => ...) with a single call.
+    public static IReadOnlyList<ChannelMessage> Run(InstrumentGroup group,
+        IEnumerable<OrderBookAction> trace, DateTime? until = null)
+    {
+        ArgumentNullException.ThrowIfNull(group);
+        ArgumentNullException.ThrowIfNull(trace);
+
+        var messages = new List<ChannelMessage>();
+        Run(group.Sequencer, trace, d => messages.AddRange(group.Channel.Publish(d.Events)), until);
+        return messages;
     }
 
     private static void Report(IReadOnlyList<Dispatched> dispatched, Action<Dispatched>? onDispatched)
