@@ -39,9 +39,9 @@ public sealed class Sequencer
     private readonly PriorityQueue<OrderBookAction, (DateTime Time, DispatchKind Kind, long Counter)>
         _queue = new();
 
-    // Keyed on the security's name rather than on the record. A name is what identifies a
+    // Keyed on the symbol rather than on the record. A symbol is what identifies a
     // contract at a venue, and it is the part an action arriving from anywhere else can be
-    // trusted to carry: two Security records describing the same contract need not be equal,
+    // trusted to carry: two Instrument records describing the same contract need not be equal,
     // since the restriction list on them compares by reference. A routing table that turned that
     // into "no book is registered for GCZ6" while holding a book for GCZ6 would be a bad
     // afternoon.
@@ -63,7 +63,7 @@ public sealed class Sequencer
     // its trace, a live pump at its clock.
     public DateTime LogicalNow => _now;
 
-    // Registers a book and the schedule driving it, keyed on the book's own security, and queues
+    // Registers a book and the schedule driving it, keyed on the book's own symbol, and queues
     // its first boundary - the next one strictly after logical now.
     //
     // A book registered mid-session is not caught up. The schedule is asked what is next, never
@@ -72,11 +72,11 @@ public sealed class Sequencer
     // where it should be: that decision belongs to whoever starts the venue, not here.
     public void Add(IOrderBook book, MarketSchedule schedule)
     {
-        if (!_books.TryAdd(book.Security.Name, (book, schedule)))
+        if (!_books.TryAdd(book.Symbol, (book, schedule)))
             throw new ArgumentException(
-                $"a book is already registered for {book.Security.Name}", nameof(book));
+                $"a book is already registered for {book.Symbol}", nameof(book));
 
-        QueueNextTransition(book.Security, schedule, _now);
+        QueueNextTransition(book.Symbol, schedule, _now);
     }
 
     // Queues client flow at its own stamp.
@@ -97,9 +97,9 @@ public sealed class Sequencer
                 $"({_now:O}). Everything up to that instant has been dispatched already.",
                 nameof(action));
 
-        if (!_books.ContainsKey(action.Security.Name))
+        if (!_books.ContainsKey(action.Symbol))
             throw new ArgumentException(
-                $"no book is registered for {action.Security.Name}", nameof(action));
+                $"no book is registered for {action.Symbol}", nameof(action));
 
         Enqueue(action, DispatchKind.ClientFlow);
     }
@@ -127,7 +127,7 @@ public sealed class Sequencer
             // actually happened at.
             _now = next.Time;
 
-            var (book, schedule) = _books[action.Security.Name];
+            var (book, schedule) = _books[action.Symbol];
             var events = book.Process(action);
 
             _sequence++;
@@ -136,7 +136,7 @@ public sealed class Sequencer
             // The next boundary is queued only once this one has been dispatched, so the queue
             // holds a single pending transition per book however far ahead the schedule runs.
             if (next.Kind == DispatchKind.ScheduleTransition)
-                QueueNextTransition(action.Security, schedule, next.Time);
+                QueueNextTransition(action.Symbol, schedule, next.Time);
 
             QueueInterruptionTicks(events, next.Time);
         }
@@ -160,18 +160,18 @@ public sealed class Sequencer
             // Strictly ahead: a deadline that has already arrived was served by the action that
             // set it, and a poke queued at the instant being dispatched would only spin.
             if (status.ResumesAt is { } resumesAt && resumesAt > dispatchedAt)
-                Enqueue(new AdvanceTime {Security = status.Security, Time = resumesAt},
+                Enqueue(new AdvanceTime {Symbol = status.Symbol, Time = resumesAt},
                     DispatchKind.InterruptionTick);
         }
     }
 
-    private void QueueNextTransition(Security security, MarketSchedule schedule, DateTime after)
+    private void QueueNextTransition(string symbol, MarketSchedule schedule, DateTime after)
     {
         // A schedule with nothing left to say - a holiday calendar past its end - simply stops
         // driving its book. Whoever registered it decides what that means.
         if (schedule.NextAfter(after) is not { } transition) return;
 
-        Enqueue(ToAction(security, transition), DispatchKind.ScheduleTransition);
+        Enqueue(ToAction(symbol, transition), DispatchKind.ScheduleTransition);
     }
 
     private void Enqueue(OrderBookAction action, DispatchKind kind)
@@ -183,14 +183,14 @@ public sealed class Sequencer
     // No reference price on an opening this builds: where that number comes from is a decision
     // kept outside the engine, and it reaches a book as an ordinary submitted action rather than
     // through a lookup wired into the schedule.
-    private static OrderBookAction ToAction(Security security, ScheduledTransition transition) =>
+    private static OrderBookAction ToAction(string symbol, ScheduledTransition transition) =>
         transition.Status switch
         {
-            OrderBookStatus.PreOpen => new PreOpenTrading {Security = security, Time = transition.Time},
-            OrderBookStatus.Open => new OpenTrading {Security = security, Time = transition.Time},
+            OrderBookStatus.PreOpen => new PreOpenTrading {Symbol = symbol, Time = transition.Time},
+            OrderBookStatus.Open => new OpenTrading {Symbol = symbol, Time = transition.Time},
             OrderBookStatus.Closed => new CloseTrading
             {
-                Security = security, Time = transition.Time, EndsTradingDay = transition.EndsTradingDay
+                Symbol = symbol, Time = transition.Time, EndsTradingDay = transition.EndsTradingDay
             },
             _ => throw new ArgumentOutOfRangeException(nameof(transition), transition.Status,
                 "a schedule moves a book between pre-open, open and closed, and nowhere else")

@@ -16,8 +16,8 @@ public class ChannelFromDispatchTests
 {
     private static readonly DateTime Day = new(2000, 1, 1);
 
-    private static readonly Security Gold = new("GCZ6", 10, 10);
-    private static readonly Security Silver = new("SIZ6", 10, 10);
+    private static readonly Instrument Gold = new("GCZ6", 10, 10);
+    private static readonly Instrument Silver = new("SIZ6", 10, 10);
 
     // Open before the trace starts and closed long after it ends, so the books actually trade
     // for the whole of it. A schedule with boundaries inside the trace would leave most of the
@@ -35,8 +35,8 @@ public class ChannelFromDispatchTests
         sequencer.Add(new OrderBook(Silver), OpenThroughout());
 
         var channel = new MarketDataChannel();
-        channel.Add(new SecurityFeed(Gold, maxLevels: 10));
-        channel.Add(new SecurityFeed(Silver, maxLevels: 10));
+        channel.Add(new SecurityFeed(Gold.Symbol, maxLevels: 10));
+        channel.Add(new SecurityFeed(Silver.Symbol, maxLevels: 10));
 
         var trace = new OrderFlowSimulator(new[] {Gold, Silver}, seed: 21).Generate(400);
 
@@ -54,8 +54,8 @@ public class ChannelFromDispatchTests
 
         // both instruments on the one channel, each message saying which
         Assert.AreEqual(
-            new[] {Gold.Name, Silver.Name},
-            published.Select(m => m.Data.Security.Name).Distinct().OrderBy(n => n).ToArray());
+            new[] {Gold.Symbol, Silver.Symbol},
+            published.Select(m => m.Data.Symbol).Distinct().OrderBy(n => n).ToArray());
 
         // and time never runs backwards along the channel, because the venue's dispatch order is
         // what put the messages there
@@ -72,10 +72,10 @@ public class ChannelFromDispatchTests
         sequencer.Add(new OrderBook(Silver), OpenThroughout());
 
         var goldChannel = new MarketDataChannel();
-        goldChannel.Add(new SecurityFeed(Gold, maxLevels: 10));
+        goldChannel.Add(new SecurityFeed(Gold.Symbol, maxLevels: 10));
 
         var silverChannel = new MarketDataChannel();
-        silverChannel.Add(new SecurityFeed(Silver, maxLevels: 10));
+        silverChannel.Add(new SecurityFeed(Silver.Symbol, maxLevels: 10));
 
         var trace = new OrderFlowSimulator(new[] {Gold, Silver}, seed: 22).Generate(400);
 
@@ -103,8 +103,8 @@ public class ChannelFromDispatchTests
             silverMessages.Select(m => m.Sequence).ToList());
 
         // each carrying only its own instrument
-        Assert.IsTrue(goldMessages.All(m => m.Data.Security.Name == Gold.Name));
-        Assert.IsTrue(silverMessages.All(m => m.Data.Security.Name == Silver.Name));
+        Assert.IsTrue(goldMessages.All(m => m.Data.Symbol == Gold.Symbol));
+        Assert.IsTrue(silverMessages.All(m => m.Data.Symbol == Silver.Symbol));
     }
 
     [Test]
@@ -128,14 +128,14 @@ public class ChannelFromDispatchTests
         sequencer.Add(new OrderBook(Silver), OpenThroughout());
 
         var channel = new MarketDataChannel();
-        channel.Add(new SecurityFeed(Gold, maxLevels: 10));
-        channel.Add(new SecurityFeed(Silver, maxLevels: 10));
+        channel.Add(new SecurityFeed(Gold.Symbol, maxLevels: 10));
+        channel.Add(new SecurityFeed(Silver.Symbol, maxLevels: 10));
 
         var rendered = new List<string>();
         Replay.Run(sequencer, trace, d =>
         {
             foreach (var message in channel.Publish(d.Events))
-                rendered.Add($"{message.Sequence} {message.Data.Security.Name} {Describe(message.Data)}");
+                rendered.Add($"{message.Sequence} {message.Data.Symbol} {Describe(message.Data)}");
         });
 
         return rendered;

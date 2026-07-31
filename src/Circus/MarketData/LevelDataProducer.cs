@@ -79,7 +79,7 @@ public class LevelDataProducer : IDataProducer<LevelsDataEvent>
 
         var bids = Snapshot(Side.Buy);
         var offers = Snapshot(Side.Sell);
-        return new[] {new LevelsDataEvent(events[0].Security, events[0].Time, bids, offers)};
+        return new[] {new LevelsDataEvent(events[0].Symbol, events[0].Time, bids, offers)};
     }
 
     private void Add(Side side, decimal price, int quantity)

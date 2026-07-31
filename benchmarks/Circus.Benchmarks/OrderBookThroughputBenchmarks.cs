@@ -15,7 +15,7 @@ public class OrderBookThroughputBenchmarks
     [Params(1_000, 10_000, 100_000)]
     public int ActionCount;
 
-    private Security _security = null!;
+    private Instrument _instrument = null!;
     private IReadOnlyList<OrderBookAction> _trace = null!;
 
     // The trace runs from 09:00, so an evening session never comes due within it.
@@ -25,8 +25,8 @@ public class OrderBookThroughputBenchmarks
     [GlobalSetup]
     public void Setup()
     {
-        _security = new Security("BENCH", 1m, 10m);
-        var simulator = new OrderFlowSimulator(_security, seed: 12345);
+        _instrument = new Instrument("BENCH", 1m, 10);
+        var simulator = new OrderFlowSimulator(_instrument, seed: 12345);
         _trace = simulator.Generate(ActionCount);
     }
 
@@ -36,8 +36,8 @@ public class OrderBookThroughputBenchmarks
         // No clock: the trace carries the time each action happened, so replaying it is the
         // whole job. Opening is stamped at the first action's instant - the book refuses time
         // running backwards, and equal stamps are fine.
-        var book = new OrderBook(_security);
-        book.Process(new OpenTrading {Security = _security, Time = _trace[0].Time});
+        var book = new OrderBook(_instrument);
+        book.Process(new OpenTrading {Symbol = _instrument.Symbol, Time = _trace[0].Time});
 
         var eventCount = 0;
         foreach (var action in _trace)
@@ -56,14 +56,14 @@ public class OrderBookThroughputBenchmarks
     [Benchmark]
     public int ReplayTraceThroughSequencer()
     {
-        var book = new OrderBook(_security);
+        var book = new OrderBook(_instrument);
         var sequencer = new Sequencer(_trace[0].Time);
 
         // A schedule whose boundaries fall outside the trace, so what is measured is the queue
         // rather than transitions the baseline never dispatched. Opening is submitted instead,
         // matching the baseline action for action.
         sequencer.Add(book, OutOfTheWay);
-        sequencer.Submit(new OpenTrading {Security = _security, Time = _trace[0].Time});
+        sequencer.Submit(new OpenTrading {Symbol = _instrument.Symbol, Time = _trace[0].Time});
 
         var eventCount = 0;
         Replay.Run(sequencer, _trace, d => eventCount += d.Events.Count);

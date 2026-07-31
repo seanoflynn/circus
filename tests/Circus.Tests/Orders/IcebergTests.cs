@@ -9,7 +9,7 @@ namespace Circus.Tests.Orders;
 [TestFixture]
 public class IcebergTests
 {
-    private static readonly Security Sec = new("GCZ6", 10, 10);
+    private static readonly Instrument Sec = new("GCZ6", 10, 10);
 
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
     private static readonly DateTime Now2 = new(2000, 1, 1, 12, 1, 0);

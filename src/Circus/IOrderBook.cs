@@ -8,7 +8,7 @@ namespace Circus;
 // out of the book, so a market data feed and a downstream mirror see the same thing.
 public interface IOrderBook
 {
-    Security Security { get; }
+    string Symbol { get; }
 
     OrderBookStatus Status { get; }
 

@@ -11,7 +11,7 @@ namespace Circus.Tests.Sessions;
 [TestFixture]
 public class PausedHaltedTests
 {
-    private static readonly Security Sec = new("GCZ6", 10, 10);
+    private static readonly Instrument Sec = new("GCZ6", 10, 10);
 
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
     private static readonly DateTime Now2 = new(2000, 1, 1, 12, 1, 0);
@@ -199,7 +199,7 @@ public class PausedHaltedTests
     public void VolatilityBandBreach_PausesRatherThanReturningToPreOpen()
     {
         // arrange - a reference of 100 and a 5-tick volatility band
-        var security = new Security("GCZ6", 10, 10,
+        var security = new Instrument("GCZ6", 10, 10,
             PriceRestrictions: new PriceRestrictionConfig[] {new VolatilityBand(5)});
         var book = new TimestampingOrderBook(security, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);

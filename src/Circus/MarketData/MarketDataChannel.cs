@@ -22,9 +22,9 @@ namespace Circus.MarketData;
 // Single-threaded, like the sequencer that feeds it: one channel, one publishing thread.
 public sealed class MarketDataChannel
 {
-    // Keyed on the security's name rather than the record, for the reason the sequencer's routing
-    // table is: two Security records describing the same contract need not be equal, since the
-    // restriction list on them compares by reference.
+    // Keyed on the symbol rather than the record, for the reason the sequencer's routing table is:
+    // two Instrument records describing the same contract need not be equal, since the restriction
+    // list on them compares by reference.
     private readonly Dictionary<string, SecurityFeed> _feeds = new();
 
     private long _sequence;
@@ -36,9 +36,9 @@ public sealed class MarketDataChannel
     {
         ArgumentNullException.ThrowIfNull(feed);
 
-        if (!_feeds.TryAdd(feed.Security.Name, feed))
+        if (!_feeds.TryAdd(feed.Symbol, feed))
             throw new ArgumentException(
-                $"a feed is already registered for {feed.Security.Name}", nameof(feed));
+                $"a feed is already registered for {feed.Symbol}", nameof(feed));
     }
 
     // Turns one dispatch's events into the messages this channel publishes for them.
@@ -55,9 +55,9 @@ public sealed class MarketDataChannel
 
         List<ChannelMessage>? output = null;
 
-        foreach (var (name, forSecurity) in GroupBySecurity(events))
+        foreach (var (symbol, forSecurity) in GroupBySymbol(events))
         {
-            if (!_feeds.TryGetValue(name, out var feed))
+            if (!_feeds.TryGetValue(symbol, out var feed))
                 continue;
 
             foreach (var data in feed.Process(forSecurity))
@@ -74,15 +74,15 @@ public sealed class MarketDataChannel
     // list is passed straight through. Grouped rather than assumed anyway, because an action that
     // implied a fill in another book would arrive here as events spanning securities, and each
     // book's producers must be handed their own book's events and only those.
-    private static IEnumerable<(string Name, IReadOnlyList<OrderBookEvent> Events)> GroupBySecurity(
+    private static IEnumerable<(string Symbol, IReadOnlyList<OrderBookEvent> Events)> GroupBySymbol(
         IReadOnlyList<OrderBookEvent> events)
     {
-        var first = events[0].Security.Name;
+        var first = events[0].Symbol;
 
         var spansSecurities = false;
         for (var i = 1; i < events.Count; i++)
         {
-            if (events[i].Security.Name == first) continue;
+            if (events[i].Symbol == first) continue;
 
             spansSecurities = true;
             break;
@@ -98,11 +98,11 @@ public sealed class MarketDataChannel
 
         foreach (var ev in events)
         {
-            var name = ev.Security.Name;
-            if (!groups.TryGetValue(name, out var list))
+            var symbol = ev.Symbol;
+            if (!groups.TryGetValue(symbol, out var list))
             {
-                groups[name] = list = new List<OrderBookEvent>();
-                order.Add(name);
+                groups[symbol] = list = new List<OrderBookEvent>();
+                order.Add(symbol);
             }
 
             list.Add(ev);

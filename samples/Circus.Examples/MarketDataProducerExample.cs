@@ -9,8 +9,8 @@ public class MarketDataProducerExample
     {
         var time = new SystemClock();
 
-        var sec1 = new Security("GCZ6", 10, 10);
-        var sec2 = new Security("SIZ6", 10, 10);
+        var sec1 = new Instrument("GCZ6", 10, 10);
+        var sec2 = new Instrument("SIZ6", 10, 10);
 
         IOrderBook book1 = new TimestampingOrderBook(sec1, time);
         IOrderBook book2 = new TimestampingOrderBook(sec2, time);
@@ -20,8 +20,8 @@ public class MarketDataProducerExample
         // instrument it is about. A feed per security, because every producer behind one builds
         // its view from a single book's events and none can resync after a missed one.
         var channel = new MarketDataChannel();
-        channel.Add(new SecurityFeed(sec1, maxLevels: 10));
-        channel.Add(new SecurityFeed(sec2, maxLevels: 10));
+        channel.Add(new SecurityFeed(sec1.Symbol, maxLevels: 10));
+        channel.Add(new SecurityFeed(sec2.Symbol, maxLevels: 10));
 
         // book1 opens on an auction: orders accumulate in pre-open with the indicative quote
         // tracking them, and the print happens on the way out - the same orders as book2, which
@@ -43,7 +43,7 @@ public class MarketDataProducerExample
     private static void Publish(MarketDataChannel channel, IReadOnlyList<Events.OrderBookEvent> events)
     {
         foreach (var message in channel.Publish(events))
-            Console.WriteLine($"{message.Sequence,3} {message.Data.Security.Name} {Describe(message.Data)}");
+            Console.WriteLine($"{message.Sequence,3} {message.Data.Symbol} {Describe(message.Data)}");
     }
 
     // LevelsDataEvent holds lists, which a record's generated ToString renders as type names.

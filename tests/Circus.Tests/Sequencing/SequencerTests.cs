@@ -21,11 +21,11 @@ public class SequencerTests
 
     private static readonly TimeSpan PauseFor = TimeSpan.FromMinutes(2);
 
-    private static readonly Security Sec = new("GCZ6", 10, 10);
+    private static readonly Instrument Sec = new("GCZ6", 10, 10);
 
     // A 5-tick volatility band on a reference of 100, so a trade at 200 breaches it and pauses the
     // book for two minutes.
-    private static readonly Security PausingSec = new("GCZ6", 10, 10,
+    private static readonly Instrument PausingSec = new("GCZ6", 10, 10,
         PriceRestrictions: new PriceRestrictionConfig[] {new VolatilityBand(5, PauseFor)});
 
     private static MarketSchedule TradingDay() => new(PreOpenAt, OpenAt, CloseAt);
@@ -39,11 +39,11 @@ public class SequencerTests
 
     private static DateTime At(int hour, int minute) => Day.Add(new TimeSpan(hour, minute, 0));
 
-    private static CreateLimitOrder Order(Security security, string companyId, string clientOrderId,
+    private static CreateLimitOrder Order(string symbol, string companyId, string clientOrderId,
         Side side, decimal price, DateTime time) =>
         new()
         {
-            Security = security, Time = time, CompanyId = companyId, ClientOrderId = clientOrderId,
+            Symbol = symbol, Time = time, CompanyId = companyId, ClientOrderId = clientOrderId,
             OrderValidity = new OrderValidity.Day(), Side = side, Quantity = 5, Price = price
         };
 
@@ -57,9 +57,9 @@ public class SequencerTests
         var sequencer = new Sequencer(At(12, 0));
         sequencer.Add(book, Quiet());
 
-        sequencer.Submit(new OpenTrading {Security = PausingSec, Time = At(12, 0), ReferencePrice = 100});
-        sequencer.Submit(Order(PausingSec, "Company1", "Sell1", Side.Sell, 200, At(12, 1)));
-        sequencer.Submit(Order(PausingSec, "Company2", "Buy1", Side.Buy, 200, At(12, 1)));
+        sequencer.Submit(new OpenTrading {Symbol = PausingSec.Symbol, Time = At(12, 0), ReferencePrice = 100});
+        sequencer.Submit(Order(PausingSec.Symbol, "Company1", "Sell1", Side.Sell, 200, At(12, 1)));
+        sequencer.Submit(Order(PausingSec.Symbol, "Company2", "Buy1", Side.Buy, 200, At(12, 1)));
 
         return (sequencer, book);
     }
@@ -151,7 +151,7 @@ public class SequencerTests
         var book = new OrderBook(Sec);
         var sequencer = new Sequencer(Day);
         sequencer.Add(book, TradingDay());
-        sequencer.Submit(Order(Sec, "Company1", "Order1", Side.Buy, 90, At(OpenAt)));
+        sequencer.Submit(Order(Sec.Symbol, "Company1", "Order1", Side.Buy, 90, At(OpenAt)));
 
         // act
         var dispatched = sequencer.AdvanceTo(At(OpenAt));
@@ -170,7 +170,7 @@ public class SequencerTests
         // carrying a lower counter than the tick the pause queues later. Without a kind to rank
         // them it would be dispatched into a book that should already have reopened
         var (sequencer, book) = PausedAtNoon();
-        sequencer.Submit(Order(PausingSec, "Company1", "Buy2", Side.Buy, 90, Deadline));
+        sequencer.Submit(Order(PausingSec.Symbol, "Company1", "Buy2", Side.Buy, 90, Deadline));
 
         // act
         var dispatched = sequencer.AdvanceTo(At(12, 30));
@@ -194,9 +194,9 @@ public class SequencerTests
         var book = new OrderBook(Sec);
         var sequencer = new Sequencer(Day);
         sequencer.Add(book, TradingDay());
-        sequencer.Submit(Order(Sec, "Company1", "Order1", Side.Buy, 90, At(10, 0)));
-        sequencer.Submit(Order(Sec, "Company2", "Order2", Side.Buy, 91, At(10, 0)));
-        sequencer.Submit(Order(Sec, "Company1", "Order3", Side.Buy, 92, At(10, 0)));
+        sequencer.Submit(Order(Sec.Symbol, "Company1", "Order1", Side.Buy, 90, At(10, 0)));
+        sequencer.Submit(Order(Sec.Symbol, "Company2", "Order2", Side.Buy, 91, At(10, 0)));
+        sequencer.Submit(Order(Sec.Symbol, "Company1", "Order3", Side.Buy, 92, At(10, 0)));
 
         // act
         var dispatched = sequencer.AdvanceTo(At(10, 0));
@@ -254,7 +254,7 @@ public class SequencerTests
         // arrange - the session closes over the running pause, which clears the book's own resume
         // time. Nothing cancels the poke that was queued for it
         var (sequencer, book) = PausedAtNoon();
-        sequencer.Submit(new CloseTrading {Security = PausingSec, Time = At(12, 2)});
+        sequencer.Submit(new CloseTrading {Symbol = PausingSec.Symbol, Time = At(12, 2)});
 
         // act
         var dispatched = sequencer.AdvanceTo(At(12, 30));
@@ -294,8 +294,8 @@ public class SequencerTests
         static IReadOnlyList<(long Sequence, string Action, DateTime Time)> Run()
         {
             var (sequencer, _) = PausedAtNoon();
-            sequencer.Submit(Order(PausingSec, "Company1", "Buy2", Side.Buy, 90, Deadline));
-            sequencer.Submit(Order(PausingSec, "Company2", "Sell2", Side.Sell, 300, At(12, 10)));
+            sequencer.Submit(Order(PausingSec.Symbol, "Company1", "Buy2", Side.Buy, 90, Deadline));
+            sequencer.Submit(Order(PausingSec.Symbol, "Company2", "Sell2", Side.Sell, 300, At(12, 10)));
 
             return sequencer.AdvanceTo(At(23, 20))
                 .Select(d => (d.Sequence, d.Action.GetType().Name, d.Action.Time))
@@ -350,7 +350,7 @@ public class SequencerTests
 
         // assert - the past has been dispatched and cannot be inserted into
         Assert.Catch<ArgumentException>(
-            () => sequencer.Submit(Order(Sec, "Company1", "Order1", Side.Buy, 90, At(11, 59)))
+            () => sequencer.Submit(Order(Sec.Symbol, "Company1", "Order1", Side.Buy, 90, At(11, 59)))
         );
     }
 
@@ -364,7 +364,7 @@ public class SequencerTests
         sequencer.AdvanceTo(At(12, 0));
 
         // act
-        sequencer.Submit(Order(Sec, "Company1", "Order1", Side.Buy, 90, At(12, 0)));
+        sequencer.Submit(Order(Sec.Symbol, "Company1", "Order1", Side.Buy, 90, At(12, 0)));
         var dispatched = sequencer.AdvanceTo(At(12, 0));
 
         // assert
@@ -381,7 +381,7 @@ public class SequencerTests
 
         // assert - an action with no time has no place in a queue ordered by time
         Assert.Catch<ArgumentException>(
-            () => sequencer.Submit(new AdvanceTime {Security = Sec})
+            () => sequencer.Submit(new AdvanceTime {Symbol = Sec.Symbol})
         );
     }
 
@@ -391,11 +391,11 @@ public class SequencerTests
         // arrange
         var sequencer = new Sequencer(Day);
         sequencer.Add(new OrderBook(Sec), TradingDay());
-        var unregistered = new Security("SIZ6", 10, 10);
+        var unregistered = new Instrument("SIZ6", 10, 10);
 
         // assert - heard about where the routing mistake was made, not mid-dispatch
         Assert.Catch<ArgumentException>(
-            () => sequencer.Submit(Order(unregistered, "Company1", "Order1", Side.Buy, 90, At(12, 0)))
+            () => sequencer.Submit(Order(unregistered.Symbol, "Company1", "Order1", Side.Buy, 90, At(12, 0)))
         );
     }
 

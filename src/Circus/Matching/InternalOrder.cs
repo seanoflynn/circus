@@ -23,7 +23,7 @@ internal class InternalOrder
     public string ExchangeOrderId => SequenceNumber.ToString();
 
     public string ClientOrderId { get; private set; }
-    public Security Security { get; }
+    public Instrument Instrument { get; }
     public DateTime CreatedTime { get; }
     public DateTime ModifiedTime { get; private set; }
     public DateTime? CompletedTime { get; private set; }
@@ -49,7 +49,7 @@ internal class InternalOrder
     internal InternalOrder? LevelNext { get; set; }
     internal InternalOrder? LevelPrev { get; set; }
 
-    public InternalOrder(long sequenceNumber, string companyId, string clientOrderId, Security security, DateTime time,
+    public InternalOrder(long sequenceNumber, string companyId, string clientOrderId, Instrument instrument, DateTime time,
         OrderStatus status, OrderType type, OrderValidity validity, Side side, int quantity, long? price,
         long? triggerPrice, string? selfMatchPreventionId = null,
         SelfMatchPreventionInstruction? selfMatchPreventionInstruction = null, int? maxVisibleQuantity = null)
@@ -58,7 +58,7 @@ internal class InternalOrder
         InternalId = sequenceNumber;
         CompanyId = companyId;
         ClientOrderId = clientOrderId;
-        Security = security;
+        Instrument = instrument;
         CreatedTime = time;
         ModifiedTime = time;
         Status = status;
@@ -81,13 +81,13 @@ internal class InternalOrder
 
     public Order ToOrder()
     {
-        return new(CompanyId, ExchangeOrderId, ClientOrderId, Security, CreatedTime, ModifiedTime, CompletedTime,
+        return new(CompanyId, ExchangeOrderId, ClientOrderId, Instrument, CreatedTime, ModifiedTime, CompletedTime,
             Status, Type, Validity, Side, Quantity, FilledQuantity, RemainingQuantity, DisplayedQuantity,
             ToDecimal(Price), ToDecimal(TriggerPrice), SelfMatchPreventionId, SelfMatchPreventionInstruction,
             MaxVisibleQuantity);
     }
 
-    private decimal? ToDecimal(long? ticks) => ticks.HasValue ? ticks.Value * Security.TickSize : null;
+    private decimal? ToDecimal(long? ticks) => ticks.HasValue ? ticks.Value * Instrument.TickSize : null;
 
     public void Cancel(DateTime time, string? clientOrderId = null)
     {

@@ -16,8 +16,8 @@ public class ReplayTests
 {
     private static readonly DateTime Day = new(2000, 1, 1);
 
-    private static readonly Security Gold = new("GCZ6", 10, 10);
-    private static readonly Security Silver = new("SIZ6", 10, 10);
+    private static readonly Instrument Gold = new("GCZ6", 10, 10);
+    private static readonly Instrument Silver = new("SIZ6", 10, 10);
 
     private static MarketSchedule TradingDay() => new(new(9, 0, 0), new(9, 30, 0), new(17, 0, 0));
 
@@ -36,7 +36,7 @@ public class ReplayTests
 
         var trace = new OrderBookAction[]
         {
-            new OpenTrading {Security = Gold, Time = At(12, 0)},
+            new OpenTrading {Symbol = Gold.Symbol, Time = At(12, 0)},
             Order(Gold, "Sell1", Side.Sell, 100, At(12, 1)),
             Order(Gold, "Buy1", Side.Buy, 100, At(12, 2))
         };
@@ -132,7 +132,7 @@ public class ReplayTests
 
         var trace = new OrderBookAction[]
         {
-            new OpenTrading {Security = Gold, Time = At(12, 0)},
+            new OpenTrading {Symbol = Gold.Symbol, Time = At(12, 0)},
             Order(Gold, "Buy1", Side.Buy, 100, At(14, 0))
         };
 
@@ -176,15 +176,15 @@ public class ReplayTests
         return sequencer;
     }
 
-    private static CreateLimitOrder Order(Security security, string clientOrderId, Side side,
+    private static CreateLimitOrder Order(Instrument instrument, string clientOrderId, Side side,
         decimal price, DateTime time) =>
         new()
         {
-            Security = security, Time = time, CompanyId = "Company1", ClientOrderId = clientOrderId,
+            Symbol = instrument.Symbol, Time = time, CompanyId = "Company1", ClientOrderId = clientOrderId,
             OrderValidity = new OrderValidity.Day(), Side = side, Quantity = 5, Price = price
         };
 
     private static string Describe(Dispatched d) =>
-        $"{d.Sequence} {d.Action.Security.Name} {d.Action.GetType().Name} {d.Action.Time:O} " +
+        $"{d.Sequence} {d.Action.Symbol} {d.Action.GetType().Name} {d.Action.Time:O} " +
         $"-> {string.Join("|", d.Events.Select(e => e.GetType().Name))}";
 }

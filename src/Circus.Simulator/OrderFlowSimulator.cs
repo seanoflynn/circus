@@ -5,13 +5,13 @@ using Circus.MarketData;
 namespace Circus.Simulator;
 
 // Generates a plausible, replayable stream of order book actions (create/cancel/update,
-// limit/market) across one or more securities. Drives a private "shadow" book per security
+// limit/market) across one or more instruments. Drives a private "shadow" book per instrument
 // purely to keep track of which orders are currently live, so that generated cancels/updates
 // always target a real resting order instead of a random, possibly-already-filled id.
 //
-// Several securities produce one interleaved trace rather than one trace each: a venue's flow
+// Several instruments produce one interleaved trace rather than one trace each: a venue's flow
 // arrives mixed, and a sequencer being fed this is exactly the thing that has to put it back in
-// order. Each security's shadow book, level view and live-order set are its own, so flow on one
+// order. Each instrument's shadow book, level view and live-order set are its own, so flow on one
 // never depends on what another was doing - the same independence the real books have.
 //
 // Pass a seed for a deterministic, reproducible trace (e.g. a committed benchmark baseline);
@@ -25,7 +25,7 @@ public sealed class OrderFlowSimulator
     private readonly List<BookState> _books;
 
     // deterministic (derived from the seeded action sequence, not Guid.NewGuid()) so traces
-    // stay reproducible for a given seed. Shared across securities so no two orders anywhere in
+    // stay reproducible for a given seed. Shared across instruments so no two orders anywhere in
     // a trace collide on a client order id.
     private long _nextId;
 
@@ -37,27 +37,27 @@ public sealed class OrderFlowSimulator
     private static readonly TimeSpan Step = TimeSpan.FromMilliseconds(1);
     private DateTime _time = Epoch;
 
-    public OrderFlowSimulator(Security security, SimulatorOptions? options = null, int? seed = null)
-        : this(new[] {security}, options, seed)
+    public OrderFlowSimulator(Instrument instrument, SimulatorOptions? options = null, int? seed = null)
+        : this(new[] {instrument}, options, seed)
     {
     }
 
-    public OrderFlowSimulator(IReadOnlyList<Security> securities, SimulatorOptions? options = null,
+    public OrderFlowSimulator(IReadOnlyList<Instrument> instruments, SimulatorOptions? options = null,
         int? seed = null)
     {
-        if (securities.Count == 0)
-            throw new ArgumentException("at least one security is required", nameof(securities));
+        if (instruments.Count == 0)
+            throw new ArgumentException("at least one instrument is required", nameof(instruments));
 
         _options = options ?? new SimulatorOptions();
         _seed = seed ?? Random.Shared.Next();
         _random = new Random(_seed);
 
-        _books = securities.Select(s => new BookState(s, _time)).ToList();
+        _books = instruments.Select(s => new BookState(s, _time)).ToList();
     }
 
     public int Seed => _seed;
 
-    public IReadOnlyList<Security> Securities => _books.Select(b => b.Security).ToList();
+    public IReadOnlyList<Instrument> Instruments => _books.Select(b => b.Instrument).ToList();
 
     // Generates the next `actionCount` actions, continuing from wherever the internal shadow
     // books currently are (i.e. calling this repeatedly extends the same session rather than
@@ -75,7 +75,7 @@ public sealed class OrderFlowSimulator
 
             // Not drawn at all when there is only one book to draw. A draw consumes the seeded
             // sequence, so making it unconditionally would have shifted every trace this class
-            // has ever produced for a single security - including the committed benchmark
+            // has ever produced for a single instrument - including the committed benchmark
             // baseline - for no reason beyond tidiness.
             var book = _books.Count == 1 ? _books[0] : _books[_random.Next(_books.Count)];
             var action = NextAction(book) with {Time = _time};
@@ -120,7 +120,7 @@ public sealed class OrderFlowSimulator
 
         return new CreateLimitOrder
         {
-            Security = book.Security, CompanyId = NextCompanyId(), ClientOrderId = NextClientOrderId(),
+            Symbol = book.Instrument.Symbol, CompanyId = NextCompanyId(), ClientOrderId = NextClientOrderId(),
             OrderValidity = new OrderValidity.GoodTilCanceled(), Side = side, Quantity = quantity, Price = price
         };
     }
@@ -132,7 +132,7 @@ public sealed class OrderFlowSimulator
 
         return new CreateMarketOrder
         {
-            Security = book.Security, CompanyId = NextCompanyId(), ClientOrderId = NextClientOrderId(),
+            Symbol = book.Instrument.Symbol, CompanyId = NextCompanyId(), ClientOrderId = NextClientOrderId(),
             OrderValidity = new OrderValidity.GoodTilCanceled(), Side = side, Quantity = quantity
         };
     }
@@ -142,7 +142,7 @@ public sealed class OrderFlowSimulator
         var info = book.PickLive(_random);
         return new CancelOrder
         {
-            Security = book.Security, CompanyId = info.CompanyId, ClientOrderId = NextClientOrderId(),
+            Symbol = book.Instrument.Symbol, CompanyId = info.CompanyId, ClientOrderId = NextClientOrderId(),
             PreviousClientOrderId = info.ClientOrderId
         };
     }
@@ -160,31 +160,31 @@ public sealed class OrderFlowSimulator
             var quantity = _random.Next(_options.MinQuantity, _options.MaxQuantity + 1);
             return new UpdateOrder
             {
-                Security = book.Security, CompanyId = info.CompanyId, ClientOrderId = newClientOrderId,
+                Symbol = book.Instrument.Symbol, CompanyId = info.CompanyId, ClientOrderId = newClientOrderId,
                 PreviousClientOrderId = info.ClientOrderId, NewTotalQuantity = quantity
             };
         }
 
-        var tick = book.Security.TickSize;
+        var tick = book.Instrument.TickSize;
         var direction = info.Side == Side.Buy ? -1 : 1; // move away from touch, staying passive
-        var reference = info.Price ?? AlignToTick(book.Security, _options.StartingPrice);
+        var reference = info.Price ?? AlignToTick(book.Instrument, _options.StartingPrice);
         var newPrice = reference + direction * _random.Next(1, 4) * tick;
 
         return new UpdateOrder
         {
-            Security = book.Security, CompanyId = info.CompanyId, ClientOrderId = newClientOrderId,
+            Symbol = book.Instrument.Symbol, CompanyId = info.CompanyId, ClientOrderId = newClientOrderId,
             PreviousClientOrderId = info.ClientOrderId, Price = newPrice
         };
     }
 
     private decimal ComputePrice(BookState book, Side side)
     {
-        var tick = book.Security.TickSize;
+        var tick = book.Instrument.TickSize;
         var bestBuy = book.Levels.Bids;
         var bestSell = book.Levels.Offers;
 
         if (bestBuy.Count == 0 && bestSell.Count == 0)
-            return AlignToTick(book.Security, _options.StartingPrice);
+            return AlignToTick(book.Instrument, _options.StartingPrice);
 
         var opposite = side == Side.Buy ? bestSell : bestBuy;
         var own = side == Side.Buy ? bestBuy : bestSell;
@@ -203,13 +203,13 @@ public sealed class OrderFlowSimulator
         return side == Side.Buy ? reference - offsetTicks * tick : reference + offsetTicks * tick;
     }
 
-    private static decimal AlignToTick(Security security, decimal price)
+    private static decimal AlignToTick(Instrument instrument, decimal price)
     {
-        var tick = security.TickSize;
+        var tick = instrument.TickSize;
         return Math.Round(price / tick) * tick;
     }
 
-    // One security's worth of the modelling the simulator needs to generate flow that targets
+    // One instrument's worth of the modelling the simulator needs to generate flow that targets
     // real resting orders: a shadow book, the touch rebuilt from its events, and the set of
     // orders currently live in it.
     //
@@ -235,15 +235,15 @@ public sealed class OrderFlowSimulator
         private readonly Dictionary<string, int> _liveIndex = new();
         private readonly Dictionary<string, LiveOrderInfo> _liveInfo = new();
 
-        public BookState(Security security, DateTime openedAt)
+        public BookState(Instrument instrument, DateTime openedAt)
         {
-            Security = security;
-            Levels = new LevelsDataEvent(security, default, Array.Empty<Level>(), Array.Empty<Level>());
-            _shadowBook = new OrderBook(security);
-            _shadowBook.Process(new OpenTrading {Security = security, Time = openedAt});
+            Instrument = instrument;
+            Levels = new LevelsDataEvent(instrument.Symbol, default, Array.Empty<Level>(), Array.Empty<Level>());
+            _shadowBook = new OrderBook(instrument);
+            _shadowBook.Process(new OpenTrading {Symbol = instrument.Symbol, Time = openedAt});
         }
 
-        public Security Security { get; }
+        public Instrument Instrument { get; }
 
         public LevelsDataEvent Levels { get; private set; }
 
@@ -307,7 +307,7 @@ public sealed class OrderFlowSimulator
             }
 
             _liveInfo[order.ClientOrderId] = new LiveOrderInfo(order.CompanyId, order.ClientOrderId,
-                order.Side, order.Price, order.TriggerPrice);
+                order.Side, order.Quantity, order.Price, order.TriggerPrice);
         }
 
         private void RemoveLive(string clientOrderId)
@@ -315,17 +315,35 @@ public sealed class OrderFlowSimulator
             if (!_liveIndex.TryGetValue(clientOrderId, out var index))
                 return;
 
-            var lastIndex = _liveIds.Count - 1;
-            var lastId = _liveIds[lastIndex];
-            _liveIds[index] = lastId;
-            _liveIndex[lastId] = index;
-            _liveIds.RemoveAt(lastIndex);
-
-            _liveIndex.Remove(clientOrderId);
+            _liveIds.RemoveAt(index);
             _liveInfo.Remove(clientOrderId);
+
+            // Update the index of every entry that shifted
+            for (var i = index; i < _liveIds.Count; i++)
+                _liveIndex[_liveIds[i]] = i;
         }
     }
 
-    private readonly record struct LiveOrderInfo(string CompanyId, string ClientOrderId, Side Side,
-        decimal? Price, decimal? TriggerPrice);
+    // The shadow book does not track trigger prices, which we need for the stop-related
+    // enforcement in BuildUpdate. Track them from the action stream instead.
+    private sealed class LiveOrderInfo
+    {
+        public LiveOrderInfo(string companyId, string clientOrderId, Side side, int quantity,
+            decimal? price, decimal? triggerPrice)
+        {
+            CompanyId = companyId;
+            ClientOrderId = clientOrderId;
+            Side = side;
+            Quantity = quantity;
+            Price = price;
+            TriggerPrice = triggerPrice;
+        }
+
+        public string CompanyId { get; }
+        public string ClientOrderId { get; }
+        public Side Side { get; }
+        public int Quantity { get; }
+        public decimal? Price { get; }
+        public decimal? TriggerPrice { get; }
+    }
 }
