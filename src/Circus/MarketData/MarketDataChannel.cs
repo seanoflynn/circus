@@ -25,14 +25,14 @@ public sealed class MarketDataChannel
     // Keyed on the symbol rather than the record, for the reason the sequencer's routing table is:
     // two Instrument records describing the same contract need not be equal, since the restriction
     // list on them compares by reference.
-    private readonly Dictionary<string, SecurityFeed> _feeds = new();
+    private readonly Dictionary<string, InstrumentFeed> _feeds = new();
 
     private long _sequence;
 
     // What a subscriber has seen so far, so a caller resuming one can say where it got to.
     public long Sequence => _sequence;
 
-    public void Add(SecurityFeed feed)
+    public void Add(InstrumentFeed feed)
     {
         ArgumentNullException.ThrowIfNull(feed);
 
@@ -43,8 +43,8 @@ public sealed class MarketDataChannel
 
     // Turns one dispatch's events into the messages this channel publishes for them.
     //
-    // Events for a security this channel does not carry are ignored rather than refused: a
-    // channel is deliberately a subset of the venue, and the securities it leaves out are the
+    // Events for an instrument this channel does not carry are ignored rather than refused: a
+    // channel is deliberately a subset of the venue, and the instruments it leaves out are the
     // normal case rather than a routing mistake.
     public IReadOnlyList<ChannelMessage> Publish(IReadOnlyList<OrderBookEvent> events)
     {
@@ -55,12 +55,12 @@ public sealed class MarketDataChannel
 
         List<ChannelMessage>? output = null;
 
-        foreach (var (symbol, forSecurity) in GroupBySymbol(events))
+        foreach (var (symbol, forInstrument) in GroupBySymbol(events))
         {
             if (!_feeds.TryGetValue(symbol, out var feed))
                 continue;
 
-            foreach (var data in feed.Process(forSecurity))
+            foreach (var data in feed.Process(forInstrument))
             {
                 output ??= new List<ChannelMessage>();
                 output.Add(new ChannelMessage(++_sequence, data));
@@ -72,23 +72,23 @@ public sealed class MarketDataChannel
 
     // One dispatch is one book's events today, so the common path is a single group and the whole
     // list is passed straight through. Grouped rather than assumed anyway, because an action that
-    // implied a fill in another book would arrive here as events spanning securities, and each
+    // implied a fill in another book would arrive here as events spanning instruments, and each
     // book's producers must be handed their own book's events and only those.
     private static IEnumerable<(string Symbol, IReadOnlyList<OrderBookEvent> Events)> GroupBySymbol(
         IReadOnlyList<OrderBookEvent> events)
     {
         var first = events[0].Symbol;
 
-        var spansSecurities = false;
+        var spansInstruments = false;
         for (var i = 1; i < events.Count; i++)
         {
             if (events[i].Symbol == first) continue;
 
-            spansSecurities = true;
+            spansInstruments = true;
             break;
         }
 
-        if (!spansSecurities)
+        if (!spansInstruments)
             return new[] {(first, events)};
 
         // Grouped in order of first appearance, so a channel's output order follows the events

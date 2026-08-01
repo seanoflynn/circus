@@ -2,21 +2,21 @@ using Circus.Events;
 
 namespace Circus.MarketData;
 
-public class TradeDataProducer : IDataProducer<TradedDataEvent>
+public class TradeDataProducer : IDataProducer<TradeDataEvent>
 {
-    public IList<TradedDataEvent> Process(IReadOnlyList<OrderBookEvent> events)
+    public IList<TradeDataEvent> Process(IReadOnlyList<OrderBookEvent> events)
     {
-        List<TradedDataEvent>? output = null;
+        List<TradeDataEvent>? output = null;
 
         foreach (var ev in events)
         {
             if (ev is OrdersMatched matched)
             {
-                output ??= new List<TradedDataEvent>();
-                output.Add(new TradedDataEvent(matched.Symbol, matched.Time, matched.Price, matched.Quantity));
+                output ??= new List<TradeDataEvent>();
+                output.Add(new TradeDataEvent(matched.Symbol, matched.Time, matched.Price, matched.Quantity));
             }
         }
 
-        return output ?? (IList<TradedDataEvent>) Array.Empty<TradedDataEvent>();
+        return output ?? (IList<TradeDataEvent>) Array.Empty<TradeDataEvent>();
     }
 }

@@ -14,7 +14,7 @@ namespace Circus.Tests.Orders;
 [TestFixture]
 public class ImmediateOrCancelTests
 {
-    private static readonly Instrument Sec = new("GCZ6", 10, 10);
+    private static readonly Instrument Gold = new("GCZ6", 10, 10);
 
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
     private static readonly DateTime Now2 = new(2000, 1, 1, 12, 1, 0);
@@ -43,7 +43,7 @@ public class ImmediateOrCancelTests
     public void SetUp()
     {
         Clock = new ManualClock(Now1);
-        Book = new LevelTrackingOrderBook(Sec, Clock);
+        Book = new LevelTrackingOrderBook(Gold, Clock);
     }
 
     // ----- no MinQuantity (classic IOC/FillAndKill behavior) -----
@@ -98,7 +98,7 @@ public class ImmediateOrCancelTests
 
         var cancelled = events[2] as CancelOrderConfirmed;
         Assert.IsNotNull(cancelled);
-        Assert.AreEqual(Sec.Symbol, cancelled.Symbol);
+        Assert.AreEqual(Gold.Symbol, cancelled.Symbol);
         Assert.AreEqual(Now2, cancelled.Time);
         Assert.AreEqual(CompanyId2, cancelled.CompanyId);
         Assert.AreEqual(OrderCancelledReason.ImmediateOrCancelNotFilled, cancelled.Reason);
@@ -145,8 +145,8 @@ public class ImmediateOrCancelTests
     public void MarketOrder_PartialFillWithinProtection_RemainderCancelled()
     {
         // arrange
-        var sec = new Instrument("GCZ6", 10, 20);
-        var book = new LevelTrackingOrderBook(sec, Clock);
+        var wideProtectionGold = new Instrument("GCZ6", 10, 20);
+        var book = new LevelTrackingOrderBook(wideProtectionGold, Clock);
         book.UpdateStatus(OrderBookStatus.Open);
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 2, 500);
         Clock.SetCurrentTime(Now2);
@@ -310,7 +310,7 @@ public class ImmediateOrCancelTests
 
         var rejected = events[0] as CreateOrderRejected;
         Assert.IsNotNull(rejected);
-        Assert.AreEqual(Sec.Symbol, rejected.Symbol);
+        Assert.AreEqual(Gold.Symbol, rejected.Symbol);
         Assert.AreEqual(Now2, rejected.Time);
         Assert.AreEqual(CompanyId2, rejected.CompanyId);
         Assert.AreEqual(OrderId2, rejected.ClientOrderId);

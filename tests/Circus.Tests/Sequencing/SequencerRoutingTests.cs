@@ -6,12 +6,12 @@ using NUnit.Framework;
 
 namespace Circus.Tests.Sequencing;
 
-// Several books behind the one queue, which is where routing and cross-security order become
+// Several books behind the one queue, which is where routing and cross-instrument order become
 // things that can be wrong. SequencerTests covers the queue itself with a single book; nothing
 // here re-tests that, and nothing here needed the queue to change.
 //
 // The properties worth holding: an action reaches the book named on it and no other, dispatch
-// order across securities follows time rather than registration or submission, one book's
+// order across instruments follows time rather than registration or submission, one book's
 // interruption is nothing to do with the rest, and every book still sees time run one way even
 // though nothing enforces that per book - it falls out of dispatching in global order.
 [TestFixture]
@@ -72,7 +72,7 @@ public class SequencerRoutingTests
         sequencer.Submit(Order(Silver.Symbol, "Silver1", Side.Sell, 100, At(12, 2)));
         var dispatched = sequencer.AdvanceTo(At(13, 0));
 
-        // assert - each order confirmed against its own security, and neither book saw the other's
+        // assert - each order confirmed against its own instrument, and neither book saw the other's
         var confirmed = dispatched
             .SelectMany(d => d.Events)
             .OfType<CreateOrderConfirmed>()
@@ -89,7 +89,7 @@ public class SequencerRoutingTests
     }
 
     [Test]
-    public void AdvanceTo_AcrossSecurities_DispatchesInTimeOrderNotSubmissionOrder()
+    public void AdvanceTo_AcrossInstruments_DispatchesInTimeOrderNotSubmissionOrder()
     {
         // arrange
         var gold = new OrderBook(Gold);
@@ -101,7 +101,7 @@ public class SequencerRoutingTests
         sequencer.Submit(new OpenTrading {Symbol = Gold.Symbol, Time = At(12, 0)});
         sequencer.Submit(new OpenTrading {Symbol = Silver.Symbol, Time = At(12, 0)});
 
-        // act - submitted grouped by security, and deliberately not in time order within either
+        // act - submitted grouped by instrument, and deliberately not in time order within either
         sequencer.Submit(Order(Gold.Symbol, "Gold1", Side.Buy, 100, At(12, 0, 30)));
         sequencer.Submit(Order(Gold.Symbol, "Gold2", Side.Buy, 100, At(12, 0, 50)));
         sequencer.Submit(Order(Silver.Symbol, "Silver1", Side.Buy, 100, At(12, 0, 20)));
@@ -215,7 +215,7 @@ public class SequencerRoutingTests
         // act - past the deadline
         var dispatched = sequencer.AdvanceTo(At(12, 4));
 
-        // assert - exactly one poke, carrying gold's security and nobody else's
+        // assert - exactly one poke, carrying gold's symbol and nobody else's
         var ticks = dispatched.Select(d => d.Action).OfType<AdvanceTime>().ToList();
         Assert.AreEqual(1, ticks.Count);
         Assert.AreEqual(Gold.Symbol, ticks[0].Symbol);
@@ -299,7 +299,7 @@ public class SequencerRoutingTests
         var dispatched = sequencer.AdvanceTo(At(13, 0));
 
         // assert - one run of numbers, not one per book: the count is of dispatches, and dispatch
-        // order is the only thing that exists at venue scope rather than per security
+        // order is the only thing that exists at venue scope rather than per instrument
         Assert.AreEqual(new long[] {1, 2, 3, 4}, dispatched.Select(d => d.Sequence).ToArray());
     }
 

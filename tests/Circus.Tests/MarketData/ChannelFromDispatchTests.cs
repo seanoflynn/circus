@@ -67,10 +67,10 @@ public class ChannelFromDispatchTests
         sequencer.Add(new OrderBook(Silver), OpenThroughout());
 
         var goldChannel = new MarketDataChannel();
-        goldChannel.Add(new SecurityFeed(Gold.Symbol, maxLevels: 10));
+        goldChannel.Add(new InstrumentFeed(Gold.Symbol, maxLevels: 10));
 
         var silverChannel = new MarketDataChannel();
-        silverChannel.Add(new SecurityFeed(Silver.Symbol, maxLevels: 10));
+        silverChannel.Add(new InstrumentFeed(Silver.Symbol, maxLevels: 10));
 
         var trace = new OrderFlowSimulator(new[] {Gold, Silver}, seed: 22).Generate(400);
 

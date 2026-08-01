@@ -1,6 +1,6 @@
 namespace Circus.Matching;
 
-// Price/TriggerPrice are tick counts (price / Security.TickSize), not decimal: decimal
+// Price/TriggerPrice are tick counts (price / Instrument.TickSize), not decimal: decimal
 // comparison has no hardware path, so the hot paths stay on long and convert back only at the
 // public-API boundary.
 internal class InternalOrder
@@ -17,7 +17,7 @@ internal class InternalOrder
     // that and so changes this. Real exchanges do the same, since an order sent to the back of
     // the queue is functionally a new entry.
     //
-    // Unique within this Security and not beyond it - the counter behind it belongs to one book
+    // Unique within this Instrument and not beyond it - the counter behind it belongs to one book
     // and is seeded from the session date, so every book opening on the same day issues the same
     // run of ids. See Order for why that is the right trade and what the venue-wide identity is.
     public string ExchangeOrderId => SequenceNumber.ToString();

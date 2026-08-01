@@ -36,7 +36,7 @@ Market data
 - [x] Price/qty/count for x levels
 - [x] All order updates
 - [x] Indicative open
-- [x] Security status (trading state, why, when it resumes, limit up/down)
+- [x] Instrument status (trading state, why, when it resumes, limit up/down)
 
 Safety features
 - [x] Banding

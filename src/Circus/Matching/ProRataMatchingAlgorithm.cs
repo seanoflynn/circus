@@ -13,6 +13,12 @@ namespace Circus.Matching;
 // Allocations for a level are computed up front when the level is first entered, so the
 // aggressor's quantity is distributed once across all orders at that level rather than
 // iteratively re-allocating to only the head each time.
+//
+// Not yet reachable from a running book: no TradingPhase constructs it, so nothing an
+// Instrument can describe selects it and only the tests drive it directly. Wiring it up means
+// letting an instrument name the algorithm its continuous phase runs, which is the change
+// IMatchingAlgorithm's "instances rather than singletons" already anticipates. Until then this
+// is a complete implementation waiting on that seam rather than dead code.
 internal sealed class ProRataMatchingAlgorithm : IMatchingAlgorithm
 {
     // Cached allocations for the current price level, consumed one per SelectNext call.

@@ -5,14 +5,14 @@ using NUnit.Framework;
 
 namespace Circus.Tests.MarketData;
 
-// SecurityFeed is the bundle of producers a venue publishes for one instrument. The producers
+// InstrumentFeed is the bundle of producers a venue publishes for one instrument. The producers
 // themselves are tested individually; what is worth holding here is that the bundle runs all of
 // them, that everything it emits says which instrument it is about, and that its order within a
 // call is fixed rather than incidental.
 [TestFixture]
-public class SecurityFeedTests
+public class InstrumentFeedTests
 {
-    private static readonly Instrument Sec = new("GCZ6", 10, 10);
+    private static readonly Instrument Gold = new("GCZ6", 10, 10);
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
 
     [Test]
@@ -28,7 +28,7 @@ public class SecurityFeedTests
             book.CreateLimitOrder("Company2", "Order2", new OrderValidity.Day(), Side.Sell, 3, 100));
 
         // assert
-        Assert.IsNotEmpty(data.OfType<TradedDataEvent>());
+        Assert.IsNotEmpty(data.OfType<TradeDataEvent>());
         Assert.IsNotEmpty(data.OfType<LevelsDataEvent>());
         Assert.IsNotEmpty(data.OfType<OrderBookDeltaEvent>());
     }
@@ -40,12 +40,12 @@ public class SecurityFeedTests
 
         var data = feed.Process(book.UpdateStatus(OrderBookStatus.Open));
 
-        var status = data.OfType<SecurityStatusDataEvent>().Single();
+        var status = data.OfType<InstrumentStatusDataEvent>().Single();
         Assert.AreEqual(OrderBookStatus.Open, status.Status);
     }
 
     [Test]
-    public void Process_EverythingItEmitsCarriesTheSecurity()
+    public void Process_EverythingItEmitsCarriesTheInstrument()
     {
         // arrange
         var (feed, book) = Feed();
@@ -62,7 +62,7 @@ public class SecurityFeedTests
         // assert - this is what lets several instruments share a channel
         Assert.IsNotEmpty(all);
         Assert.IsNotEmpty(all.OfType<IndicativePriceDataEvent>(), "expected an auction quote");
-        Assert.IsTrue(all.All(d => d.Symbol == Sec.Symbol),
+        Assert.IsTrue(all.All(d => d.Symbol == Gold.Symbol),
             "every message must say which instrument it is about");
     }
 
@@ -83,7 +83,7 @@ public class SecurityFeedTests
         // what a subscriber gets. Fixed, so it is the same on every run.
         var kinds = data.Select(d => d.GetType().Name).Distinct().ToList();
         Assert.AreEqual(
-            new[] {nameof(TradedDataEvent), nameof(LevelsDataEvent), nameof(OrderBookDeltaEvent)},
+            new[] {nameof(TradeDataEvent), nameof(LevelsDataEvent), nameof(OrderBookDeltaEvent)},
             kinds);
     }
 
@@ -95,9 +95,9 @@ public class SecurityFeedTests
         Assert.IsEmpty(feed.Process(Array.Empty<OrderBookEvent>()));
     }
 
-    private static (SecurityFeed Feed, IOrderBook Book) Feed()
+    private static (InstrumentFeed Feed, IOrderBook Book) Feed()
     {
-        var book = new TimestampingOrderBook(Sec, new ManualClock(Now1));
-        return (new SecurityFeed(Sec.Symbol, maxLevels: 10), book);
+        var book = new TimestampingOrderBook(Gold, new ManualClock(Now1));
+        return (new InstrumentFeed(Gold.Symbol, maxLevels: 10), book);
     }
 }

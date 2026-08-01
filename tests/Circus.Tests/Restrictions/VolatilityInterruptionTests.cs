@@ -30,7 +30,7 @@ public class VolatilityInterruptionTests
 
     // Ordinary range 5 ticks, extended range 8, pausing for two minutes. On a tick size of 10
     // that is 50 and 80 either side of the reference.
-    private static Instrument ExtendingSecurity() =>
+    private static Instrument ExtendingGold() =>
         new("GCZ6", 10, 10,
             PriceRestrictions: new PriceRestriction[]
             {
@@ -42,7 +42,7 @@ public class VolatilityInterruptionTests
     {
         // arrange - referenced at 100, then a trade at 200 breaches the ordinary range and
         // pauses the book, leaving the two orders crossed and unfilled
-        var book = new TimestampingOrderBook(ExtendingSecurity(), Clock);
+        var book = new TimestampingOrderBook(ExtendingGold(), Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 200);
         book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 200);
@@ -66,7 +66,7 @@ public class VolatilityInterruptionTests
     public void InterruptionExtends_NoticedLate_FromTheDeadlineItServed()
     {
         // arrange - paused at 200, which the extended range still refuses
-        var book = new TimestampingOrderBook(ExtendingSecurity(), Clock);
+        var book = new TimestampingOrderBook(ExtendingGold(), Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 200);
         book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 200);
@@ -90,7 +90,7 @@ public class VolatilityInterruptionTests
     public void InterruptionEnds_OnceItWouldPrintInsideTheExtendedRange()
     {
         // arrange - as above, paused with a would-be print at 200
-        var book = new TimestampingOrderBook(ExtendingSecurity(), Clock);
+        var book = new TimestampingOrderBook(ExtendingGold(), Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 5, 200);
         book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 200);
@@ -124,13 +124,13 @@ public class VolatilityInterruptionTests
         // arrange - a dynamic range of 3 ticks alongside a static range of 5, referenced at 100.
         // Each step below is well inside the dynamic range; it is the distance from where the
         // day started that eventually trips.
-        var security = new Instrument("GCZ6", 10, 10,
+        var instrument = new Instrument("GCZ6", 10, 10,
             PriceRestrictions: new PriceRestriction[]
             {
                 new VolatilityBand(3),
                 new StaticPriceRange(5)
             });
-        var book = new TimestampingOrderBook(security, Clock);
+        var book = new TimestampingOrderBook(instrument, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
 
         // act + assert - 120 is 2 ticks from the reference, inside both

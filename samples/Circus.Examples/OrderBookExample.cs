@@ -9,10 +9,10 @@ public static class OrderBookExample
 {
     public static void TestExample()
     {
-        var sec = new Instrument("GCZ6", 10, 10);
+        var gold = new Instrument("GCZ6", 10, 10);
 
         var clock = new ManualClock(DateTime.Now);
-        IOrderBook book = new TimestampingOrderBook(sec, clock);
+        IOrderBook book = new TimestampingOrderBook(gold, clock);
 
         // Open the book for trading before placing orders.
         book.PreOpenTrading(referencePrice: 100);
@@ -24,11 +24,11 @@ public static class OrderBookExample
 
     public static void BackTestExample()
     {
-        var sec = new Instrument("GCZ6", 10, 10);
+        var gold = new Instrument("GCZ6", 10, 10);
 
         // No clock anywhere: a backtest already knows when everything happened, so it stamps
         // each action with the data's own time rather than moving a clock the book would read.
-        IOrderBook book = new OrderBook(sec);
+        IOrderBook book = new OrderBook(gold);
 
         var schedule = new MarketSchedule(new TimeSpan(1, 0, 0), new TimeSpan(1, 10, 0),
             new TimeSpan(22, 10, 0));
@@ -51,10 +51,10 @@ public static class OrderBookExample
 
     public static void LiveExample()
     {
-        var sec = new Instrument("GCZ6", 10, 10);
+        var gold = new Instrument("GCZ6", 10, 10);
 
         var clock = new SystemClock();
-        IOrderBook book = new TimestampingOrderBook(sec, clock);
+        IOrderBook book = new TimestampingOrderBook(gold, clock);
 
         var schedule = new MarketSchedule(new TimeSpan(1, 0, 0), new TimeSpan(1, 10, 0),
             new TimeSpan(22, 10, 0));

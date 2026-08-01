@@ -15,16 +15,16 @@ namespace Circus.MarketData;
 //
 // Starts where a book starts - closed, nothing pending, no limit - so the first status change
 // is a change from something true rather than from a guess.
-public class SecurityStatusDataProducer : IDataProducer<SecurityStatusDataEvent>
+public class InstrumentStatusDataProducer : IDataProducer<InstrumentStatusDataEvent>
 {
     private OrderBookStatus _status = OrderBookStatus.Closed;
     private OrderBookStatusChangeReason _reason = OrderBookStatusChangeReason.Requested;
     private DateTime? _resumesAt;
     private Side? _limitState;
 
-    public IList<SecurityStatusDataEvent> Process(IReadOnlyList<OrderBookEvent> events)
+    public IList<InstrumentStatusDataEvent> Process(IReadOnlyList<OrderBookEvent> events)
     {
-        List<SecurityStatusDataEvent>? output = null;
+        List<InstrumentStatusDataEvent>? output = null;
 
         foreach (var ev in events)
         {
@@ -48,10 +48,10 @@ public class SecurityStatusDataProducer : IDataProducer<SecurityStatusDataEvent>
 
             // One per contributing event, carrying that event's own time rather than a time
             // chosen for a batch. Each is a complete picture, so a consumer never needs two.
-            output ??= new List<SecurityStatusDataEvent>();
-            output.Add(new SecurityStatusDataEvent(ev.Symbol, ev.Time, _status, _reason, _resumesAt, _limitState));
+            output ??= new List<InstrumentStatusDataEvent>();
+            output.Add(new InstrumentStatusDataEvent(ev.Symbol, ev.Time, _status, _reason, _resumesAt, _limitState));
         }
 
-        return output ?? (IList<SecurityStatusDataEvent>) Array.Empty<SecurityStatusDataEvent>();
+        return output ?? (IList<InstrumentStatusDataEvent>) Array.Empty<InstrumentStatusDataEvent>();
     }
 }

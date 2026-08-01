@@ -9,19 +9,19 @@ public class MarketDataProducerExample
     {
         var time = new SystemClock();
 
-        var sec1 = new Instrument("GCZ6", 10, 10);
-        var sec2 = new Instrument("SIZ6", 10, 10);
+        var gold = new Instrument("GCZ6", 10, 10);
+        var silver = new Instrument("SIZ6", 10, 10);
 
-        IOrderBook book1 = new TimestampingOrderBook(sec1, time);
-        IOrderBook book2 = new TimestampingOrderBook(sec2, time);
+        IOrderBook book1 = new TimestampingOrderBook(gold, time);
+        IOrderBook book2 = new TimestampingOrderBook(silver, time);
 
         // Both instruments on one channel, the way a venue publishes them: one sequence a
         // subscriber counts to notice it missed something, and each message saying which
-        // instrument it is about. A feed per security, because every producer behind one builds
+        // instrument it is about. A feed per instrument, because every producer behind one builds
         // its view from a single book's events and none can resync after a missed one.
         var channel = new MarketDataChannel();
-        channel.Add(new SecurityFeed(sec1.Symbol, maxLevels: 10));
-        channel.Add(new SecurityFeed(sec2.Symbol, maxLevels: 10));
+        channel.Add(new InstrumentFeed(gold.Symbol, maxLevels: 10));
+        channel.Add(new InstrumentFeed(silver.Symbol, maxLevels: 10));
 
         // book1 opens on an auction: orders accumulate in pre-open with the indicative quote
         // tracking them, and the print happens on the way out - the same orders as book2, which

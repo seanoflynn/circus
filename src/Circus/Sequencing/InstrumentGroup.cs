@@ -28,7 +28,7 @@ public sealed class InstrumentGroup
     public MarketDataChannel Channel => _channel;
     public IReadOnlyList<string> Symbols => _symbols;
 
-    // Registers an instrument: creates a bare OrderBook and a SecurityFeed, adds the book and
+    // Registers an instrument: creates a bare OrderBook and an InstrumentFeed, adds the book and
     // schedule to the sequencer and the feed to the channel. maxLevels sets the depth of the
     // level data producer (default 10).
     public void Add(Instrument instrument, MarketSchedule schedule, int maxLevels = 10)
@@ -38,19 +38,19 @@ public sealed class InstrumentGroup
 
         var book = new OrderBook(instrument);
         _sequencer.Add(book, schedule);
-        _channel.Add(new SecurityFeed(instrument.Symbol, maxLevels));
+        _channel.Add(new InstrumentFeed(instrument.Symbol, maxLevels));
         _symbols.Add(instrument.Symbol);
     }
 
     // Registers a pre-built book (e.g. with custom price restrictions) alongside its schedule and
-    // a security feed for it.
+    // an instrument feed for it.
     public void Add(IOrderBook book, MarketSchedule schedule, int maxLevels = 10)
     {
         ArgumentNullException.ThrowIfNull(book);
         ArgumentNullException.ThrowIfNull(schedule);
 
         _sequencer.Add(book, schedule);
-        _channel.Add(new SecurityFeed(book.Symbol, maxLevels));
+        _channel.Add(new InstrumentFeed(book.Symbol, maxLevels));
         _symbols.Add(book.Symbol);
     }
 

@@ -4,7 +4,7 @@ using Circus.Sessions;
 
 namespace Circus.Sequencing;
 
-// One queue in front of the books, and the only component that knows more than one security
+// One queue in front of the books, and the only component that knows more than one instrument
 // exists. Its dispatch order is the venue's order of events.
 //
 // That is the whole reason it exists. A book must never be handed an action stamped behind the
@@ -82,7 +82,7 @@ public sealed class Sequencer
     // Queues client flow at its own stamp.
     //
     // Refused if stamped behind logical now: the past has already been dispatched and cannot be
-    // inserted into. Refused for a security with no book registered, because a routing mistake is
+    // inserted into. Refused for an instrument with no book registered, because a routing mistake is
     // worth hearing about where it was made rather than as a lookup failure mid-dispatch.
     public void Submit(OrderBookAction action)
     {

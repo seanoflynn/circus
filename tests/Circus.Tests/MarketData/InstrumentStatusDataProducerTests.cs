@@ -6,22 +6,22 @@ using NUnit.Framework;
 
 namespace Circus.Tests.MarketData;
 
-public class SecurityStatusDataProducerTests
+public class InstrumentStatusDataProducerTests
 {
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
     private static readonly TimeSpan PauseFor = TimeSpan.FromMinutes(2);
 
     private ManualClock Clock;
-    private SecurityStatusDataProducer Producer;
+    private InstrumentStatusDataProducer Producer;
 
     [SetUp]
     public void SetUp()
     {
         Clock = new ManualClock(Now1);
-        Producer = new SecurityStatusDataProducer();
+        Producer = new InstrumentStatusDataProducer();
     }
 
-    private IList<SecurityStatusDataEvent> Publish(IOrderBook book, IReadOnlyList<OrderBookEvent> bookEvents) =>
+    private IList<InstrumentStatusDataEvent> Publish(IOrderBook book, IReadOnlyList<OrderBookEvent> bookEvents) =>
         Producer.Process(bookEvents);
 
     private IOrderBook PlainBook() =>

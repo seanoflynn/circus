@@ -7,7 +7,7 @@ using NUnit.Framework;
 namespace Circus.Tests.Restrictions;
 
 [TestFixture]
-public class PriceBandTests
+public class OrderPriceBandTests
 {
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
 
@@ -33,10 +33,10 @@ public class PriceBandTests
     public void NoBandConfigured_OrderFarFromReferencePrice_Accepted()
     {
         // arrange - no restrictions at all, so banding is off even though a reference price is
-        // seeded. A security without a band leaves the restriction out rather than configuring
+        // seeded. An instrument without a band leaves the restriction out rather than configuring
         // one with no width.
-        var security = new Instrument("GCZ6", 10, 10);
-        var book = new LevelTrackingOrderBook(security, Clock);
+        var instrument = new Instrument("GCZ6", 10, 10);
+        var book = new LevelTrackingOrderBook(instrument, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
 
         // act
@@ -53,13 +53,13 @@ public class PriceBandTests
         // carries its own width, so the mapping in the book's constructor is the only place the
         // two could be crossed over. A wide entry band must not reject, and a narrow volatility
         // band must still pause on the resulting trade.
-        var security = new Instrument("GCZ6", 10, 10,
+        var instrument = new Instrument("GCZ6", 10, 10,
             PriceRestrictions: new PriceRestriction[]
             {
                 new OrderPriceBand(1000),
                 new VolatilityBand(5)
             });
-        var book = new LevelTrackingOrderBook(security, Clock);
+        var book = new LevelTrackingOrderBook(instrument, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
 
         // act - 200 is far outside the narrow volatility band but well inside the wide entry
@@ -79,9 +79,9 @@ public class PriceBandTests
     public void NoReferencePriceSeeded_NoTradeYet_BandInactive_Accepted()
     {
         // arrange - band is configured, but there's no anchor to check against yet
-        var security = new Instrument("GCZ6", 10, 10,
+        var instrument = new Instrument("GCZ6", 10, 10,
             PriceRestrictions: new PriceRestriction[] {new OrderPriceBand(5)});
-        var book = new LevelTrackingOrderBook(security, Clock);
+        var book = new LevelTrackingOrderBook(instrument, Clock);
         book.UpdateStatus(OrderBookStatus.Open);
 
         // act
@@ -95,9 +95,9 @@ public class PriceBandTests
     public void ReferencePriceSeeded_OrderWithinBand_Accepted_OutsideBand_Rejected()
     {
         // arrange - band of 5 ticks (50) around a seeded reference of 100, so [50, 150]
-        var security = new Instrument("GCZ6", 10, 10,
+        var instrument = new Instrument("GCZ6", 10, 10,
             PriceRestrictions: new PriceRestriction[] {new OrderPriceBand(5)});
-        var book = new LevelTrackingOrderBook(security, Clock);
+        var book = new LevelTrackingOrderBook(instrument, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
 
         // act/assert - at the reference price
@@ -119,9 +119,9 @@ public class PriceBandTests
     public void BandMovesDynamically_AfterATrade_ReanchorsToNewLastTradedPrice()
     {
         // arrange - reference seeded at 100, band [50, 150]
-        var security = new Instrument("GCZ6", 10, 10,
+        var instrument = new Instrument("GCZ6", 10, 10,
             PriceRestrictions: new PriceRestriction[] {new OrderPriceBand(5)});
-        var book = new LevelTrackingOrderBook(security, Clock);
+        var book = new LevelTrackingOrderBook(instrument, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
 
         // 160 is outside the original [50, 150] band
@@ -146,9 +146,9 @@ public class PriceBandTests
     public void UpdateOrder_RepriceOutsideBand_Rejected()
     {
         // arrange - reference seeded at 100, band [50, 150]
-        var security = new Instrument("GCZ6", 10, 10,
+        var instrument = new Instrument("GCZ6", 10, 10,
             PriceRestrictions: new PriceRestriction[] {new OrderPriceBand(5)});
-        var book = new LevelTrackingOrderBook(security, Clock);
+        var book = new LevelTrackingOrderBook(instrument, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100);
 
@@ -167,7 +167,7 @@ public class PriceBandTests
     }
 
     // A band of 5 ticks on a tick size of 10 is 50 either side of wherever the reference is.
-    private static Instrument BandedSecurity() =>
+    private static Instrument BandedGold() =>
         new("GCZ6", 10, 10,
             PriceRestrictions: new PriceRestriction[] {new OrderPriceBand(5)});
 
@@ -175,7 +175,7 @@ public class PriceBandTests
     public void PreOpen_ReferenceMovesFromTheSettlementPriceToTheIndicativePrice()
     {
         // arrange - settled at 100, so the band starts out [50, 150]
-        var book = new LevelTrackingOrderBook(BandedSecurity(), Clock);
+        var book = new LevelTrackingOrderBook(BandedGold(), Clock);
         book.UpdateStatus(OrderBookStatus.PreOpen, 100);
 
         // assert - 200 is outside the band while the settlement price is still the reference
@@ -201,7 +201,7 @@ public class PriceBandTests
     public void ContinuousTrading_ReferenceReturnsToTheLastTrade_OnceTheQuoteIsWithdrawn()
     {
         // arrange - open on an auction that prints at 150, which withdraws the quote
-        var book = new LevelTrackingOrderBook(BandedSecurity(), Clock);
+        var book = new LevelTrackingOrderBook(BandedGold(), Clock);
         book.UpdateStatus(OrderBookStatus.PreOpen, 100);
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 10, 150);
         book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 10, 150);
@@ -238,7 +238,7 @@ public class PriceBandTests
     public void StopLimit_TriggerAndPriceWithinABandOfEachOther_Accepted()
     {
         // arrange - band [150, 250] around the re-seeded reference of 200
-        var book = StopSpreadBook(BandedSecurity());
+        var book = StopSpreadBook(BandedGold());
 
         // act - trigger 160 and limit 210 are 50 apart, exactly the band width
         var events = book.CreateStopLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(),
@@ -252,7 +252,7 @@ public class PriceBandTests
     public void StopLimit_TriggerAndPriceFurtherApartThanTheBand_Rejected()
     {
         // arrange
-        var book = StopSpreadBook(BandedSecurity());
+        var book = StopSpreadBook(BandedGold());
 
         // act - trigger 160 and limit 250 are 90 apart, beyond the band
         var events = book.CreateStopLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(),
@@ -269,7 +269,7 @@ public class PriceBandTests
     public void UpdateOrder_RepricingAStopBeyondTheBandFromItsTrigger_Rejected()
     {
         // arrange - an accepted stop, trigger 160 and limit 210
-        var book = StopSpreadBook(BandedSecurity());
+        var book = StopSpreadBook(BandedGold());
         book.CreateStopLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Buy, 5, 210, 160);
 
         // act - repricing to 250 leaves the limit inside the band but 90 from the trigger

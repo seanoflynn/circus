@@ -11,12 +11,12 @@ public class TradeDataProducerTests
     public void TradeDataProducer_Traded_FiresEvent()
     {
         // arrange
-        var sec = new Instrument("GCZ6", 10, 10);
+        var gold = new Instrument("GCZ6", 10, 10);
         var now = new DateTime(2000, 1, 1, 12, 0, 0);
         var clock = new ManualClock(now);
         var producer = new TradeDataProducer();
 
-        var book = new TimestampingOrderBook(sec, clock);
+        var book = new TimestampingOrderBook(gold, clock);
         book.UpdateStatus(OrderBookStatus.Open);
         book.CreateLimitOrder("Company1", "Order1", new OrderValidity.Day(), Side.Buy, 3, 100);
         var bookEvents =

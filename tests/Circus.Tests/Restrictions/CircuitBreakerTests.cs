@@ -29,14 +29,14 @@ public class CircuitBreakerTests
     // reference of 1000 with a tick size of 10 that is 7, 13 and 20 ticks either side.
     private IOrderBook LeveledBook()
     {
-        var security = new Instrument("GCZ6", 10, 10,
+        var instrument = new Instrument("GCZ6", 10, 10,
             PriceRestrictions: new PriceRestriction[]
             {
                 new CircuitBreaker(new PriceLimitWidth.Percent(7), HaltFor),
                 new CircuitBreaker(new PriceLimitWidth.Percent(13), HaltFor),
                 new CircuitBreaker(new PriceLimitWidth.Percent(20))
             });
-        var book = new TimestampingOrderBook(security, Clock);
+        var book = new TimestampingOrderBook(instrument, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 1000);
         return book;
     }
@@ -97,13 +97,13 @@ public class CircuitBreakerTests
     {
         // arrange - a volatility band far narrower than the breaker, so any price tripping the
         // breaker trips the band too. The severer consequence has to win.
-        var security = new Instrument("GCZ6", 10, 10,
+        var instrument = new Instrument("GCZ6", 10, 10,
             PriceRestrictions: new PriceRestriction[]
             {
                 new VolatilityBand(2, PauseFor: TimeSpan.FromMinutes(2)),
                 new CircuitBreaker(new PriceLimitWidth.Percent(7), HaltFor)
             });
-        var book = new TimestampingOrderBook(security, Clock);
+        var book = new TimestampingOrderBook(instrument, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 1000);
 
         // act

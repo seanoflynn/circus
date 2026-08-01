@@ -5,7 +5,7 @@ namespace Circus.MarketData;
 // Everything a venue publishes about one instrument, assembled in one place. A book's events go
 // in, the messages a subscriber would receive come out.
 //
-// One bundle per security, created before that book processes its first action: the level, depth
+// One bundle per instrument, created before that book processes its first action: the level, depth
 // and status producers inside it are each stateful and none can resync after a missed event.
 //
 // One level producer at one depth, unlike the several a caller might otherwise run side by side.
@@ -17,15 +17,15 @@ namespace Circus.MarketData;
 // A venue separating market-by-price from market-by-order would compose its own bundle rather
 // than use this: both are here, which is the useful default for a simulator and more than a real
 // depth feed carries.
-public sealed class SecurityFeed
+public sealed class InstrumentFeed
 {
     private readonly LevelDataProducer _levels;
     private readonly FullBookDataProducer _orderByOrder = new();
     private readonly TradeDataProducer _trades = new();
     private readonly IndicativePriceDataProducer _indicative = new();
-    private readonly SecurityStatusDataProducer _status = new();
+    private readonly InstrumentStatusDataProducer _status = new();
 
-    public SecurityFeed(string symbol, int maxLevels)
+    public InstrumentFeed(string symbol, int maxLevels)
     {
         Symbol = symbol ?? throw new ArgumentNullException(nameof(symbol));
         _levels = new LevelDataProducer(maxLevels);

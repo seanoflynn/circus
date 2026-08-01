@@ -5,8 +5,8 @@ using NUnit.Framework;
 namespace Circus.Tests.Simulator;
 
 // The simulator generates traces the rest of the suite and the benchmarks depend on, so what is
-// worth pinning is that a seed reproduces one exactly, and that covering several securities
-// interleaves them without letting one security's flow depend on another's.
+// worth pinning is that a seed reproduces one exactly, and that covering several instruments
+// interleaves them without letting one instrument's flow depend on another's.
 [TestFixture]
 public class OrderFlowSimulatorTests
 {
@@ -33,18 +33,18 @@ public class OrderFlowSimulatorTests
     }
 
     [Test]
-    public void Generate_SeveralSecurities_InterleavesThemInOneTrace()
+    public void Generate_SeveralInstruments_InterleavesThemInOneTrace()
     {
         var trace = new OrderFlowSimulator(new[] {Gold, Silver, Copper}, seed: 7).Generate(600);
 
-        // every security represented, and mixed rather than generated in blocks
+        // every instrument represented, and mixed rather than generated in blocks
         var names = trace.Select(a => a.Symbol).ToList();
         Assert.That(
             names.Distinct().OrderBy(n => n).ToList(),
             Is.EqualTo(new[] {Gold.Symbol, Copper.Symbol, Silver.Symbol}.OrderBy(n => n).ToList()));
 
         var switches = names.Zip(names.Skip(1)).Count(pair => pair.First != pair.Second);
-        Assert.Greater(switches, 100, "expected the securities to be interleaved, not blocked");
+        Assert.Greater(switches, 100, "expected the instruments to be interleaved, not blocked");
     }
 
     [Test]
@@ -52,7 +52,7 @@ public class OrderFlowSimulatorTests
     {
         var trace = new OrderFlowSimulator(new[] {Gold, Silver}, seed: 5).Generate(300);
 
-        // one clock across all securities, so the trace is already in the order a sequencer
+        // one clock across all instruments, so the trace is already in the order a sequencer
         // would put it in
         var times = trace.Select(a => a.Time).ToList();
         Assert.AreEqual(times.OrderBy(t => t).ToList(), times);
@@ -60,13 +60,13 @@ public class OrderFlowSimulatorTests
     }
 
     [Test]
-    public void Generate_EveryActionTargetsTheSecurityItWasGeneratedFor()
+    public void Generate_EveryActionTargetsTheInstrumentItWasGeneratedFor()
     {
         var trace = new OrderFlowSimulator(new[] {Gold, Silver}, seed: 8).Generate(400);
 
         // an update or cancel naming an order that never existed in that book would be routed to
-        // it and rejected, so the ids have to have been drawn per security
-        var known = new HashSet<(string Security, string ClientOrderId)>();
+        // it and rejected, so the ids have to have been drawn per instrument
+        var known = new HashSet<(string Symbol, string ClientOrderId)>();
 
         foreach (var action in trace)
         {
@@ -91,7 +91,7 @@ public class OrderFlowSimulatorTests
     }
 
     [Test]
-    public void Generate_ClientOrderIdsAreUniqueAcrossSecurities()
+    public void Generate_ClientOrderIdsAreUniqueAcrossInstruments()
     {
         var trace = new OrderFlowSimulator(new[] {Gold, Silver, Copper}, seed: 3).Generate(400);
 
@@ -102,7 +102,7 @@ public class OrderFlowSimulatorTests
     }
 
     [Test]
-    public void Generate_NoSecurities_ArgumentException()
+    public void Generate_NoInstruments_ArgumentException()
     {
         Assert.Throws<ArgumentException>(() => new OrderFlowSimulator(Array.Empty<Instrument>()));
     }

@@ -55,12 +55,12 @@ public class MarketDataChannelTests
         // ladders on any non-empty batch and so contributes one of its own here too
         Assert.AreEqual(
             new[] {Gold.Symbol, Silver.Symbol},
-            messages.Where(m => m.Data is SecurityStatusDataEvent)
+            messages.Where(m => m.Data is InstrumentStatusDataEvent)
                 .Select(m => m.Data.Symbol).ToArray());
     }
 
     [Test]
-    public void Publish_ASecurityTheChannelDoesNotCarry_IsIgnoredAndDoesNotConsumeASequence()
+    public void Publish_AnInstrumentTheChannelDoesNotCarry_IsIgnoredAndDoesNotConsumeASequence()
     {
         // arrange - a channel carrying gold only, which is the normal case rather than a mistake:
         // a venue splits its instruments across channels deliberately
@@ -84,7 +84,7 @@ public class MarketDataChannelTests
     }
 
     [Test]
-    public void Publish_EventsSpanningSecurities_ReachEachSecuritysOwnFeed()
+    public void Publish_EventsSpanningInstruments_ReachEachInstrumentsOwnFeed()
     {
         // arrange - nothing produces this today, since one dispatch is one book. It is what an
         // action implying a fill in another book would look like, and each book's producers must
@@ -101,11 +101,11 @@ public class MarketDataChannelTests
         // act
         var messages = channel.Publish(mixed);
 
-        // assert - grouped by security in order of first appearance, and each feed saw only its
+        // assert - grouped by instrument in order of first appearance, and each feed saw only its
         // own: gold's status producer tracked two changes, silver's one
         var statuses = messages
             .Select(m => m.Data)
-            .OfType<SecurityStatusDataEvent>()
+            .OfType<InstrumentStatusDataEvent>()
             .Select(d => (d.Symbol, d.Status))
             .ToList();
 
@@ -129,18 +129,18 @@ public class MarketDataChannelTests
     }
 
     [Test]
-    public void Add_TwiceForTheSameSecurity_ArgumentException()
+    public void Add_TwiceForTheSameInstrument_ArgumentException()
     {
         var channel = Channel(Gold);
 
-        Assert.Throws<ArgumentException>(() => channel.Add(new SecurityFeed(Gold.Symbol, maxLevels: 10)));
+        Assert.Throws<ArgumentException>(() => channel.Add(new InstrumentFeed(Gold.Symbol, maxLevels: 10)));
     }
 
     private static MarketDataChannel Channel(params Instrument[] instruments)
     {
         var channel = new MarketDataChannel();
         foreach (var instrument in instruments)
-            channel.Add(new SecurityFeed(instrument.Symbol, maxLevels: 10));
+            channel.Add(new InstrumentFeed(instrument.Symbol, maxLevels: 10));
 
         return channel;
     }
