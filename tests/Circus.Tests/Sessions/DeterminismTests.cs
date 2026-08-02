@@ -12,7 +12,7 @@ namespace Circus.Tests.Sessions;
 [TestFixture]
 public class DeterminismTests
 {
-    private static readonly Instrument Sec = new("GCZ6", 10, 10);
+    private static readonly Instrument Gold = new("GCZ6", 10, 10);
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
 
     [Test]
@@ -31,18 +31,18 @@ public class DeterminismTests
     [Test]
     public void OneActionStampsEveryEventItProducesWithOneInstant()
     {
-        var book = new OrderBook(Sec);
-        book.Process(new OpenTrading {Symbol = Sec.Symbol, Time = Now1});
+        var book = new OrderBook(Gold);
+        book.Process(new OpenTrading {Symbol = Gold.Symbol, Time = Now1});
         book.Process(new CreateLimitOrder
         {
-            Symbol = Sec.Symbol, Time = Now1, CompanyId = "C1", ClientOrderId = "O1",
+            Symbol = Gold.Symbol, Time = Now1, CompanyId = "C1", ClientOrderId = "O1",
             OrderValidity = new OrderValidity.Day(), Side = Side.Sell, Quantity = 5, Price = 100
         });
 
         // A crossing order: confirms, matches, prints, and fills - several events, one action.
         var events = book.Process(new CreateLimitOrder
         {
-            Symbol = Sec.Symbol, Time = Now1.AddSeconds(1), CompanyId = "C2", ClientOrderId = "O2",
+            Symbol = Gold.Symbol, Time = Now1.AddSeconds(1), CompanyId = "C2", ClientOrderId = "O2",
             OrderValidity = new OrderValidity.Day(), Side = Side.Buy, Quantity = 5, Price = 100
         });
 
@@ -55,8 +55,8 @@ public class DeterminismTests
     [Test]
     public void DayOrdersExpireInIdOrderRatherThanHashOrder()
     {
-        var book = new OrderBook(Sec);
-        book.Process(new OpenTrading {Symbol = Sec.Symbol, Time = Now1});
+        var book = new OrderBook(Gold);
+        book.Process(new OpenTrading {Symbol = Gold.Symbol, Time = Now1});
 
         // Enough of them that a dictionary's iteration order would not plausibly match insertion
         // order by chance, and interleaved with cancels so the table has had entries removed.
@@ -69,13 +69,13 @@ public class DeterminismTests
         {
             book.Process(new CancelOrder
             {
-                Symbol = Sec.Symbol, Time = Now1, CompanyId = "C", ClientOrderId = $"{id}x",
+                Symbol = Gold.Symbol, Time = Now1, CompanyId = "C", ClientOrderId = $"{id}x",
                 PreviousClientOrderId = id
             });
         }
 
         var expired = book
-            .Process(new CloseTrading {Symbol = Sec.Symbol, Time = Now1.AddHours(6), EndsTradingDay = true})
+            .Process(new CloseTrading {Symbol = Gold.Symbol, Time = Now1.AddHours(6), EndsTradingDay = true})
             .OfType<ExpireOrderConfirmed>()
             .Select(e => e.Order.ClientOrderId)
             .ToList();
@@ -86,10 +86,10 @@ public class DeterminismTests
     [Test]
     public void AnUnstampedActionIsRefusedRatherThanTreatedAsTheStartOfTime()
     {
-        var book = new OrderBook(Sec);
+        var book = new OrderBook(Gold);
 
         var ex = Assert.Throws<ArgumentException>(() =>
-            book.Process(new OpenTrading {Symbol = Sec.Symbol}));
+            book.Process(new OpenTrading {Symbol = Gold.Symbol}));
 
         Assert.That(ex.Message, Does.Contain("Time"));
     }
@@ -97,22 +97,22 @@ public class DeterminismTests
     [Test]
     public void TimeRunningBackwardsIsRefused()
     {
-        var book = new OrderBook(Sec);
-        book.Process(new OpenTrading {Symbol = Sec.Symbol, Time = Now1});
+        var book = new OrderBook(Gold);
+        book.Process(new OpenTrading {Symbol = Gold.Symbol, Time = Now1});
 
         Assert.Throws<ArgumentException>(() =>
-            book.Process(new CloseTrading {Symbol = Sec.Symbol, Time = Now1.AddSeconds(-1)}));
+            book.Process(new CloseTrading {Symbol = Gold.Symbol, Time = Now1.AddSeconds(-1)}));
 
         // The same instant twice is not backwards - a burst can share one.
         Assert.DoesNotThrow(() =>
-            book.Process(new AdvanceTime {Symbol = Sec.Symbol, Time = Now1}));
+            book.Process(new AdvanceTime {Symbol = Gold.Symbol, Time = Now1}));
     }
 
     [Test]
     public void AStampingBookUsesTheClockItWasGiven()
     {
         var clock = new ManualClock(Now1);
-        var book = new TimestampingOrderBook(Sec, clock);
+        var book = new TimestampingOrderBook(Gold, clock);
 
         var events = book.OpenTrading();
 
@@ -140,7 +140,7 @@ public class DeterminismTests
                 var index = random.Next(live.Count);
                 actions.Add(new CancelOrder
                 {
-                    Symbol = Sec.Symbol, Time = time, CompanyId = "C", ClientOrderId = $"o{n++}",
+                    Symbol = Gold.Symbol, Time = time, CompanyId = "C", ClientOrderId = $"o{n++}",
                     PreviousClientOrderId = live[index]
                 });
                 live.RemoveAt(index);
@@ -153,7 +153,7 @@ public class DeterminismTests
                 var renamed = $"o{n++}";
                 actions.Add(new UpdateOrder
                 {
-                    Symbol = Sec.Symbol, Time = time, CompanyId = "C", ClientOrderId = renamed,
+                    Symbol = Gold.Symbol, Time = time, CompanyId = "C", ClientOrderId = renamed,
                     PreviousClientOrderId = live[index], NewTotalQuantity = random.Next(1, 10)
                 });
                 live[index] = renamed;
@@ -164,7 +164,7 @@ public class DeterminismTests
             var id = $"o{n++}";
             actions.Add(new CreateLimitOrder
             {
-                Symbol = Sec.Symbol, Time = time, CompanyId = "C", ClientOrderId = id,
+                Symbol = Gold.Symbol, Time = time, CompanyId = "C", ClientOrderId = id,
                 OrderValidity = new OrderValidity.Day(),
                 Side = random.Next(2) == 0 ? Side.Buy : Side.Sell,
                 Quantity = random.Next(1, 10),
@@ -173,7 +173,7 @@ public class DeterminismTests
             live.Add(id);
         }
 
-        actions.Add(new CloseTrading {Symbol = Sec.Symbol, Time = time.AddHours(6), EndsTradingDay = true});
+        actions.Add(new CloseTrading {Symbol = Gold.Symbol, Time = time.AddHours(6), EndsTradingDay = true});
         return actions;
     }
 
@@ -181,9 +181,9 @@ public class DeterminismTests
     // test. The opening action shares the first action's instant so nothing moves backwards.
     private static List<string> Replay(IReadOnlyList<OrderBookAction> actions)
     {
-        var book = new OrderBook(Sec);
+        var book = new OrderBook(Gold);
         var events = new List<OrderBookEvent>(book.Process(
-            new OpenTrading {Symbol = Sec.Symbol, Time = actions[0].Time}));
+            new OpenTrading {Symbol = Gold.Symbol, Time = actions[0].Time}));
 
         foreach (var action in actions)
             events.AddRange(book.Process(action));
@@ -210,7 +210,7 @@ public class DeterminismTests
     private static void Rest(IOrderBook book, string clientOrderId, DateTime time) =>
         book.Process(new CreateLimitOrder
         {
-            Symbol = Sec.Symbol, Time = time, CompanyId = "C", ClientOrderId = clientOrderId,
+            Symbol = Gold.Symbol, Time = time, CompanyId = "C", ClientOrderId = clientOrderId,
             OrderValidity = new OrderValidity.Day(), Side = Side.Buy, Quantity = 1, Price = 100
         });
 }

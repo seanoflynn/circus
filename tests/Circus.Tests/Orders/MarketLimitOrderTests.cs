@@ -9,7 +9,7 @@ namespace Circus.Tests.Orders;
 [TestFixture]
 public class MarketLimitOrderTests
 {
-    private static readonly Instrument Sec = new("GCZ6", 10, 10);
+    private static readonly Instrument Gold = new("GCZ6", 10, 10);
 
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
     private static readonly DateTime Now2 = new(2000, 1, 1, 12, 1, 0);
@@ -29,7 +29,7 @@ public class MarketLimitOrderTests
     public void SetUp()
     {
         Clock = new ManualClock(Now1);
-        Book = new LevelTrackingOrderBook(Sec, Clock);
+        Book = new LevelTrackingOrderBook(Gold, Clock);
     }
 
     [Test]
@@ -100,14 +100,14 @@ public class MarketLimitOrderTests
     {
         // arrange - a wide protection-tick band so a plain Market order provably reaches
         // the second level, contrasted against a MarketLimit order in the identical setup
-        var sec = new Instrument("GCZ6", 10, 20);
+        var wideProtectionGold = new Instrument("GCZ6", 10, 20);
 
-        var marketBook = new LevelTrackingOrderBook(sec, Clock);
+        var marketBook = new LevelTrackingOrderBook(wideProtectionGold, Clock);
         marketBook.UpdateStatus(OrderBookStatus.Open);
         marketBook.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 2, 500);
         marketBook.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 10, 600);
 
-        var marketLimitBook = new LevelTrackingOrderBook(sec, Clock);
+        var marketLimitBook = new LevelTrackingOrderBook(wideProtectionGold, Clock);
         marketLimitBook.UpdateStatus(OrderBookStatus.Open);
         marketLimitBook.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 2, 500);
         marketLimitBook.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 10, 600);
@@ -232,8 +232,8 @@ public class MarketLimitOrderTests
         // act
         var events = Book.Process(new CreateMarketLimitOrder
         {
-            Symbol = Sec.Symbol, CompanyId = CompanyId2, ClientOrderId = OrderId2, OrderValidity = new OrderValidity.Day(),
-            Side = Side.Buy, Quantity = 3
+            Symbol = Gold.Symbol, CompanyId = CompanyId2, ClientOrderId = OrderId2,
+            OrderValidity = new OrderValidity.Day(), Side = Side.Buy, Quantity = 3
         });
 
         // assert

@@ -12,7 +12,7 @@ namespace Circus.Tests.Sessions;
 [TestFixture]
 public class MultipleSessionsTests
 {
-    private static readonly Instrument Sec = new("GCZ6", 10, 10);
+    private static readonly Instrument Gold = new("GCZ6", 10, 10);
 
     private static readonly DateTime MorningSession = new(2000, 1, 1, 9, 0, 0);
     private static readonly DateTime AfternoonSession = new(2000, 1, 1, 14, 0, 0);
@@ -33,7 +33,7 @@ public class MultipleSessionsTests
     public void SetUp()
     {
         Clock = new ManualClock(MorningSession);
-        Book = new TimestampingOrderBook(Sec, Clock);
+        Book = new TimestampingOrderBook(Gold, Clock);
     }
 
     // The seed OrderBook derives from a date, so a test can say which run of ids it

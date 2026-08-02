@@ -8,7 +8,7 @@ namespace Circus.Tests.Sessions;
 [TestFixture]
 public class UpdateStateTests
 {
-    private static readonly Instrument Sec = new("GCZ6", 10, 10);
+    private static readonly Instrument Gold = new("GCZ6", 10, 10);
 
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
     private static readonly DateTime Now2 = new(2000, 1, 1, 12, 1, 0);
@@ -29,7 +29,7 @@ public class UpdateStateTests
     public void SetUp()
     {
         Clock = new ManualClock(Now1);
-        Book = new TimestampingOrderBook(Sec, Clock);
+        Book = new TimestampingOrderBook(Gold, Clock);
     }
 
     [TestCase(OrderBookStatus.PreOpen)]
@@ -47,7 +47,7 @@ public class UpdateStateTests
         Assert.AreEqual(1, events.Count);
         var statusChanged = events[0] as StatusChanged;
         Assert.IsNotNull(statusChanged);
-        Assert.AreEqual(Sec.Symbol, statusChanged.Symbol);
+        Assert.AreEqual(Gold.Symbol, statusChanged.Symbol);
         Assert.AreEqual(status, statusChanged.Status);
         Assert.AreEqual(Now1, statusChanged.Time);
     }
@@ -73,14 +73,14 @@ public class UpdateStateTests
         Assert.IsNull(withdrawn.Price, "the auction it was quoting has printed");
         var matched = events[1] as OrdersMatched;
         Assert.IsNotNull(matched);
-        Assert.AreEqual(Sec.Symbol, matched.Symbol);
+        Assert.AreEqual(Gold.Symbol, matched.Symbol);
         Assert.AreEqual(Now3, matched.Time);
         Assert.AreEqual(100, matched.Price);
         Assert.AreEqual(5, matched.Quantity);
         Assert.IsNotNull(matched.Fills);
         Assert.AreEqual(2, matched.Fills.Count);
 
-        Assert.AreEqual(Sec.Symbol, matched.Fills[0].Symbol);
+        Assert.AreEqual(Gold.Symbol, matched.Fills[0].Symbol);
         Assert.AreEqual(Now3, matched.Fills[0].Time);
         Assert.AreEqual(CompanyId1, matched.Fills[0].CompanyId);
         Assert.AreEqual(OrderId1, matched.Fills[0].ClientOrderId);
@@ -89,7 +89,7 @@ public class UpdateStateTests
         Assert.AreEqual(true, matched.Fills[0].IsResting);
         Assert.AreEqual(CompanyId1, matched.Fills[0].Order.CompanyId);
         Assert.AreEqual(OrderId1, matched.Fills[0].Order.ClientOrderId);
-        Assert.AreEqual(Sec, matched.Fills[0].Order.Instrument);
+        Assert.AreEqual(Gold, matched.Fills[0].Order.Instrument);
         Assert.AreEqual(Now1, matched.Fills[0].Order.CreatedTime);
         Assert.AreEqual(Now1, matched.Fills[0].Order.ModifiedTime);
         Assert.AreEqual(Now3, matched.Fills[0].Order.CompletedTime);
@@ -103,7 +103,7 @@ public class UpdateStateTests
         Assert.AreEqual(5, matched.Fills[0].Order.FilledQuantity);
         Assert.AreEqual(0, matched.Fills[0].Order.RemainingQuantity);
 
-        Assert.AreEqual(Sec.Symbol, matched.Fills[1].Symbol);
+        Assert.AreEqual(Gold.Symbol, matched.Fills[1].Symbol);
         Assert.AreEqual(Now3, matched.Fills[1].Time);
         Assert.AreEqual(CompanyId2, matched.Fills[1].CompanyId);
         Assert.AreEqual(OrderId2, matched.Fills[1].ClientOrderId);
@@ -112,7 +112,7 @@ public class UpdateStateTests
         Assert.AreEqual(false, matched.Fills[1].IsResting);
         Assert.AreEqual(CompanyId2, matched.Fills[1].Order.CompanyId);
         Assert.AreEqual(OrderId2, matched.Fills[1].Order.ClientOrderId);
-        Assert.AreEqual(Sec, matched.Fills[1].Order.Instrument);
+        Assert.AreEqual(Gold, matched.Fills[1].Order.Instrument);
         Assert.AreEqual(Now2, matched.Fills[1].Order.CreatedTime);
         Assert.AreEqual(Now2, matched.Fills[1].Order.ModifiedTime);
         Assert.AreEqual(Now3, matched.Fills[1].Order.CompletedTime);
@@ -144,14 +144,14 @@ public class UpdateStateTests
 
         var expired = events[1] as ExpireOrderConfirmed;
         Assert.IsNotNull(expired);
-        Assert.AreEqual(Sec.Symbol, expired.Symbol);
+        Assert.AreEqual(Gold.Symbol, expired.Symbol);
         Assert.AreEqual(Now2, expired.Time);
         Assert.AreEqual(CompanyId1, expired.CompanyId);
         Assert.AreEqual(100, expired.PreviousPrice, "the working-book price it's being removed from");
         Assert.AreEqual(5, expired.PreviousQuantity, "the working-book displayed quantity being removed");
         Assert.AreEqual(CompanyId1, expired.Order.CompanyId);
         Assert.AreEqual(OrderId1, expired.Order.ClientOrderId);
-        Assert.AreEqual(Sec, expired.Order.Instrument);
+        Assert.AreEqual(Gold, expired.Order.Instrument);
         Assert.AreEqual(Now1, expired.Order.CreatedTime);
         Assert.AreEqual(Now1, expired.Order.ModifiedTime);
         Assert.AreEqual(Now2, expired.Order.CompletedTime);
@@ -185,14 +185,14 @@ public class UpdateStateTests
 
         var expired = events[1] as ExpireOrderConfirmed;
         Assert.IsNotNull(expired);
-        Assert.AreEqual(Sec.Symbol, expired.Symbol);
+        Assert.AreEqual(Gold.Symbol, expired.Symbol);
         Assert.AreEqual(Now2, expired.Time);
         Assert.AreEqual(CompanyId3, expired.CompanyId);
         Assert.IsNull(expired.PreviousPrice, "still Hidden - never resting in the working book");
         Assert.AreEqual(5, expired.PreviousQuantity, "the working-book displayed quantity being removed");
         Assert.AreEqual(CompanyId3, expired.Order.CompanyId);
         Assert.AreEqual(OrderId3, expired.Order.ClientOrderId);
-        Assert.AreEqual(Sec, expired.Order.Instrument);
+        Assert.AreEqual(Gold, expired.Order.Instrument);
         Assert.AreEqual(Now1, expired.Order.CreatedTime);
         Assert.AreEqual(Now1, expired.Order.ModifiedTime);
         Assert.AreEqual(Now2, expired.Order.CompletedTime);
@@ -224,7 +224,7 @@ public class UpdateStateTests
 
         var statusChanged = events[0] as StatusChanged;
         Assert.IsNotNull(statusChanged);
-        Assert.AreEqual(Sec.Symbol, statusChanged.Symbol);
+        Assert.AreEqual(Gold.Symbol, statusChanged.Symbol);
         Assert.AreEqual(OrderBookStatus.Closed, statusChanged.Status);
         Assert.AreEqual(Now2, statusChanged.Time);
     }
@@ -247,7 +247,7 @@ public class UpdateStateTests
 
         var statusChanged = events[0] as StatusChanged;
         Assert.IsNotNull(statusChanged);
-        Assert.AreEqual(Sec.Symbol, statusChanged.Symbol);
+        Assert.AreEqual(Gold.Symbol, statusChanged.Symbol);
         Assert.AreEqual(OrderBookStatus.Closed, statusChanged.Status);
         Assert.AreEqual(Now2, statusChanged.Time);
     }
@@ -270,7 +270,7 @@ public class UpdateStateTests
 
         var expired = events[1] as ExpireOrderConfirmed;
         Assert.IsNotNull(expired);
-        Assert.AreEqual(Sec.Symbol, expired.Symbol);
+        Assert.AreEqual(Gold.Symbol, expired.Symbol);
         Assert.AreEqual(Now2, expired.Time);
         Assert.AreEqual(CompanyId1, expired.CompanyId);
         Assert.AreEqual(CompanyId1, expired.Order.CompanyId);
@@ -309,7 +309,7 @@ public class UpdateStateTests
 
         var expired = events[1] as ExpireOrderConfirmed;
         Assert.IsNotNull(expired);
-        Assert.AreEqual(Sec.Symbol, expired.Symbol);
+        Assert.AreEqual(Gold.Symbol, expired.Symbol);
         Assert.AreEqual(day3, expired.Time);
         Assert.AreEqual(CompanyId1, expired.CompanyId);
         Assert.AreEqual(OrderId1, expired.Order.ClientOrderId);

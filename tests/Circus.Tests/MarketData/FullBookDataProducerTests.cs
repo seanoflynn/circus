@@ -8,7 +8,7 @@ namespace Circus.Tests.MarketData;
 
 public class FullBookDataProducerTests
 {
-    private static readonly Instrument Sec = new("GCZ6", 10, 10);
+    private static readonly Instrument Gold = new("GCZ6", 10, 10);
 
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
     private static readonly DateTime Now2 = new(2000, 1, 1, 12, 1, 0);
@@ -38,7 +38,7 @@ public class FullBookDataProducerTests
     public void SetUp()
     {
         Clock = new ManualClock(Now1);
-        Book = new TimestampingOrderBook(Sec, Clock);
+        Book = new TimestampingOrderBook(Gold, Clock);
     }
 
     [Test]

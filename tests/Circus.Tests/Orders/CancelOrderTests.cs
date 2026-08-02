@@ -8,7 +8,7 @@ namespace Circus.Tests.Orders;
 [TestFixture]
 public class CancelOrderTests
 {
-    private static readonly Instrument Sec = new("GCZ6", 10, 10);
+    private static readonly Instrument Gold = new("GCZ6", 10, 10);
 
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
     private static readonly DateTime Now2 = new(2000, 1, 1, 12, 1, 0);
@@ -30,7 +30,7 @@ public class CancelOrderTests
     public void SetUp()
     {
         Clock = new ManualClock(Now1);
-        Book = new TimestampingOrderBook(Sec, Clock);
+        Book = new TimestampingOrderBook(Gold, Clock);
     }
 
     [Test]
@@ -49,7 +49,7 @@ public class CancelOrderTests
         Assert.AreEqual(1, events.Count);
         var cancelled = events[0] as CancelOrderConfirmed;
         Assert.IsNotNull(cancelled);
-        Assert.AreEqual(Sec.Symbol, cancelled.Symbol);
+        Assert.AreEqual(Gold.Symbol, cancelled.Symbol);
         Assert.AreEqual(Now2, cancelled.Time);
         Assert.AreEqual(CompanyId1, cancelled.CompanyId);
         Assert.AreEqual(OrderId1, cancelled.PreviousClientOrderId);
@@ -58,7 +58,7 @@ public class CancelOrderTests
         Assert.AreEqual(3, cancelled.PreviousQuantity, "the working-book displayed quantity being removed");
         Assert.AreEqual(CompanyId1, cancelled.Order.CompanyId);
         Assert.AreEqual(OrderId4, cancelled.Order.ClientOrderId);
-        Assert.AreEqual(Sec, cancelled.Order.Instrument);
+        Assert.AreEqual(Gold, cancelled.Order.Instrument);
         Assert.AreEqual(Now1, cancelled.Order.CreatedTime);
         Assert.AreEqual(Now1, cancelled.Order.ModifiedTime);
         Assert.AreEqual(Now2, cancelled.Order.CompletedTime);
@@ -91,7 +91,7 @@ public class CancelOrderTests
         Assert.AreEqual(1, events.Count);
         var cancelled = events[0] as CancelOrderConfirmed;
         Assert.IsNotNull(cancelled);
-        Assert.AreEqual(Sec.Symbol, cancelled.Symbol);
+        Assert.AreEqual(Gold.Symbol, cancelled.Symbol);
         Assert.AreEqual(Now2, cancelled.Time);
         Assert.AreEqual(CompanyId3, cancelled.CompanyId);
         Assert.AreEqual(OrderId3, cancelled.PreviousClientOrderId);
@@ -100,7 +100,7 @@ public class CancelOrderTests
         Assert.AreEqual(3, cancelled.PreviousQuantity, "the working-book displayed quantity being removed");
         Assert.AreEqual(CompanyId3, cancelled.Order.CompanyId);
         Assert.AreEqual(OrderId4, cancelled.Order.ClientOrderId);
-        Assert.AreEqual(Sec, cancelled.Order.Instrument);
+        Assert.AreEqual(Gold, cancelled.Order.Instrument);
         Assert.AreEqual(Now1, cancelled.Order.CreatedTime);
         Assert.AreEqual(Now1, cancelled.Order.ModifiedTime);
         Assert.AreEqual(Now2, cancelled.Order.CompletedTime);
@@ -131,7 +131,7 @@ public class CancelOrderTests
         Assert.AreEqual(1, events.Count);
         var rejected = events[0] as CancelOrderRejected;
         Assert.IsNotNull(rejected);
-        Assert.AreEqual(Sec.Symbol, rejected.Symbol);
+        Assert.AreEqual(Gold.Symbol, rejected.Symbol);
         Assert.AreEqual(Now1, rejected.Time);
         Assert.AreEqual(CompanyId1, rejected.CompanyId);
         Assert.AreEqual(OrderId4, rejected.ClientOrderId);
@@ -157,7 +157,7 @@ public class CancelOrderTests
         Assert.AreEqual(1, events.Count);
         var rejected = events[0] as CancelOrderRejected;
         Assert.IsNotNull(rejected);
-        Assert.AreEqual(Sec.Symbol, rejected.Symbol);
+        Assert.AreEqual(Gold.Symbol, rejected.Symbol);
         Assert.AreEqual(Now1, rejected.Time);
         Assert.AreEqual(CompanyId1, rejected.CompanyId);
         Assert.AreEqual(OrderId5, rejected.ClientOrderId);
@@ -181,7 +181,7 @@ public class CancelOrderTests
         Assert.AreEqual(1, events.Count);
         var rejected = events[0] as CancelOrderRejected;
         Assert.IsNotNull(rejected);
-        Assert.AreEqual(Sec.Symbol, rejected.Symbol);
+        Assert.AreEqual(Gold.Symbol, rejected.Symbol);
         Assert.AreEqual(Now1, rejected.Time);
         Assert.AreEqual(CompanyId1, rejected.CompanyId);
         Assert.AreEqual(OrderId4, rejected.ClientOrderId);

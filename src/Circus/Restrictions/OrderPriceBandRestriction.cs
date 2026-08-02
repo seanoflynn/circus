@@ -11,7 +11,7 @@ namespace Circus.Restrictions;
 // anchors rather than as a rule about phases, which comes out the same without this needing to
 // know what phase the book is in - continuous trading publishes no indicative price, so the top
 // rung is simply empty there.
-internal sealed class OrderPriceRestriction : IPriceRestriction
+internal sealed class OrderPriceBandRestriction : IPriceRestriction
 {
     private readonly int _bandTicks;
 
@@ -19,7 +19,7 @@ internal sealed class OrderPriceRestriction : IPriceRestriction
     private long? _lastTradePriceTicks;
     private long? _sessionPriceTicks;
 
-    internal OrderPriceRestriction(int bandTicks)
+    internal OrderPriceBandRestriction(int bandTicks)
     {
         _bandTicks = bandTicks;
     }
@@ -35,8 +35,8 @@ internal sealed class OrderPriceRestriction : IPriceRestriction
     private long? ReferencePriceTicks =>
         _indicativePriceTicks ?? _lastTradePriceTicks ?? _sessionPriceTicks;
 
-    // Inactive until some anchor exists. A band with no width is not modelled here at all - a
-    // security that wants none leaves the restriction out.
+    // Inactive until some anchor exists. A band with no width is not modelled here at all - an
+    // instrument that wants none leaves the restriction out.
     public bool Allows(long priceTicks, DateTime time)
     {
         var reference = ReferencePriceTicks;

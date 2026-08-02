@@ -9,7 +9,7 @@ namespace Circus.Tests.Restrictions;
 // open, keeps quoting, trades at the limit and can trade back inside - so almost every
 // assertion here is that the book is still Open while refusing to go further.
 [TestFixture]
-public class DailyLimitTests
+public class DailyPriceLimitTests
 {
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
 
@@ -27,12 +27,12 @@ public class DailyLimitTests
     // 5 ticks on a tick size of 10, referenced at 100, so the limits are 50 and 150.
     private IOrderBook LimitedBook()
     {
-        var security = new Instrument("GCZ6", 10, 10,
+        var instrument = new Instrument("GCZ6", 10, 10,
             PriceRestrictions: new PriceRestriction[]
             {
                 new DailyPriceLimit(new PriceLimitWidth.Ticks(5))
             });
-        var book = new TimestampingOrderBook(security, Clock);
+        var book = new TimestampingOrderBook(instrument, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
         return book;
     }
@@ -77,12 +77,12 @@ public class DailyLimitTests
     // refuse: it traded at 200, holds a buy at 240, and is now referenced at 100.
     private IOrderBook BookWithRestingOrderAboveTheLimit()
     {
-        var security = new Instrument("GCZ6", 10, 10,
+        var instrument = new Instrument("GCZ6", 10, 10,
             PriceRestrictions: new PriceRestriction[]
             {
                 new DailyPriceLimit(new PriceLimitWidth.Ticks(5))
             });
-        var book = new TimestampingOrderBook(security, Clock);
+        var book = new TimestampingOrderBook(instrument, Clock);
 
         book.UpdateStatus(OrderBookStatus.Open, 200);
         book.CreateLimitOrder(CompanyId1, "Sell1", new OrderValidity.Day(), Side.Sell, 5, 200);
@@ -147,12 +147,12 @@ public class DailyLimitTests
     public void PercentageWidth_ResolvesAgainstTheReference()
     {
         // arrange - 7 percent of a reference of 1000, so 70 either side
-        var security = new Instrument("GCZ6", 10, 10,
+        var instrument = new Instrument("GCZ6", 10, 10,
             PriceRestrictions: new PriceRestriction[]
             {
                 new DailyPriceLimit(new PriceLimitWidth.Percent(7))
             });
-        var book = new TimestampingOrderBook(security, Clock);
+        var book = new TimestampingOrderBook(instrument, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 1000);
 
         // act + assert - 1070 is exactly on the ceiling
@@ -167,12 +167,12 @@ public class DailyLimitTests
     public void NoReferenceYet_LimitInactive()
     {
         // arrange - a percentage of nothing is not a width
-        var security = new Instrument("GCZ6", 10, 10,
+        var instrument = new Instrument("GCZ6", 10, 10,
             PriceRestrictions: new PriceRestriction[]
             {
                 new DailyPriceLimit(new PriceLimitWidth.Percent(7))
             });
-        var book = new TimestampingOrderBook(security, Clock);
+        var book = new TimestampingOrderBook(instrument, Clock);
         book.UpdateStatus(OrderBookStatus.Open);
 
         // act

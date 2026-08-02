@@ -4,12 +4,12 @@ using NUnit.Framework;
 namespace Circus.Tests.Restrictions;
 
 [TestFixture]
-public class OrderPriceRestrictionTests
+public class OrderPriceBandRestrictionTests
 {
     [Test]
     public void Scope_IsOrderEntry_OnBreach_IsReject()
     {
-        var restriction = new OrderPriceRestriction(5);
+        var restriction = new OrderPriceBandRestriction(5);
 
         Assert.AreEqual(RestrictionScope.OrderEntry, restriction.Scope);
         Assert.AreEqual(RestrictionBreachAction.Reject, restriction.OnBreach);
@@ -18,7 +18,7 @@ public class OrderPriceRestrictionTests
     [Test]
     public void RejectionInterruptsNothing_SoThereIsNothingToResumeFrom()
     {
-        var restriction = new OrderPriceRestriction(5);
+        var restriction = new OrderPriceBandRestriction(5);
 
         Assert.IsNull(restriction.ResumeAfter);
     }
@@ -26,7 +26,7 @@ public class OrderPriceRestrictionTests
     [Test]
     public void NoReferencePriceYet_AlwaysAllows()
     {
-        var restriction = new OrderPriceRestriction(5);
+        var restriction = new OrderPriceBandRestriction(5);
 
         Assert.IsTrue(restriction.Allows(1_000_000, default));
     }
@@ -34,7 +34,7 @@ public class OrderPriceRestrictionTests
     [Test]
     public void WithinBand_Allowed_AtEdge_Allowed_BeyondEdge_Disallowed()
     {
-        var restriction = new OrderPriceRestriction(5);
+        var restriction = new OrderPriceBandRestriction(5);
         restriction.OnSessionChange(100);
 
         Assert.IsTrue(restriction.Allows(100, default));
@@ -47,7 +47,7 @@ public class OrderPriceRestrictionTests
     [Test]
     public void OnSessionChange_Null_DoesNotClearExistingReference()
     {
-        var restriction = new OrderPriceRestriction(5);
+        var restriction = new OrderPriceBandRestriction(5);
         restriction.OnSessionChange(100);
         restriction.OnSessionChange(null);
 
@@ -58,7 +58,7 @@ public class OrderPriceRestrictionTests
     [Test]
     public void OnTrade_MovesReferenceToLastTrade()
     {
-        var restriction = new OrderPriceRestriction(5);
+        var restriction = new OrderPriceBandRestriction(5);
         restriction.OnSessionChange(100);
 
         restriction.OnTrade(200, default);
@@ -74,7 +74,7 @@ public class OrderPriceRestrictionTests
     {
         // an auction is quoting, so that is what an order is judged against - CME's banding
         // reference follows the IOP once one exists
-        var restriction = new OrderPriceRestriction(5);
+        var restriction = new OrderPriceBandRestriction(5);
         restriction.OnSessionChange(100);
         restriction.OnTrade(200, default);
 
@@ -89,7 +89,7 @@ public class OrderPriceRestrictionTests
     public void IndicativePrice_OutranksTheSessionReference_WithNoTradeYet()
     {
         // pre-open on a fresh session: settled at 100, then the book crosses at 300
-        var restriction = new OrderPriceRestriction(5);
+        var restriction = new OrderPriceBandRestriction(5);
         restriction.OnSessionChange(100);
 
         restriction.OnIndicativePrice(300);
@@ -102,7 +102,7 @@ public class OrderPriceRestrictionTests
     public void IndicativePriceWithdrawn_FallsBackToTheLastTrade()
     {
         // the auction ends and continuous trading takes over, which quotes nothing
-        var restriction = new OrderPriceRestriction(5);
+        var restriction = new OrderPriceBandRestriction(5);
         restriction.OnSessionChange(100);
         restriction.OnTrade(200, default);
         restriction.OnIndicativePrice(300);
@@ -116,7 +116,7 @@ public class OrderPriceRestrictionTests
     [Test]
     public void IndicativePriceWithdrawn_NoTradeYet_FallsBackToTheSessionReference()
     {
-        var restriction = new OrderPriceRestriction(5);
+        var restriction = new OrderPriceBandRestriction(5);
         restriction.OnSessionChange(100);
         restriction.OnIndicativePrice(300);
 
@@ -131,7 +131,7 @@ public class OrderPriceRestrictionTests
     {
         // a new session's settlement price has to beat the previous session's last trade, so
         // an explicit reference clears the anchors above it rather than sitting underneath them
-        var restriction = new OrderPriceRestriction(5);
+        var restriction = new OrderPriceBandRestriction(5);
         restriction.OnTrade(200, default);
         restriction.OnIndicativePrice(300);
 
@@ -145,7 +145,7 @@ public class OrderPriceRestrictionTests
     [Test]
     public void AllowsStopSpread_WithinWidth_AtWidth_BeyondWidth()
     {
-        var restriction = new OrderPriceRestriction(5);
+        var restriction = new OrderPriceBandRestriction(5);
 
         Assert.IsTrue(restriction.AllowsStopSpread(0));
         Assert.IsTrue(restriction.AllowsStopSpread(4));
@@ -157,7 +157,7 @@ public class OrderPriceRestrictionTests
     public void AllowsStopSpread_DoesNotDependOnAReference()
     {
         // it measures a width, not a distance from anywhere
-        var restriction = new OrderPriceRestriction(5);
+        var restriction = new OrderPriceBandRestriction(5);
 
         Assert.IsTrue(restriction.AllowsStopSpread(5));
         Assert.IsFalse(restriction.AllowsStopSpread(6));

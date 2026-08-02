@@ -2,8 +2,8 @@ namespace Circus.Matching;
 
 // How a trade is allocated and priced. Matcher owns the loop around this - the crossing
 // condition, self-match detection, stop-triggering - and runs it identically whichever
-// algorithm is active; only the decisions below vary. Instances rather than singletons, so a
-// security can eventually carry its own set.
+// algorithm is active; only the decisions below vary. Instances rather than singletons, so an
+// instrument can eventually carry its own set.
 internal interface IMatchingAlgorithm
 {
     // What this algorithm would print right now without committing to it, which is what

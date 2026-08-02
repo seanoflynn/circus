@@ -84,13 +84,13 @@ public class VelocityLogicTests
     {
         // arrange - a wide volatility band with no window of its own alongside the velocity
         // limit. The band is four times the width, so nothing below comes close to it.
-        var security = new Instrument("GCZ6", 10, 10,
+        var instrument = new Instrument("GCZ6", 10, 10,
             PriceRestrictions: new PriceRestriction[]
             {
                 new VolatilityBand(20),
                 new VelocityLimit(5, Window)
             });
-        var book = new TimestampingOrderBook(security, Clock);
+        var book = new TimestampingOrderBook(instrument, Clock);
         book.UpdateStatus(OrderBookStatus.Open);
 
         // act

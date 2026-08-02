@@ -47,8 +47,8 @@ public class AuctionMatchingAlgorithmTests
         // (price improvement - they pay 120, not their own higher limit), the 110 and 120
         // sells fully fill (also price improvement - they get 120, not their own lower limit),
         // and the 120 buy (the marginal order) only partially fills for the 1 unit left over
-        var security = new Instrument("GCZ6", 10, 10);
-        var book = new LevelTrackingOrderBook(security, Clock);
+        var instrument = new Instrument("GCZ6", 10, 10);
+        var book = new LevelTrackingOrderBook(instrument, Clock);
         book.UpdateStatus(OrderBookStatus.PreOpen);
 
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 140);
@@ -96,8 +96,8 @@ public class AuctionMatchingAlgorithmTests
         // Price-time priority means the iceberg, having arrived first, must be filled in full
         // before the later order gets anything - it must not lose its place in the queue just
         // because its displayed peak needs replenishing mid-print.
-        var security = new Instrument("GCZ6", 10, 10);
-        var book = new LevelTrackingOrderBook(security, Clock);
+        var instrument = new Instrument("GCZ6", 10, 10);
+        var book = new LevelTrackingOrderBook(instrument, Clock);
         book.UpdateStatus(OrderBookStatus.PreOpen);
 
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 100, 100,
@@ -129,8 +129,8 @@ public class AuctionMatchingAlgorithmTests
         // 55 remaining. Sizing that single fill against the full remaining quantity rather
         // than the 10-unit peak must not leave DisplayedQuantity negative or stale - it should
         // come out re-derived to a fresh full peak, the same as if it had just been entered.
-        var security = new Instrument("GCZ6", 10, 10);
-        var book = new LevelTrackingOrderBook(security, Clock);
+        var instrument = new Instrument("GCZ6", 10, 10);
+        var book = new LevelTrackingOrderBook(instrument, Clock);
         book.UpdateStatus(OrderBookStatus.PreOpen);
 
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 100, 100,
@@ -158,8 +158,8 @@ public class AuctionMatchingAlgorithmTests
     {
         // arrange - 120 and 130 tie for max executable volume (10 each), with the surplus on
         // the sell side at both - CME's rule picks the lowest of the tied prices in that case
-        var security = new Instrument("GCZ6", 10, 10);
-        var book = new LevelTrackingOrderBook(security, Clock);
+        var instrument = new Instrument("GCZ6", 10, 10);
+        var book = new LevelTrackingOrderBook(instrument, Clock);
         book.UpdateStatus(OrderBookStatus.PreOpen);
 
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 140);
@@ -183,8 +183,8 @@ public class AuctionMatchingAlgorithmTests
     {
         // arrange - same tie as above (120 vs 130), but with a reference price seeded at 130
         // (must be tick-aligned to TickSize 10) - that should win over the default rule
-        var security = new Instrument("GCZ6", 10, 10);
-        var book = new LevelTrackingOrderBook(security, Clock);
+        var instrument = new Instrument("GCZ6", 10, 10);
+        var book = new LevelTrackingOrderBook(instrument, Clock);
         book.UpdateStatus(OrderBookStatus.PreOpen, 130);
 
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 140);
@@ -207,8 +207,8 @@ public class AuctionMatchingAlgorithmTests
     public void Opening_NoCrossingBook_NoAuctionPrint()
     {
         // arrange
-        var security = new Instrument("GCZ6", 10, 10);
-        var book = new LevelTrackingOrderBook(security, Clock);
+        var instrument = new Instrument("GCZ6", 10, 10);
+        var book = new LevelTrackingOrderBook(instrument, Clock);
         book.UpdateStatus(OrderBookStatus.PreOpen);
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100);
 
@@ -229,8 +229,8 @@ public class AuctionMatchingAlgorithmTests
         // arrange - pre-open is governed by an auction, so the one thing that must never
         // happen is that governance turning into execution: a crossed book during pre-open is
         // quoted, not printed. Orders sit untouched until the open.
-        var security = new Instrument("GCZ6", 10, 10);
-        var book = new LevelTrackingOrderBook(security, Clock);
+        var instrument = new Instrument("GCZ6", 10, 10);
+        var book = new LevelTrackingOrderBook(instrument, Clock);
         book.UpdateStatus(OrderBookStatus.PreOpen);
 
         // act - deeply crossed: the bid is well through the offer
@@ -258,8 +258,8 @@ public class AuctionMatchingAlgorithmTests
     public void ClosingFromPreOpen_AbandonsTheAuction_WithoutPrinting()
     {
         // arrange - a crossed book in pre-open, quoting a price it would clear at
-        var security = new Instrument("GCZ6", 10, 10);
-        var book = new LevelTrackingOrderBook(security, Clock);
+        var instrument = new Instrument("GCZ6", 10, 10);
+        var book = new LevelTrackingOrderBook(instrument, Clock);
         book.UpdateStatus(OrderBookStatus.PreOpen);
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 10, 150);
         var quoting = book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 10, 100);
@@ -287,8 +287,8 @@ public class AuctionMatchingAlgorithmTests
     {
         // arrange - continuous trading is governed by price-time, which has no single price it
         // would print at, so there is no indicative auction price to publish while open
-        var security = new Instrument("GCZ6", 10, 10);
-        var book = new LevelTrackingOrderBook(security, Clock);
+        var instrument = new Instrument("GCZ6", 10, 10);
+        var book = new LevelTrackingOrderBook(instrument, Clock);
         book.UpdateStatus(OrderBookStatus.Open);
 
         // act + assert - a resting order, then one that crosses it and trades: neither quotes
@@ -312,8 +312,8 @@ public class AuctionMatchingAlgorithmTests
     public void IndicativePrice_PublishedAsThePreOpenBookMoves()
     {
         // arrange
-        var security = new Instrument("GCZ6", 10, 10);
-        var book = new LevelTrackingOrderBook(security, Clock);
+        var instrument = new Instrument("GCZ6", 10, 10);
+        var book = new LevelTrackingOrderBook(instrument, Clock);
         var preOpen = book.UpdateStatus(OrderBookStatus.PreOpen);
 
         // assert - nothing resting yet, so nothing to quote
@@ -361,9 +361,9 @@ public class AuctionMatchingAlgorithmTests
         // actual price movement by itself; only an executed trade at an extreme price should
         // pause the book. This order doesn't cross anything (isolated at 200, nothing on the
         // opposing side), so it must not trigger a pause just for being entered.
-        var security = new Instrument("GCZ6", 10, 10,
+        var instrument = new Instrument("GCZ6", 10, 10,
             PriceRestrictions: new PriceRestriction[] {new VolatilityBand(5)});
-        var book = new LevelTrackingOrderBook(security, Clock);
+        var book = new LevelTrackingOrderBook(instrument, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
 
         // act
@@ -381,9 +381,9 @@ public class AuctionMatchingAlgorithmTests
         // arrange - continuous trading establishes a reference price of 100, then a resting
         // sell stop (trigger 90) is added, plus a resting sell at 200 that hasn't crossed
         // anything yet (so hasn't paused anything, per the test above)
-        var security = new Instrument("GCZ6", 10, 10,
+        var instrument = new Instrument("GCZ6", 10, 10,
             PriceRestrictions: new PriceRestriction[] {new VolatilityBand(5)});
-        var book = new LevelTrackingOrderBook(security, Clock);
+        var book = new LevelTrackingOrderBook(instrument, Clock);
         book.UpdateStatus(OrderBookStatus.Open);
         book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100);
         book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 5, 100);
@@ -437,9 +437,9 @@ public class AuctionMatchingAlgorithmTests
     {
         // arrange - #23's hard-reject band still works exactly as before with no volatility
         // band alongside it
-        var security = new Instrument("GCZ6", 10, 10,
+        var instrument = new Instrument("GCZ6", 10, 10,
             PriceRestrictions: new PriceRestriction[] {new OrderPriceBand(5)});
-        var book = new LevelTrackingOrderBook(security, Clock);
+        var book = new LevelTrackingOrderBook(instrument, Clock);
         book.UpdateStatus(OrderBookStatus.Open, 100);
 
         // act

@@ -113,7 +113,7 @@ public class OrderBook : IOrderBook
             ? Array.Empty<IPriceRestriction>()
             : configs.Select<PriceRestriction, IPriceRestriction>(config => config switch
             {
-                OrderPriceBand band => new OrderPriceRestriction(band.BandTicks),
+                OrderPriceBand band => new OrderPriceBandRestriction(band.BandTicks),
                 VolatilityBand band => new VolatilityBandRestriction(band.RangeTicks, band.PauseFor,
                     band.Window, band.ExtendedRangeTicks),
                 StaticPriceRange range => new StaticPriceRangeRestriction(range.RangeTicks, range.PauseFor),
@@ -127,8 +127,8 @@ public class OrderBook : IOrderBook
                 _ => throw new ArgumentException($"Unknown price restriction {config.GetType().Name}")
             }).ToList();
 
-    // Restrictions supplied outright rather than derived from the security. Internal because it
-    // is a seam, not an API: it exists so combinations a Security cannot yet describe - two
+    // Restrictions supplied outright rather than derived from the instrument. Internal because it
+    // is a seam, not an API: it exists so combinations an Instrument cannot yet describe - two
     // trade-scoped restrictions disagreeing about severity, say - can still be exercised.
     internal OrderBook(Instrument instrument, IReadOnlyList<IPriceRestriction> priceRestrictions)
     {

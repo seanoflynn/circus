@@ -7,7 +7,7 @@ namespace Circus.MarketData;
 // from the events rather than queried back out of it - which is also what lets market data be
 // rebuilt from a journal of those events, with no books involved at all.
 //
-// Most implementations are stateful, so one instance per security, created before that book
+// Most implementations are stateful, so one instance per instrument, created before that book
 // processes its first action. None of them can resync after a missed event.
 public interface IDataProducer<T> where T : MarketDataEvent
 {

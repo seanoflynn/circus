@@ -11,7 +11,7 @@ namespace Circus.Tests.Matching;
 [TestFixture]
 public class MatcherTests
 {
-    private static readonly Instrument Sec = new("GCZ6", 10, 10);
+    private static readonly Instrument Gold = new("GCZ6", 10, 10);
 
     private static readonly DateTime Early = new(2000, 1, 1, 12, 0, 0);
     private static readonly DateTime Late = new(2000, 1, 1, 12, 1, 0);
@@ -25,7 +25,7 @@ public class MatcherTests
         matcher.Run(algorithm, algorithm, _ => null).FirstOrDefault();
 
     private static InternalOrder Order(long sequenceNumber, Side side, int quantity, DateTime time) =>
-        new(sequenceNumber, $"Company{sequenceNumber}", $"Order{sequenceNumber}", Sec, time,
+        new(sequenceNumber, $"Company{sequenceNumber}", $"Order{sequenceNumber}", Gold, time,
             OrderStatus.Working, OrderType.Limit, new OrderValidity.Day(), side, quantity, Tick, null);
 
     // Three resting buys at one price, then a later sell that crosses all of them - the shape

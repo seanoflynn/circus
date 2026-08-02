@@ -4,13 +4,13 @@ using NUnit.Framework;
 
 namespace Circus.Tests.Orders;
 
-// ExchangeOrderId is unique within a security and not beyond it. That is a decision rather than
+// ExchangeOrderId is unique within an instrument and not beyond it. That is a decision rather than
 // an oversight, and it is the kind of decision that gets quietly reversed by someone tidying up,
 // so it is pinned here: the collision is asserted, and so is the pair that resolves it.
 //
 // The alternative - one counter shared by every book - would make each book's ids depend on every
 // other book's traffic. A book would stop being reproducible from its own actions alone, and
-// replaying one security out of a venue-wide journal would stop producing the ids it originally
+// replaying one instrument out of a venue-wide journal would stop producing the ids it originally
 // issued. Independence is worth more than a tidier id.
 [TestFixture]
 public class ExchangeOrderIdScopeTests
