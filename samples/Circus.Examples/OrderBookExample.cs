@@ -1,100 +1,39 @@
-using Circus.Actions;
 using Circus.Events;
-using Circus.Sessions;
-using Circus.Time;
 
 namespace Circus.Examples;
 
+// The smallest thing the library does: actions in, events out.
+//
+// A bare OrderBook and no clock anywhere. Every action carries the instant it happened at, so
+// the book needs nothing ambient to decide what an action means - which is why running this
+// twice prints the same thing twice, and why a journal of these actions is enough to rebuild
+// the book later with nothing recorded beside it.
 public static class OrderBookExample
 {
-    public static void TestExample()
+    private static readonly Instrument Gold = new("GCZ6", TickSize: 10);
+
+    private static readonly DateTime Open = new(2026, 1, 5, 9, 0, 0, DateTimeKind.Utc);
+
+    public static void Run()
     {
-        var gold = new Instrument("GCZ6", 10, 10);
+        var book = new OrderBook(Gold);
 
-        var clock = new ManualClock(DateTime.Now);
-        IOrderBook book = new TimestampingOrderBook(gold, clock);
+        Print(book.OpenTrading(referencePrice: 1000, time: Open));
 
-        // Open the book for trading before placing orders.
-        book.PreOpenTrading(referencePrice: 100);
-        book.OpenTrading(referencePrice: 100);
+        // Rests: there is nothing on the other side to trade with yet.
+        Print(book.CreateLimitOrder("Buyer", "B1", new OrderValidity.Day(), Side.Buy, 3, 1000,
+            time: Open.AddSeconds(1)));
 
-        Print(book.CreateLimitOrder("Buyer", "Order1", new OrderValidity.Day(), Side.Buy, 3, 100));
-        Print(book.CreateLimitOrder("Seller", "Order2", new OrderValidity.Day(), Side.Sell, 5, 100));
-    }
-
-    public static void BackTestExample()
-    {
-        var gold = new Instrument("GCZ6", 10, 10);
-
-        // No clock anywhere: a backtest already knows when everything happened, so it stamps
-        // each action with the data's own time rather than moving a clock the book would read.
-        IOrderBook book = new OrderBook(gold);
-
-        var schedule = new MarketSchedule(new TimeSpan(1, 0, 0), new TimeSpan(1, 10, 0),
-            new TimeSpan(22, 10, 0));
-
-        // Advance the book through the schedule to the data's first timestamp.
-        var dataTime = new DateTime(2020, 1, 1, 1, 30, 0);
-        DriveTo(book, schedule, dataTime);
-
-        // loop through data
-        for (var i = 0; i < 100; i++)
-        {
-            var time = dataTime;
-
-            // pass in data - each order needs its own ClientOrderId, since Buyer's ids are
-            // permanently reserved once used
-            Print(book.CreateLimitOrder("Buyer", $"Order{i}", new OrderValidity.Day(), Side.Buy, 3, 100,
-                time: time));
-        }
-    }
-
-    public static void LiveExample()
-    {
-        var gold = new Instrument("GCZ6", 10, 10);
-
-        var clock = new SystemClock();
-        IOrderBook book = new TimestampingOrderBook(gold, clock);
-
-        var schedule = new MarketSchedule(new TimeSpan(1, 0, 0), new TimeSpan(1, 10, 0),
-            new TimeSpan(22, 10, 0));
-
-        Task.Run(() =>
-        {
-            var i = 0;
-            while (i < 100)
-            {
-                // this needs to happen on same thread as book is updated
-                DriveTo(book, schedule, clock.GetCurrentTime());
-                Thread.Sleep(100);
-                i++;
-            }
-        });
-
-        Print(book.CreateLimitOrder("Buyer", "Order1", new OrderValidity.Day(), Side.Buy, 3, 100));
-        Print(book.CreateLimitOrder("Seller", "Order2", new OrderValidity.Day(), Side.Sell, 5, 100));
-    }
-
-    // Walk the schedule from the start of the day to the given time, applying every transition
-    // the book has passed. Idempotent: calling again with the same or earlier time is a no-op.
-    private static void DriveTo(IOrderBook book, MarketSchedule schedule, DateTime time)
-    {
-        var t = time.Date;
-        while (true)
-        {
-            var next = schedule.NextAfter(t);
-            if (next == null || next.Value.Time > time) break;
-            book.UpdateStatus(next.Value.Status, endsTradingDay: next.Value.EndsTradingDay,
-                time: next.Value.Time);
-            t = next.Value.Time;
-        }
+        // Crosses. One action, several events - the confirm, the match, a fill for each side -
+        // and every one of them carrying this action's instant rather than a fresh clock read.
+        // The seller is left resting the two lots that found no buyer.
+        Print(book.CreateLimitOrder("Seller", "S1", new OrderValidity.Day(), Side.Sell, 5, 1000,
+            time: Open.AddSeconds(2)));
     }
 
     private static void Print(IEnumerable<OrderBookEvent> events)
     {
-        foreach (var @event in events)
-        {
-            Console.WriteLine(@event);
-        }
+        foreach (var ev in events)
+            Console.WriteLine($"  {ev}");
     }
 }

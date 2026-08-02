@@ -14,11 +14,9 @@ namespace Circus.Matching;
 // aggressor's quantity is distributed once across all orders at that level rather than
 // iteratively re-allocating to only the head each time.
 //
-// Not yet reachable from a running book: no TradingPhase constructs it, so nothing an
-// Instrument can describe selects it and only the tests drive it directly. Wiring it up means
-// letting an instrument name the algorithm its continuous phase runs, which is the change
-// IMatchingAlgorithm's "instances rather than singletons" already anticipates. Until then this
-// is a complete implementation waiting on that seam rather than dead code.
+// Selected by an instrument naming MatchingAlgorithm.ProRata, which the book turns into an
+// instance of this for its continuous phase and nowhere else - an auction uncrosses at one
+// price whatever the rest of the day allocates under.
 internal sealed class ProRataMatchingAlgorithm : IMatchingAlgorithm
 {
     // Cached allocations for the current price level, consumed one per SelectNext call.

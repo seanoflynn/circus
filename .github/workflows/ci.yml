@@ -22,6 +22,12 @@ jobs:
       - name: Test
         run: dotnet test --configuration Release --no-build --collect:"XPlat Code Coverage"
 
+      # Runs every sample. Nothing asserts on the output, so this only catches a sample that
+      # throws or stops compiling against the library it is meant to demonstrate - which is
+      # exactly how the previous set came to be wrong without anyone noticing.
+      - name: Run samples
+        run: dotnet run --configuration Release --no-build --project samples/Circus.Examples
+
       - name: Generate coverage summary
         if: always()
         uses: danielpalme/ReportGenerator-GitHub-Action@5.5.11
