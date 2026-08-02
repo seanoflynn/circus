@@ -8,6 +8,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\..\src\Circus\Circus.csproj" />
+      <ProjectReference Include="..\..\src\Circus.Simulator\Circus.Simulator.csproj" />
     </ItemGroup>
 
 </Project>

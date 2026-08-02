@@ -6,6 +6,33 @@ A financial exchange simulator.
 
 [.NET 10](https://dotnet.microsoft.com/download) is required. There are no other dependencies.
 
+## How it works
+
+Actions in, events out. An `OrderBook` reads no clock and consults nothing ambient: every action
+carries the instant it happened at, so the same actions always produce the same events, and a
+journal of those actions is enough to rebuild a book by replaying it.
+
+Everything a consumer knows is derived from that event stream rather than queried back out of a
+book. Market data producers turn events into what a subscriber sees - depth, order-by-order,
+trades, indicative quotes, instrument status - so the same code that publishes a live feed
+rebuilds one from a recorded trace.
+
+Where time comes from is the only thing that differs between running and replaying.
+`LiveDriver` stamps arriving actions from a clock; `Replay` takes the instants already on a
+recorded trace. Both feed a `Sequencer`, one queue in front of every book, whose dispatch order
+is the venue's order of events.
+
+```
+                    ┌──────────────┐
+   live ─ clock ──▶ │              │        ┌────────┐      ┌──────────────┐
+                    │  Sequencer   │ ──────▶│  Books │ ────▶│  Market data │──▶ subscribers
+ replay ─ trace ──▶ │              │        └────────┘      │   channel    │
+                    └──────────────┘                        └──────────────┘
+```
+
+See `samples/Circus.Examples` for each of these; `dotnet run --project samples/Circus.Examples`
+runs them all.
+
 ## Features
 
 Order types
@@ -47,8 +74,8 @@ Safety features
 - [ ] Stop price logic
 - [x] Self-match prevention
 
-Matching algorithms
-- [x] FIFO
+Matching algorithms, selected per instrument
+- [x] FIFO (price-time)
 - [x] Open auction
-- [ ] Allocation
-- [ ] Pro-rata
+- [x] Pro-rata
+- [ ] Allocation (top-order priority, split FIFO/pro-rata)

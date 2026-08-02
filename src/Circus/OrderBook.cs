@@ -48,7 +48,17 @@ public class OrderBook : IOrderBook
     // Nothing outside this table names a status - the rest of the book reads the current phase
     // and acts on what it says. Pre-open's auction instance is also what prints on the way out
     // of it, so the opening print is the quote it had been publishing.
-    private readonly IReadOnlyDictionary<OrderBookStatus, TradingPhase> _phases =
+    //
+    // Built per book rather than shared between them, because every algorithm in it carries
+    // run-scoped state - an auction's struck price, a pro-rata level's pending allocations -
+    // and two books sharing one instance would interleave it.
+    private readonly IReadOnlyDictionary<OrderBookStatus, TradingPhase> _phases;
+
+    // Only the continuous phase varies with the instrument: an auction uncrosses at a single
+    // price whatever the rest of the day allocates under, and a closed or halted book matches
+    // nothing at all.
+    private static IReadOnlyDictionary<OrderBookStatus, TradingPhase> BuildPhases(
+        MatchingAlgorithm algorithm) =>
         new Dictionary<OrderBookStatus, TradingPhase>
         {
             {
@@ -58,7 +68,7 @@ public class OrderBook : IOrderBook
             },
             {
                 OrderBookStatus.Open,
-                new TradingPhase(new PriceTimeMatchingAlgorithm(), AcceptsOrderActions: true, AcceptsMarketOrders: true,
+                new TradingPhase(Continuous(algorithm), AcceptsOrderActions: true, AcceptsMarketOrders: true,
                     MatchesContinuously: true, StartsSession: false, ExpiresDayOrders: false)
             },
             {
@@ -87,6 +97,15 @@ public class OrderBook : IOrderBook
                     MatchesContinuously: false, StartsSession: false, ExpiresDayOrders: false)
             }
         };
+
+    // Config in, enforcement out, the same way price restrictions are adapted below.
+    private static IMatchingAlgorithm Continuous(MatchingAlgorithm algorithm) => algorithm switch
+    {
+        MatchingAlgorithm.PriceTime => new PriceTimeMatchingAlgorithm(),
+        MatchingAlgorithm.ProRata => new ProRataMatchingAlgorithm(),
+        _ => throw new ArgumentOutOfRangeException(nameof(algorithm), algorithm,
+            "an instrument allocates its continuous trading under price-time or pro-rata")
+    };
 
     private TradingPhase CurrentPhase => _phases[_status];
 
@@ -134,6 +153,7 @@ public class OrderBook : IOrderBook
     {
         _instrument = instrument;
         _priceRestrictions = priceRestrictions;
+        _phases = BuildPhases(instrument.MatchingAlgorithm);
     }
 
     public string Symbol => _instrument.Symbol;
