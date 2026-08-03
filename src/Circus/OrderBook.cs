@@ -23,6 +23,13 @@ public class OrderBook : IOrderBook
     // first action, so a book has no opinion about what time it is until something tells it.
     private DateTime _lastActionTime;
     private long _nextSequenceNumber;
+
+    // Trades are numbered separately from orders. The two are different namespaces - a trade and
+    // an order may both be 5 without ambiguity, since nothing ever holds one where the other is
+    // expected - and interleaving them into a single run would make each harder to read for no
+    // gain. Seeded alongside the order counter at the start of a session, for the reasons given
+    // there.
+    private long _nextTradeId;
     private long? _lastTradedPrice;
 
     // A timed interruption's deadline and where it returns to. Null whenever the book is not
@@ -884,15 +891,16 @@ public class OrderBook : IOrderBook
         var aggressorSnapshot = aggressor.ToOrder();
         var aggressorReplenish = FinishFill(aggressor, time);
 
-        events.Add(new OrdersMatched(_instrument.Symbol, time, price, quantity,
-            new[]
-            {
-                new FillOrderConfirmed(_instrument.Symbol, time, resting.CompanyId, restingSnapshot, price, quantity,
-                    restingDisplayed, true),
-                new FillOrderConfirmed(_instrument.Symbol, time, aggressor.CompanyId, aggressorSnapshot, price,
-                    quantity, aggressorDisplayed, false)
-            }
-        ));
+        // Resting first, then the aggressor: the order the two sides used to appear in within
+        // OrdersMatched.Fills, and the order a consumer deriving one public print from the pair
+        // relies on to see the trade begin.
+        _nextTradeId++;
+        var tradeId = _nextTradeId.ToString();
+
+        events.Add(new FillOrderConfirmed(_instrument.Symbol, time, resting.CompanyId, restingSnapshot, tradeId,
+            price, quantity, restingDisplayed, true));
+        events.Add(new FillOrderConfirmed(_instrument.Symbol, time, aggressor.CompanyId, aggressorSnapshot, tradeId,
+            price, quantity, aggressorDisplayed, false));
 
         if (restingReplenish != null)
             events.Add(restingReplenish);
@@ -1015,6 +1023,12 @@ public class OrderBook : IOrderBook
             // that no longer encodes its date beats one that repeats itself.
             var seed = ((time.Year * 10000) + (time.Month * 100) + time.Day) * 10000000000L;
             _nextSequenceNumber = Math.Max(_nextSequenceNumber, seed);
+
+            // Trade ids carry the day and never run backwards for the same reasons, though a
+            // trade is finished the moment it prints and so nothing outlives a session holding
+            // one. What the forward-only seed protects here is a journal or a recorded stream
+            // spanning sessions, where a repeated id would describe two different trades.
+            _nextTradeId = Math.Max(_nextTradeId, seed);
         }
 
         // _resumeAt was cleared above, so this reports nothing pending - which is what an

@@ -1,5 +1,6 @@
 using Circus.Actions;
 using Circus.Events;
+using Circus.Tests.Helpers;
 using Circus.Time;
 using NUnit.Framework;
 
@@ -88,7 +89,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(2, events.Count);
+        Assert.AreEqual(3, events.Count);
 
         var created = events[0] as CreateOrderConfirmed;
         Assert.IsNotNull(created);
@@ -111,7 +112,7 @@ public class CreateOrderTests
         Assert.AreEqual(0, created.Order.FilledQuantity);
         Assert.AreEqual(5, created.Order.RemainingQuantity);
 
-        var matched = events[1] as OrdersMatched;
+        var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
         Assert.AreEqual(wideProtectionGold.Symbol, matched.Symbol);
         Assert.AreEqual(Now2, matched.Time);
@@ -258,9 +259,9 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(2, events.Count);
+        Assert.AreEqual(3, events.Count);
 
-        var matched = events[1] as OrdersMatched;
+        var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
         Assert.AreEqual(Gold.Symbol, matched.Symbol);
         Assert.AreEqual(Now2, matched.Time);
@@ -329,9 +330,9 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(2, events.Count);
+        Assert.AreEqual(3, events.Count);
 
-        var matched = events[1] as OrdersMatched;
+        var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
         Assert.AreEqual(Gold.Symbol, matched.Symbol);
         Assert.AreEqual(Now2, matched.Time);
@@ -400,9 +401,9 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(2, events.Count);
+        Assert.AreEqual(3, events.Count);
 
-        var matched = events[1] as OrdersMatched;
+        var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
         Assert.AreEqual(Gold.Symbol, matched.Symbol);
         Assert.AreEqual(Now2, matched.Time);
@@ -478,9 +479,9 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(2, events.Count);
+        Assert.AreEqual(3, events.Count);
 
-        var matched = events[1] as OrdersMatched;
+        var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
         Assert.AreEqual(Gold.Symbol, matched.Symbol);
         Assert.AreEqual(Now3, matched.Time);
@@ -551,9 +552,9 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(3, events.Count);
+        Assert.AreEqual(5, events.Count);
 
-        var matched1 = events[1] as OrdersMatched;
+        var matched1 = events.Trades()[0];
         Assert.IsNotNull(matched1);
         Assert.AreEqual(Gold.Symbol, matched1.Symbol);
         Assert.AreEqual(Now3, matched1.Time);
@@ -608,7 +609,7 @@ public class CreateOrderTests
         Assert.AreEqual(5, matched1.Fills[1].Order.FilledQuantity);
         Assert.AreEqual(3, matched1.Fills[1].Order.RemainingQuantity);
 
-        var matched2 = events[2] as OrdersMatched;
+        var matched2 = events.Trades()[1];
         Assert.IsNotNull(matched2);
         Assert.AreEqual(Gold.Symbol, matched2.Symbol);
         Assert.AreEqual(Now3, matched2.Time);
@@ -679,9 +680,9 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(2, events.Count);
+        Assert.AreEqual(3, events.Count);
 
-        var matched = events[1] as OrdersMatched;
+        var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
         Assert.AreEqual(Gold.Symbol, matched.Symbol);
         Assert.AreEqual(Now3, matched.Time);
@@ -757,9 +758,9 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(3, events.Count);
+        Assert.AreEqual(5, events.Count);
 
-        var matched1 = events[1] as OrdersMatched;
+        var matched1 = events.Trades()[0];
         Assert.IsNotNull(matched1);
         Assert.AreEqual(Gold.Symbol, matched1.Symbol);
         Assert.AreEqual(Now3, matched1.Time);
@@ -814,7 +815,7 @@ public class CreateOrderTests
         Assert.AreEqual(5, matched1.Fills[1].Order.FilledQuantity);
         Assert.AreEqual(3, matched1.Fills[1].Order.RemainingQuantity);
 
-        var matched2 = events[2] as OrdersMatched;
+        var matched2 = events.Trades()[1];
         Assert.IsNotNull(matched2);
         Assert.AreEqual(Gold.Symbol, matched2.Symbol);
         Assert.AreEqual(Now3, matched2.Time);
@@ -885,9 +886,9 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(2, events.Count);
+        Assert.AreEqual(3, events.Count);
 
-        var matched = events[1] as OrdersMatched;
+        var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
         Assert.AreEqual(Gold.Symbol, matched.Symbol);
         Assert.AreEqual(Now3, matched.Time);
@@ -958,9 +959,9 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(3, events.Count);
+        Assert.AreEqual(5, events.Count);
 
-        var matched1 = events[1] as OrdersMatched;
+        var matched1 = events.Trades()[0];
         Assert.IsNotNull(matched1);
         Assert.AreEqual(Gold.Symbol, matched1.Symbol);
         Assert.AreEqual(Now3, matched1.Time);
@@ -1015,7 +1016,7 @@ public class CreateOrderTests
         Assert.AreEqual(5, matched1.Fills[1].Order.FilledQuantity);
         Assert.AreEqual(3, matched1.Fills[1].Order.RemainingQuantity);
 
-        var matched2 = events[2] as OrdersMatched;
+        var matched2 = events.Trades()[1];
         Assert.IsNotNull(matched2);
         Assert.AreEqual(Gold.Symbol, matched2.Symbol);
         Assert.AreEqual(Now3, matched2.Time);
@@ -1086,9 +1087,9 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(2, events.Count);
+        Assert.AreEqual(3, events.Count);
 
-        var matched = events[1] as OrdersMatched;
+        var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
         Assert.AreEqual(Gold.Symbol, matched.Symbol);
         Assert.AreEqual(Now3, matched.Time);
@@ -1164,9 +1165,9 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(3, events.Count);
+        Assert.AreEqual(5, events.Count);
 
-        var matched1 = events[1] as OrdersMatched;
+        var matched1 = events.Trades()[0];
         Assert.IsNotNull(matched1);
         Assert.AreEqual(Gold.Symbol, matched1.Symbol);
         Assert.AreEqual(Now3, matched1.Time);
@@ -1221,7 +1222,7 @@ public class CreateOrderTests
         Assert.AreEqual(5, matched1.Fills[1].Order.FilledQuantity);
         Assert.AreEqual(3, matched1.Fills[1].Order.RemainingQuantity);
 
-        var matched2 = events[2] as OrdersMatched;
+        var matched2 = events.Trades()[1];
         Assert.IsNotNull(matched2);
         Assert.AreEqual(Gold.Symbol, matched2.Symbol);
         Assert.AreEqual(Now3, matched2.Time);
@@ -1294,9 +1295,9 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(2, events.Count);
+        Assert.AreEqual(3, events.Count);
 
-        var matched = events[1] as OrdersMatched;
+        var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
         Assert.AreEqual(Gold.Symbol, matched.Symbol);
         Assert.AreEqual(Now4, matched.Time);
@@ -1369,9 +1370,9 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(3, events.Count);
+        Assert.AreEqual(5, events.Count);
 
-        var matched1 = events[1] as OrdersMatched;
+        var matched1 = events.Trades()[0];
         Assert.IsNotNull(matched1);
         Assert.AreEqual(Gold.Symbol, matched1.Symbol);
         Assert.AreEqual(Now4, matched1.Time);
@@ -1426,7 +1427,7 @@ public class CreateOrderTests
         Assert.AreEqual(5, matched1.Fills[1].Order.FilledQuantity);
         Assert.AreEqual(3, matched1.Fills[1].Order.RemainingQuantity);
 
-        var matched2 = events[2] as OrdersMatched;
+        var matched2 = events.Trades()[1];
         Assert.IsNotNull(matched2);
         Assert.AreEqual(Gold.Symbol, matched2.Symbol);
         Assert.AreEqual(Now4, matched2.Time);
@@ -1499,9 +1500,9 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(2, events.Count);
+        Assert.AreEqual(3, events.Count);
 
-        var matched = events[1] as OrdersMatched;
+        var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
         Assert.AreEqual(Gold.Symbol, matched.Symbol);
         Assert.AreEqual(Now4, matched.Time);
@@ -1579,9 +1580,9 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(3, events.Count);
+        Assert.AreEqual(5, events.Count);
 
-        var matched1 = events[1] as OrdersMatched;
+        var matched1 = events.Trades()[0];
         Assert.IsNotNull(matched1);
         Assert.AreEqual(Gold.Symbol, matched1.Symbol);
         Assert.AreEqual(Now4, matched1.Time);
@@ -1636,7 +1637,7 @@ public class CreateOrderTests
         Assert.AreEqual(4, matched1.Fills[1].Order.FilledQuantity);
         Assert.AreEqual(4, matched1.Fills[1].Order.RemainingQuantity);
 
-        var matched2 = events[2] as OrdersMatched;
+        var matched2 = events.Trades()[1];
         Assert.IsNotNull(matched2);
         Assert.AreEqual(Gold.Symbol, matched2.Symbol);
         Assert.AreEqual(Now4, matched2.Time);
@@ -1709,9 +1710,9 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(2, events.Count);
+        Assert.AreEqual(3, events.Count);
 
-        var matched = events[1] as OrdersMatched;
+        var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
         Assert.AreEqual(Gold.Symbol, matched.Symbol);
         Assert.AreEqual(Now4, matched.Time);

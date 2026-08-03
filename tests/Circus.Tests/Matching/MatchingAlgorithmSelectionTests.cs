@@ -1,4 +1,5 @@
 using Circus.Events;
+using Circus.Tests.Helpers;
 using NUnit.Framework;
 
 namespace Circus.Tests.Matching;
@@ -31,7 +32,7 @@ public class MatchingAlgorithmSelectionTests
     }
 
     private static Dictionary<string, int> FilledByCompany(IReadOnlyList<OrderBookEvent> events) =>
-        events.OfType<OrdersMatched>()
+        events.Trades()
             .SelectMany(m => m.Fills)
             .Where(f => f.IsResting)
             .GroupBy(f => f.CompanyId)

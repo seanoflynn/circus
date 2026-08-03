@@ -63,16 +63,12 @@ public class LevelDataProducer : IDataProducer<LevelsDataEvent>
                         Remove(expire.Order.Side, expire.PreviousPrice.Value, expire.PreviousQuantity);
                     break;
 
-                // FillOrderConfirmed is only ever nested inside OrdersMatched.Fills, never a
-                // top-level event in its own right.
-                case OrdersMatched matched:
-                    foreach (var fill in matched.Fills)
-                    {
-                        ReduceQuantity(fill.Order.Side, fill.Order.Price!.Value,
-                            fill.PreviousDisplayedQuantity - fill.Order.DisplayedQuantity,
-                            fullyFilled: fill.Order.RemainingQuantity == 0);
-                    }
-
+                // One per side of a trade, arriving as two top-level events rather than one
+                // wrapping both, so each is applied on its own.
+                case FillOrderConfirmed fill:
+                    ReduceQuantity(fill.Order.Side, fill.Order.Price!.Value,
+                        fill.PreviousDisplayedQuantity - fill.Order.DisplayedQuantity,
+                        fullyFilled: fill.Order.RemainingQuantity == 0);
                     break;
             }
         }

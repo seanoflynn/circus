@@ -27,17 +27,13 @@ public class FullBookDataProducer : IDataProducer<OrderBookDeltaEvent>
 
         foreach (var ev in events)
         {
-            // FillOrderConfirmed is only ever nested inside OrdersMatched.Fills, never a
-            // top-level event in its own right.
-            if (ev is OrdersMatched matched)
+            // One per side of a trade, arriving as two top-level events rather than one wrapping
+            // both, so each becomes its own delta.
+            if (ev is FillOrderConfirmed fill)
             {
-                foreach (var fill in matched.Fills)
-                {
-                    Add(ref output, new OrderBookDeltaEvent(fill.Symbol, fill.Time, fill.Order.Side,
-                        fill.Order.ExchangeOrderId, fill.Order.Price!.Value, fill.Quantity,
-                        OrderBookDeltaAction.Filled));
-                }
-
+                Add(ref output, new OrderBookDeltaEvent(fill.Symbol, fill.Time, fill.Order.Side,
+                    fill.Order.ExchangeOrderId, fill.Order.Price!.Value, fill.Quantity,
+                    OrderBookDeltaAction.Filled));
                 continue;
             }
 

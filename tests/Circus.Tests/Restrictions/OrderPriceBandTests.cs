@@ -131,7 +131,7 @@ public class OrderPriceBandTests
         // act - a trade prints at 140, re-anchoring the band to [90, 190]
         book.CreateLimitOrder(CompanyId1, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 140);
         var matchEvents = book.CreateLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Sell, 5, 140);
-        Assert.IsInstanceOf<OrdersMatched>(matchEvents[^1]);
+        Assert.IsNotEmpty(matchEvents.Trades());
 
         // assert - 160 is now within the new [90, 190] band
         var afterTrade = book.CreateLimitOrder(CompanyId2, OrderId4, new OrderValidity.Day(), Side.Sell, 5, 160);

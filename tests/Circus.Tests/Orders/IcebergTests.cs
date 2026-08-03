@@ -89,10 +89,10 @@ public class IcebergTests
         // replenishes (to a full peak of 5 again) and is requeued behind Company2 - visible in
         // the feed as its own UpdateOrderConfirmed, with a fresh ExchangeOrderId marking the
         // lost priority
-        Assert.AreEqual(4, events.Count);
+        Assert.AreEqual(6, events.Count);
         Assert.IsInstanceOf<CreateOrderConfirmed>(events[0]);
 
-        var firstMatch = events[1] as OrdersMatched;
+        var firstMatch = events.Trades()[0];
         Assert.IsNotNull(firstMatch);
         Assert.AreEqual(5, firstMatch.Quantity);
         Assert.AreEqual(OrderId1, firstMatch.Fills[0].ClientOrderId);
@@ -100,15 +100,15 @@ public class IcebergTests
         Assert.AreEqual(7, firstMatch.Fills[0].Order.RemainingQuantity);
         Assert.AreEqual(0, firstMatch.Fills[0].Order.DisplayedQuantity); // not yet replenished
 
-        var replenish = events[2] as UpdateOrderConfirmed;
+        var replenish = events[3] as UpdateOrderConfirmed;
         Assert.IsNotNull(replenish);
         Assert.AreEqual(OrderId1, replenish.Order.ClientOrderId);
         Assert.AreEqual(5, replenish.Order.DisplayedQuantity); // replenished back to full peak
         Assert.AreNotEqual(replenish.PreviousExchangeOrderId, replenish.Order.ExchangeOrderId);
 
-        // third event: the aggressor's remaining 3 units match Company2 - not the iceberg's
+        // second trade: the aggressor's remaining 3 units match Company2 - not the iceberg's
         // freshly-replenished peak - proving the iceberg lost its queue position
-        var secondMatch = events[3] as OrdersMatched;
+        var secondMatch = events.Trades()[1];
         Assert.IsNotNull(secondMatch);
         Assert.AreEqual(3, secondMatch.Quantity);
         Assert.AreEqual(OrderId2, secondMatch.Fills[0].ClientOrderId);
@@ -137,8 +137,8 @@ public class IcebergTests
         // assert - three separate prints as the peak replenishes: 5, 5, then the 2 left over,
         // with a replenish event after each of the first two (not after the last - the
         // iceberg is fully filled at that point, nothing left to replenish)
-        Assert.AreEqual(6, events.Count);
-        var matches = events.OfType<OrdersMatched>().ToList();
+        Assert.AreEqual(9, events.Count);
+        var matches = events.Trades().ToList();
         Assert.AreEqual(3, matches.Count);
         Assert.AreEqual(5, matches[0].Quantity);
         Assert.AreEqual(5, matches[1].Quantity);
@@ -173,7 +173,7 @@ public class IcebergTests
         // aggressor's 15 is satisfied, so it replenishes one last time trailing the final
         // match too; events[^1] can't be assumed to be the match itself here.
         Assert.IsInstanceOf<CreateOrderConfirmed>(events[0]);
-        var lastMatch = events.OfType<OrdersMatched>().Last();
+        var lastMatch = events.Trades().Last();
         Assert.AreEqual(OrderStatus.Filled, lastMatch.Fills[1].Order.Status);
         Assert.AreEqual(15, lastMatch.Fills[1].Order.FilledQuantity);
 
@@ -201,7 +201,7 @@ public class IcebergTests
         var events = Book.CreateLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Sell, 3, 100);
 
         // assert
-        var matched = events[1] as OrdersMatched;
+        var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
         Assert.AreEqual(OrderId1B, matched.Fills[0].ClientOrderId);
     }
@@ -224,7 +224,7 @@ public class IcebergTests
         var events = Book.CreateLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Sell, 3, 100);
 
         // assert
-        var matched = events[1] as OrdersMatched;
+        var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
         Assert.AreEqual(OrderId2, matched.Fills[0].ClientOrderId);
     }
@@ -248,8 +248,8 @@ public class IcebergTests
         // remaining size, down to whatever's left at the end (3, 3, 3, then 1). The aggressor
         // itself replenishes (and loses priority) after each of the first three fills, but not
         // the last, since it's fully filled at that point.
-        Assert.AreEqual(8, events.Count);
-        var matches = events.OfType<OrdersMatched>().ToList();
+        Assert.AreEqual(12, events.Count);
+        var matches = events.Trades().ToList();
         Assert.AreEqual(4, matches.Count);
         Assert.AreEqual(3, matches[0].Quantity);
         Assert.AreEqual(3, matches[1].Quantity);

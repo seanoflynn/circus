@@ -51,7 +51,7 @@ public class SelfTradePreventionTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(3, events.Count);
+        Assert.AreEqual(4, events.Count);
 
         Assert.IsInstanceOf<CreateOrderConfirmed>(events[0]);
 
@@ -62,7 +62,7 @@ public class SelfTradePreventionTests
         Assert.AreEqual(CompanyId1, cancelled.Order.CompanyId);
         Assert.AreEqual(OrderStatus.Cancelled, cancelled.Order.Status);
 
-        var matched = events[2] as OrdersMatched;
+        var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
         Assert.AreEqual(100, matched.Price);
         Assert.AreEqual(5, matched.Quantity);
@@ -154,10 +154,10 @@ public class SelfTradePreventionTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(2, events.Count);
+        Assert.AreEqual(3, events.Count);
         Assert.IsInstanceOf<CreateOrderConfirmed>(events[0]);
 
-        var matched = events[1] as OrdersMatched;
+        var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
         Assert.AreEqual(5, matched.Quantity);
         Assert.AreEqual(OrderStatus.Filled, matched.Fills[0].Order.Status);
@@ -178,10 +178,10 @@ public class SelfTradePreventionTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(2, events.Count);
+        Assert.AreEqual(3, events.Count);
         Assert.IsInstanceOf<CreateOrderConfirmed>(events[0]);
 
-        var matched = events[1] as OrdersMatched;
+        var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
         Assert.AreEqual(5, matched.Quantity);
     }
@@ -278,7 +278,7 @@ public class SelfTradePreventionTests
 
         // assert - accepted: the 2@100 self-match is skipped, the 5@100 behind it is enough
         Assert.IsNotNull(events);
-        Assert.AreEqual(3, events.Count);
+        Assert.AreEqual(4, events.Count);
         Assert.IsInstanceOf<CreateOrderConfirmed>(events[0]);
 
         var cancelled = events[1] as CancelOrderConfirmed;
@@ -286,7 +286,7 @@ public class SelfTradePreventionTests
         Assert.AreEqual(OrderCancelledReason.SelfMatchPrevention, cancelled.Reason);
         Assert.AreEqual(OrderId1, cancelled.Order.ClientOrderId);
 
-        var matched = events[2] as OrdersMatched;
+        var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
         Assert.AreEqual(5, matched.Quantity);
         Assert.AreEqual(OrderId2, matched.Fills[0].ClientOrderId);

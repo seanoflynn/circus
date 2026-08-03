@@ -63,7 +63,7 @@ public class AuctionMatchingAlgorithmTests
 
         // assert - every fill in this batch prints at the single auction price of 120
         Assert.IsInstanceOf<StatusChanged>(events[0]);
-        var matches = events.OfType<OrdersMatched>().ToList();
+        var matches = events.Trades().ToList();
         Assert.IsNotEmpty(matches);
         foreach (var matched in matches)
             Assert.AreEqual(120, matched.Price);
@@ -111,7 +111,7 @@ public class AuctionMatchingAlgorithmTests
         var events = book.UpdateStatus(OrderBookStatus.Open);
 
         // assert
-        var fills = events.OfType<OrdersMatched>().SelectMany(m => m.Fills).ToList();
+        var fills = events.Trades().SelectMany(m => m.Fills).ToList();
         var icebergFilled = fills.Where(f => f.Order.ClientOrderId == OrderId1).Sum(f => f.Quantity);
         var laterOrderFilled = fills.Where(f => f.Order.ClientOrderId == OrderId2).Sum(f => f.Quantity);
 
@@ -142,7 +142,7 @@ public class AuctionMatchingAlgorithmTests
         var events = book.UpdateStatus(OrderBookStatus.Open);
 
         // assert - one clean allocation of 45, not several smaller touches
-        var icebergFills = events.OfType<OrdersMatched>().SelectMany(m => m.Fills)
+        var icebergFills = events.Trades().SelectMany(m => m.Fills)
             .Where(f => f.Order.ClientOrderId == OrderId1).ToList();
         Assert.AreEqual(1, icebergFills.Count);
         Assert.AreEqual(45, icebergFills[0].Quantity);
@@ -173,7 +173,7 @@ public class AuctionMatchingAlgorithmTests
         var events = book.UpdateStatus(OrderBookStatus.Open);
 
         // assert
-        var matched = events[1] as OrdersMatched;
+        var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
         Assert.AreEqual(120, matched.Price);
     }
@@ -198,7 +198,7 @@ public class AuctionMatchingAlgorithmTests
         var events = book.UpdateStatus(OrderBookStatus.Open);
 
         // assert
-        var matched = events[1] as OrdersMatched;
+        var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
         Assert.AreEqual(130, matched.Price);
     }
@@ -271,7 +271,7 @@ public class AuctionMatchingAlgorithmTests
         var events = book.UpdateStatus(OrderBookStatus.Closed);
 
         // assert
-        Assert.IsEmpty(events.OfType<OrdersMatched>().ToList(),
+        Assert.IsEmpty(events.Trades().ToList(),
             "the auction must not print into a phase that doesn't trade");
         Assert.AreEqual(2, events.OfType<ExpireOrderConfirmed>().ToList().Count);
         Assert.AreEqual(OrderBookStatus.Closed, book.Status);
@@ -296,7 +296,7 @@ public class AuctionMatchingAlgorithmTests
         var crossing = book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 4, 100);
 
         Assert.IsEmpty(resting.OfType<IndicativePriceChanged>().ToList());
-        Assert.IsInstanceOf<OrdersMatched>(crossing[^1]);
+        Assert.IsNotEmpty(crossing.Trades());
         Assert.IsEmpty(crossing.OfType<IndicativePriceChanged>().ToList());
 
         // ...and it comes back the moment a volatility pause interrupts trading
@@ -426,9 +426,9 @@ public class AuctionMatchingAlgorithmTests
         var reopenEvents = book.UpdateStatus(OrderBookStatus.Open, 90);
 
         // assert
-        Assert.IsTrue(reopenEvents.OfType<OrdersMatched>().Any(m => m.Price == 90));
+        Assert.IsTrue(reopenEvents.Trades().Any(m => m.Price == 90));
         var stopElected = reopenEvents.Any(e => e is UpdateOrderConfirmed u && u.Order.ClientOrderId == OrderId3) ||
-            reopenEvents.OfType<OrdersMatched>().Any(m => m.Fills.Any(f => f.ClientOrderId == OrderId3));
+            reopenEvents.Trades().Any(m => m.Fills.Any(f => f.ClientOrderId == OrderId3));
         Assert.IsTrue(stopElected);
     }
 
