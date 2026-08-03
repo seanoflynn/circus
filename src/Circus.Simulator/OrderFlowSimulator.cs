@@ -274,12 +274,9 @@ public sealed class OrderFlowSimulator
                     case ExpireOrderConfirmed expire:
                         RemoveLive(expire.Order.ClientOrderId);
                         break;
-                    case OrdersMatched matched:
-                        foreach (var fill in matched.Fills)
-                        {
-                            if (fill.Order.RemainingQuantity == 0)
-                                RemoveLive(fill.Order.ClientOrderId);
-                        }
+                    case FillOrderConfirmed fill:
+                        if (fill.Order.RemainingQuantity == 0)
+                            RemoveLive(fill.Order.ClientOrderId);
                         break;
                 }
             }

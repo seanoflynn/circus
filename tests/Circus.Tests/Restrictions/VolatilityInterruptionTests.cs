@@ -1,5 +1,6 @@
 using Circus.Actions;
 using Circus.Events;
+using Circus.Tests.Helpers;
 using Circus.Time;
 using NUnit.Framework;
 
@@ -55,7 +56,7 @@ public class VolatilityInterruptionTests
 
         // assert - the interruption keeps running rather than resolving out there
         Assert.AreEqual(OrderBookStatus.Paused, book.Status);
-        Assert.AreEqual(0, events.OfType<OrdersMatched>().Count(), "nothing printed");
+        Assert.AreEqual(0, events.Trades().Count(), "nothing printed");
 
         var stillPaused = events.OfType<StatusChanged>().Single();
         Assert.AreEqual(OrderBookStatus.Paused, stillPaused.Status);
@@ -113,7 +114,7 @@ public class VolatilityInterruptionTests
         // assert - the interruption resolves, printing at a price the ordinary range would
         // never have allowed to trade continuously
         Assert.AreEqual(OrderBookStatus.Open, book.Status);
-        var matched = events.OfType<OrdersMatched>().Single();
+        var matched = events.Trades().Single();
         Assert.AreEqual(180, matched.Price);
         Assert.AreEqual(5, matched.Quantity);
     }

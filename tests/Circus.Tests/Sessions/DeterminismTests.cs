@@ -1,4 +1,3 @@
-using System.Text;
 using Circus.Actions;
 using Circus.Events;
 using Circus.Time;
@@ -179,7 +178,13 @@ public class DeterminismTests
 
     // No clock: the trace carries the time each action happened, which is the property under
     // test. The opening action shares the first action's instant so nothing moves backwards.
-    private static List<string> Replay(IReadOnlyList<OrderBookAction> actions)
+    //
+    // Compared as events rather than rendered to strings first. That used to be impossible: the
+    // only composite event, OrdersMatched, held its fills in an IList, and a record's generated
+    // equality compares one of those by reference - so two runs producing identical trades came
+    // out unequal and had to be described in text to be compared at all. With a trade emitted as
+    // two flat FillOrderConfirmed events, every event compares by value and the rendering can go.
+    private static List<OrderBookEvent> Replay(IReadOnlyList<OrderBookAction> actions)
     {
         var book = new OrderBook(Gold);
         var events = new List<OrderBookEvent>(book.Process(
@@ -188,23 +193,7 @@ public class DeterminismTests
         foreach (var action in actions)
             events.AddRange(book.Process(action));
 
-        return events.Select(Describe).ToList();
-    }
-
-    // Rendered rather than compared directly: OrdersMatched carries its fills in an IList, and a
-    // record's generated equality compares that by reference, so two runs producing identical
-    // trades would still come out unequal. Expanding the fills here compares what they say.
-    private static string Describe(OrderBookEvent e)
-    {
-        if (e is not OrdersMatched matched)
-            return e.ToString();
-
-        var text = new StringBuilder();
-        text.Append($"OrdersMatched {{ Time = {matched.Time:O}, Price = {matched.Price}, " +
-                    $"Quantity = {matched.Quantity}, Fills = [");
-        foreach (var fill in matched.Fills)
-            text.Append(fill).Append("; ");
-        return text.Append("] }").ToString();
+        return events;
     }
 
     private static void Rest(IOrderBook book, string clientOrderId, DateTime time) =>

@@ -2,6 +2,7 @@ using Circus.Actions;
 using Circus.Events;
 using Circus.Sequencing;
 using Circus.Sessions;
+using Circus.Tests.Helpers;
 using NUnit.Framework;
 
 namespace Circus.Tests.Sequencing;
@@ -85,7 +86,7 @@ public class SequencerRoutingTests
         Assert.AreEqual("Silver1", confirmed[1].Order.ClientOrderId);
 
         // nothing crossed: two resting orders in two books are not a trade
-        Assert.IsEmpty(dispatched.SelectMany(d => d.Events).OfType<OrdersMatched>());
+        Assert.IsEmpty(dispatched.SelectMany(d => d.Events).Trades());
     }
 
     [Test]
@@ -184,7 +185,7 @@ public class SequencerRoutingTests
         Assert.AreEqual(OrderBookStatus.Open, silver.Status, "silver has no band to breach");
 
         // silver printed while gold was paused, at the price that stopped gold
-        var trades = dispatched.SelectMany(d => d.Events).OfType<OrdersMatched>().ToList();
+        var trades = dispatched.SelectMany(d => d.Events).Trades().ToList();
         Assert.AreEqual(1, trades.Count);
         Assert.AreEqual(Silver.Symbol, trades[0].Symbol);
         Assert.AreEqual(200, trades[0].Price);

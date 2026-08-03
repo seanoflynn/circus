@@ -1,5 +1,6 @@
 using Circus.Actions;
 using Circus.Events;
+using Circus.Tests.Helpers;
 using Circus.Time;
 using NUnit.Framework;
 
@@ -92,7 +93,7 @@ public class MultipleSessionsTests
         var events = Book.CreateLimitOrder(CompanyId2, OrderId4, new OrderValidity.Day(), Side.Sell, 5, 100);
 
         // assert - the afternoon pair traded rather than colliding with the morning pair's ids
-        var matched = events.OfType<OrdersMatched>().Single();
+        var matched = events.Trades().Single();
         Assert.AreEqual(100, matched.Price);
         Assert.AreEqual(5, matched.Quantity);
     }
@@ -169,7 +170,7 @@ public class MultipleSessionsTests
         var events = Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 5, 100);
 
         // assert
-        var matched = events.OfType<OrdersMatched>().Single();
+        var matched = events.Trades().Single();
         Assert.AreEqual(100, matched.Price);
         Assert.AreEqual(5, matched.Quantity);
     }

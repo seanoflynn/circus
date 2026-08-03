@@ -1,5 +1,6 @@
 using Circus.Actions;
 using Circus.Events;
+using Circus.Tests.Helpers;
 using Circus.Time;
 using NUnit.Framework;
 
@@ -67,11 +68,11 @@ public class UpdateStateTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(3, events.Count);
-        var withdrawn = events[2] as IndicativePriceChanged;
+        Assert.AreEqual(4, events.Count);
+        var withdrawn = events[3] as IndicativePriceChanged;
         Assert.IsNotNull(withdrawn);
         Assert.IsNull(withdrawn.Price, "the auction it was quoting has printed");
-        var matched = events[1] as OrdersMatched;
+        var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
         Assert.AreEqual(Gold.Symbol, matched.Symbol);
         Assert.AreEqual(Now3, matched.Time);

@@ -3,6 +3,7 @@ using Circus.Events;
 using Circus.Sequencing;
 using Circus.Sessions;
 using Circus.Simulator;
+using Circus.Tests.Helpers;
 using NUnit.Framework;
 
 namespace Circus.Tests.Sequencing;
@@ -48,7 +49,7 @@ public class ReplayTests
         // assert - every action, in the order recorded, and the book actually traded
         Assert.AreEqual(3, dispatched.Count);
         Assert.AreEqual(new long[] {1, 2, 3}, dispatched.Select(d => d.Sequence).ToArray());
-        Assert.AreEqual(1, dispatched.SelectMany(d => d.Events).OfType<OrdersMatched>().Count());
+        Assert.AreEqual(1, dispatched.SelectMany(d => d.Events).Trades().Count());
     }
 
     [Test]

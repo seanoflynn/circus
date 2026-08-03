@@ -2,6 +2,7 @@ using Circus.Actions;
 using Circus.Events;
 using Circus.Sequencing;
 using Circus.Sessions;
+using Circus.Tests.Helpers;
 using NUnit.Framework;
 
 namespace Circus.Tests.Sequencing;
@@ -229,7 +230,7 @@ public class SequencerTests
         Assert.AreEqual(Deadline, resumed.Time);
 
         // and the pause resolves into one uncrossing print, stamped there too
-        var matched = tick.Events.OfType<OrdersMatched>().Single();
+        var matched = tick.Events.Trades().Single();
         Assert.AreEqual(200, matched.Price);
         Assert.AreEqual(Deadline, matched.Time);
     }

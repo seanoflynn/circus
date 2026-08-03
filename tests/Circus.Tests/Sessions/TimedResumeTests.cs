@@ -1,6 +1,7 @@
 using Circus.Actions;
 using Circus.Events;
 using Circus.Restrictions;
+using Circus.Tests.Helpers;
 using Circus.Time;
 using NUnit.Framework;
 
@@ -115,7 +116,7 @@ public class TimedResumeTests
         var events = book.AdvanceTime();
 
         // assert - the pause resolves into one uncrossing print rather than resuming mid-sweep
-        var matched = events.OfType<OrdersMatched>().Single();
+        var matched = events.Trades().Single();
         Assert.AreEqual(200, matched.Price);
         Assert.AreEqual(5, matched.Quantity);
     }
@@ -169,7 +170,7 @@ public class TimedResumeTests
 
         // assert - the auction uncrosses against the book as of the deadline, and the print says
         // so rather than claiming the trade happened three quarters of an hour later
-        var matched = events.OfType<OrdersMatched>().Single();
+        var matched = events.Trades().Single();
         Assert.AreEqual(200, matched.Price);
         Assert.AreEqual(Now1 + PauseFor, matched.Time);
     }

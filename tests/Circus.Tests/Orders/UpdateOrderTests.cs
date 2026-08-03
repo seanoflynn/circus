@@ -1,5 +1,6 @@
 using Circus.Actions;
 using Circus.Events;
+using Circus.Tests.Helpers;
 using Circus.Time;
 using NUnit.Framework;
 
@@ -491,7 +492,7 @@ public class UpdateOrderTests
 
         // a follow-up buy for the full new total should only find the 2 that remain
         var matched = Book.CreateLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Buy, 6, 110)
-            .OfType<OrdersMatched>().Single();
+            .Trades().Single();
         Assert.AreEqual(2, matched.Quantity);
     }
 
@@ -510,9 +511,9 @@ public class UpdateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(2, events.Count);
+        Assert.AreEqual(3, events.Count);
 
-        var matched = events[1] as OrdersMatched;
+        var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
         Assert.AreEqual(Gold.Symbol, matched.Symbol);
         Assert.AreEqual(Now3, matched.Time);

@@ -1,5 +1,6 @@
 using Circus.Actions;
 using Circus.Events;
+using Circus.Tests.Helpers;
 using Circus.Time;
 using NUnit.Framework;
 
@@ -126,7 +127,7 @@ public class VelocityLogicTests
 
         // assert
         Assert.AreEqual(OrderBookStatus.Open, book.Status);
-        var matched = events.OfType<OrdersMatched>().Single();
+        var matched = events.Trades().Single();
         Assert.AreEqual(180, matched.Price);
     }
 

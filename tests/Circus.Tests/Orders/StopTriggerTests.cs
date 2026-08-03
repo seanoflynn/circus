@@ -1,5 +1,6 @@
 using Circus.Actions;
 using Circus.Events;
+using Circus.Tests.Helpers;
 using Circus.Time;
 using NUnit.Framework;
 
@@ -69,7 +70,7 @@ public class StopTriggerTests
         var events = Book.CreateLimitOrder(CompanyId6, OrderId6, new OrderValidity.Day(), Side.Buy, 2, 510);
 
         // assert
-        var tradedAtTrigger = events.OfType<OrdersMatched>().FirstOrDefault(m => m.Price == 510);
+        var tradedAtTrigger = events.Trades().FirstOrDefault(m => m.Price == 510);
         Assert.IsNotNull(tradedAtTrigger, "expected a trade at the trigger price of 510");
 
         var triggerConversion = events.OfType<UpdateOrderConfirmed>()
@@ -81,7 +82,7 @@ public class StopTriggerTests
         Assert.IsNull(triggerConversion.PreviousPrice,
             "it was resting in the stops ladder, not the working book - this is an arrival, not a move");
 
-        var tradedAtLimit = events.OfType<OrdersMatched>().FirstOrDefault(m => m.Price == 520);
+        var tradedAtLimit = events.Trades().FirstOrDefault(m => m.Price == 520);
         Assert.IsNotNull(tradedAtLimit, "expected the newly triggered order to match against the resting offer at 520");
         Assert.AreEqual(5, tradedAtLimit.Quantity);
         Assert.IsTrue(tradedAtLimit.Fills.Any(f => f.Order.ClientOrderId == OrderId4 && f.Order.Status == OrderStatus.Filled));
@@ -114,7 +115,7 @@ public class StopTriggerTests
         var events = Book.CreateLimitOrder(CompanyId6, OrderId6, new OrderValidity.Day(), Side.Sell, 2, 490);
 
         // assert
-        var tradedAtTrigger = events.OfType<OrdersMatched>().FirstOrDefault(m => m.Price == 490);
+        var tradedAtTrigger = events.Trades().FirstOrDefault(m => m.Price == 490);
         Assert.IsNotNull(tradedAtTrigger, "expected a trade at the trigger price of 490");
 
         var triggerConversion = events.OfType<UpdateOrderConfirmed>()
@@ -124,7 +125,7 @@ public class StopTriggerTests
         Assert.AreEqual(OrderStatus.Working, triggerConversion.Order.Status);
         Assert.AreEqual(470, triggerConversion.Order.Price);
 
-        var tradedAtLimit = events.OfType<OrdersMatched>().FirstOrDefault(m => m.Price == 480);
+        var tradedAtLimit = events.Trades().FirstOrDefault(m => m.Price == 480);
         Assert.IsNotNull(tradedAtLimit, "expected the newly triggered order to match against the resting bid at 480");
         Assert.AreEqual(5, tradedAtLimit.Quantity);
         Assert.IsTrue(tradedAtLimit.Fills.Any(f => f.Order.ClientOrderId == OrderId4 && f.Order.Status == OrderStatus.Filled));
@@ -149,7 +150,7 @@ public class StopTriggerTests
         var events = Book.CreateLimitOrder(CompanyId5, OrderId5, new OrderValidity.Day(), Side.Sell, 1, 490);
 
         // assert
-        Assert.IsTrue(events.OfType<OrdersMatched>().Any(m => m.Price == 490));
+        Assert.IsTrue(events.Trades().Any(m => m.Price == 490));
         Assert.IsFalse(events.OfType<UpdateOrderConfirmed>().Any(u => u.Order.ClientOrderId == OrderId3),
             "the stop order should still be pending, not triggered, since price moved away from the trigger");
 
@@ -179,7 +180,7 @@ public class StopTriggerTests
         var events = Book.CreateLimitOrder(CompanyId5, OrderId5, new OrderValidity.Day(), Side.Sell, 1, 510);
 
         // assert
-        Assert.IsTrue(events.OfType<OrdersMatched>().Any(m => m.Price == 510));
+        Assert.IsTrue(events.Trades().Any(m => m.Price == 510));
         Assert.IsFalse(events.OfType<UpdateOrderConfirmed>().Any(u => u.Order.ClientOrderId == OrderId3),
             "the stop order should still be pending, not triggered, since price moved away from the trigger");
 
@@ -210,7 +211,7 @@ public class StopTriggerTests
         var events = Book.CreateLimitOrder(CompanyId5, OrderId5, new OrderValidity.Day(), Side.Buy, 2, 510);
 
         // assert
-        Assert.IsTrue(events.OfType<OrdersMatched>().Any(m => m.Price == 510));
+        Assert.IsTrue(events.Trades().Any(m => m.Price == 510));
 
         var cancelled = events.OfType<CancelOrderConfirmed>().FirstOrDefault(c => c.Order.ClientOrderId == OrderId3);
         Assert.IsNotNull(cancelled, "expected the triggered stop market order to be cancelled since the book was empty");

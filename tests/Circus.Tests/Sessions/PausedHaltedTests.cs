@@ -1,5 +1,6 @@
 using Circus.Actions;
 using Circus.Events;
+using Circus.Tests.Helpers;
 using Circus.Time;
 using NUnit.Framework;
 
@@ -103,7 +104,7 @@ public class PausedHaltedTests
         // and the order is genuinely still resting, not merely unexpired
         Book.UpdateStatus(OrderBookStatus.Open);
         var crossing = Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 5, 100);
-        Assert.AreEqual(1, crossing.OfType<OrdersMatched>().Count());
+        Assert.AreEqual(1, crossing.Trades().Count());
     }
 
     [TestCase(OrderBookStatus.Paused)]
@@ -159,13 +160,13 @@ public class PausedHaltedTests
         var quote = crossing.OfType<IndicativePriceChanged>().Last();
         Assert.AreEqual(100, quote.Price);
         Assert.AreEqual(10, quote.Quantity);
-        Assert.AreEqual(0, crossing.OfType<OrdersMatched>().Count(), "a pause quotes, it does not trade");
+        Assert.AreEqual(0, crossing.Trades().Count(), "a pause quotes, it does not trade");
 
         // act - resuming resolves the accumulated book in one print
         var resumed = Book.UpdateStatus(OrderBookStatus.Open);
 
         // assert
-        var matched = resumed.OfType<OrdersMatched>().Single();
+        var matched = resumed.Trades().Single();
         Assert.AreEqual(100, matched.Price);
         Assert.AreEqual(10, matched.Quantity);
     }
@@ -183,14 +184,14 @@ public class PausedHaltedTests
 
         // assert - withholding price discovery is what makes this a halt
         Assert.AreEqual(0, crossing.OfType<IndicativePriceChanged>().Count());
-        Assert.AreEqual(0, crossing.OfType<OrdersMatched>().Count());
+        Assert.AreEqual(0, crossing.Trades().Count());
 
         // act - no algorithm means nothing prints on the way out; the cross is resolved by
         // continuous trading once open, not by an uncrossing auction
         var resumed = Book.UpdateStatus(OrderBookStatus.Open);
 
         // assert
-        var matched = resumed.OfType<OrdersMatched>().Single();
+        var matched = resumed.Trades().Single();
         Assert.AreEqual(100, matched.Price);
         Assert.AreEqual(10, matched.Quantity);
     }

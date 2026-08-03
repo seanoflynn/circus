@@ -1,5 +1,6 @@
 using Circus.Actions;
 using Circus.Events;
+using Circus.Tests.Helpers;
 using Circus.Time;
 using NUnit.Framework;
 
@@ -64,7 +65,7 @@ public class DailyPriceLimitTests
         var events = book.CreateLimitOrder(CompanyId2, "Order2", new OrderValidity.Day(), Side.Buy, 5, 150);
 
         // assert
-        var matched = events.OfType<OrdersMatched>().Single();
+        var matched = events.Trades().Single();
         Assert.AreEqual(150, matched.Price);
         Assert.AreEqual(OrderBookStatus.Open, book.Status);
         Assert.AreEqual(0, events.OfType<LimitStateChanged>().Count(), "trading at the limit is not being stuck");
@@ -111,7 +112,7 @@ public class DailyPriceLimitTests
 
         // assert - nothing printed, and the market is neither paused nor halted
         Assert.IsInstanceOf<CreateOrderConfirmed>(events[0]);
-        Assert.AreEqual(0, events.OfType<OrdersMatched>().Count());
+        Assert.AreEqual(0, events.Trades().Count());
         Assert.AreEqual(OrderBookStatus.Open, book.Status, "a limit is not a halt");
 
         // ...and it says which way it is stuck: the blocked price is above the last trade, so
@@ -137,7 +138,7 @@ public class DailyPriceLimitTests
         var traded = book.CreateLimitOrder(CompanyId2, "Buy3", new OrderValidity.Day(), Side.Buy, 5, 140);
 
         // assert - trading again, and said so
-        Assert.AreEqual(1, traded.OfType<OrdersMatched>().Count());
+        Assert.AreEqual(1, traded.Trades().Count());
         var released = traded.OfType<LimitStateChanged>().Single();
         Assert.IsNull(released.Side);
         Assert.IsNull(released.Price);
