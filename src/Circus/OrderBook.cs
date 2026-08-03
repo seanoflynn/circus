@@ -118,7 +118,6 @@ public class OrderBook : IOrderBook
 
     // Keyed by InternalId, not ExchangeOrderId - the latter changes across an order's life.
     private readonly Dictionary<long, InternalOrder> _orders = new();
-    private readonly Dictionary<long, InternalOrder> _completedOrders = new();
 
     // every (companyId, clientOrderId) pair ever assigned by a client, permanently reserved -
     // used for per-client uniqueness checks, ownership enforcement, and Update/Cancel lookups
@@ -649,7 +648,6 @@ public class OrderBook : IOrderBook
     private void FinishOrder(InternalOrder order)
     {
         _orders.Remove(order.InternalId);
-        _completedOrders.Add(order.InternalId, order);
     }
 
     // Called immediately after order.Fill(...). Snapshot the order for FillOrderConfirmed
@@ -1018,9 +1016,9 @@ public class OrderBook : IOrderBook
             // forwards: a second session on the same date computes a seed the counter has
             // already passed and so continues from where it was. Restarting it would re-issue
             // ids that orders surviving the previous session (GTC, or GTD not yet due) still
-            // hold, and _orders/_completedOrders are keyed on exactly that. Math.Max is also
-            // what keeps a replay whose clock moves backwards from colliding - a run of ids
-            // that no longer encodes its date beats one that repeats itself.
+            // hold, and _orders is keyed on exactly that. Math.Max is also what keeps a replay
+            // whose clock moves backwards from colliding - a run of ids that no longer encodes
+            // its date beats one that repeats itself.
             var seed = ((time.Year * 10000) + (time.Month * 100) + time.Day) * 10000000000L;
             _nextSequenceNumber = Math.Max(_nextSequenceNumber, seed);
 
