@@ -35,8 +35,12 @@ trade. So the two obvious filters are both wrong:
 
 So the view has to rewrite the event rather than filter it - reducing `OrdersMatched.Fills` to
 the participant's own - and the same question has to be asked of every composite event added
-later. That is the design work in this phase, and it belongs in one place rather than in each
-consumer's LINQ.
+later.
+
+**Superseded**: rather than rewrite the event, `OrdersMatched` is being removed, leaving a trade
+as two top-level `FillOrderConfirmed` events carrying a shared trade id. See
+`flatten-ordersmatched.md`. That lands before 3a, so the participant view below is a filter on
+`CompanyId` and nothing more - which is the whole reason to do it first.
 
 What a participant sees, then, is two streams, exactly as at a real venue:
 
