@@ -9,7 +9,7 @@ namespace Circus.Tests.Sessions;
 // A trading day can hold more than one session. Sequence numbers are seeded from the date, so
 // the thing to prove is that a second session on the same date carries on issuing ids rather
 // than restarting - orders surviving the break still hold the ids a restart would hand out
-// again, and both _orders and _completedOrders are keyed on exactly those.
+// again, and _orders is keyed on exactly those.
 [TestFixture]
 public class MultipleSessionsTests
 {
