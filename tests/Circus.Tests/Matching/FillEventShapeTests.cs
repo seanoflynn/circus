@@ -16,9 +16,14 @@ public class FillEventShapeTests
     private static readonly Instrument Gold = new("GCZ6", 10, 10);
     private static readonly DateTime Open = new(2000, 1, 1, 12, 0, 0);
 
+    // Through PreOpen rather than straight to Open: StartsSession belongs to that phase alone,
+    // and the trade id counter is seeded from the session date on the way into it, exactly as
+    // the order id counter is - see ExchangeOrderIdScopeTests for that convention. A book opened
+    // directly still works, but its ids start from a bare 1 rather than carrying the date.
     private static IOrderBook OpenBook()
     {
         var book = new OrderBook(Gold);
+        book.PreOpenTrading(time: Open);
         book.OpenTrading(time: Open);
         return book;
     }
