@@ -8,10 +8,18 @@ namespace Circus.MarketData;
 // wanting to render "what is happening to this instrument" wants them together, and assembling
 // them is this producer's whole job.
 //
-// Stateful, like the level producers and unlike the trade and indicative ones: each incoming
-// event carries only its own part, so the rest has to be remembered. That means one instance per
-// IOrderBook, created before that book processes its first action, with no way to resync after a
-// missed event.
+// The last producer here that accumulates anything, and it does so for a reason none of the
+// others now have: each incoming event carries one part of a composite, so the rest has to be
+// remembered. Depth was the same shape until the book began reporting whole level sets itself,
+// and the trade print never needed more than a batch. This one cannot be fixed that way - the
+// parts genuinely arrive separately, because a status change and a limit lock are separate
+// things that happen at separate times.
+//
+// So it stays one instance per IOrderBook, created before that book processes its first action.
+// The answer to a missed event is not to make this stateless but to republish the composite, the
+// way CME's snapshot carries instrument status alongside the book: a subscriber that never saw
+// the StatusChanged learns the status from the next snapshot rather than by replaying history it
+// missed. Until that channel exists, a gap here is unrecoverable.
 //
 // Starts where a book starts - closed, nothing pending, no limit - so the first status change
 // is a change from something true rather than from a guess.

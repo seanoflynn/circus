@@ -68,8 +68,19 @@ public class LiquidityAgentTests
             AgentSwarm.Run(Swarm, Clock, Step, ticks, Published.Add);
         }
 
-        public LevelsDataEvent LastLevels(string symbol) =>
-            Published.Select(m => m.Data).OfType<LevelsDataEvent>().LastOrDefault(l => l.Symbol == symbol);
+        // The ladder a subscriber would be holding, rebuilt from every depth message the venue
+        // has published for this symbol - which is all a participant ever has to go on.
+        public LevelBook Levels(string symbol)
+        {
+            var levels = new LevelBook();
+            foreach (var delta in Published.Select(m => m.Data).OfType<MarketByPriceDeltaEvent>()
+                         .Where(d => d.Symbol == symbol))
+            {
+                levels.Apply(delta);
+            }
+
+            return levels;
+        }
 
         public int Trades => Published.Select(m => m.Data).OfType<TradeDataEvent>().Count();
     }
@@ -144,7 +155,7 @@ public class LiquidityAgentTests
         venue.Swarm.Add(Agent("MM", new LiquidityAgentOptions(Aggression: 0), 11, Gold));
         venue.Run(100);
 
-        var levels = venue.LastLevels(Gold.Symbol);
+        var levels = venue.Levels(Gold.Symbol);
         Assert.That(levels, Is.Not.Null);
         Assert.That(levels.Bids, Is.Not.Empty);
         Assert.That(levels.Offers, Is.Not.Empty);
@@ -227,7 +238,7 @@ public class LiquidityAgentTests
         venue.Swarm.Add(Agent("MM2", new LiquidityAgentOptions(Aggression: 0), 9, Gold));
         venue.Run(300);
 
-        Assert.That(venue.LastLevels(Gold.Symbol).Bids, Is.Not.Empty, "expected it to be quoting");
+        Assert.That(venue.Levels(Gold.Symbol).Bids, Is.Not.Empty, "expected it to be quoting");
         Assert.That(venue.Trades, Is.EqualTo(0));
     }
 
@@ -256,7 +267,7 @@ public class LiquidityAgentTests
                     ReplaceProbability: 0), 4, Gold));
             venue.Run(100);
 
-            return venue.LastLevels(Gold.Symbol).Bids.Count;
+            return venue.Levels(Gold.Symbol).Bids.Count;
         }
     }
 
@@ -269,7 +280,7 @@ public class LiquidityAgentTests
                 ReplaceProbability: 0), 12, Gold));
         venue.Run(100);
 
-        var levels = venue.LastLevels(Gold.Symbol);
+        var levels = venue.Levels(Gold.Symbol);
 
         // three ticks of 10 between the reference and the first rung, and between rungs
         Assert.That(levels.Bids[0].Price, Is.EqualTo(970));
@@ -358,8 +369,8 @@ public class LiquidityAgentTests
         venue.Swarm.Add(Agent("MM", new LiquidityAgentOptions(Aggression: 0), 15, Gold, Silver));
         venue.Run(200);
 
-        Assert.That(venue.LastLevels(Gold.Symbol).Bids, Is.Not.Empty);
-        Assert.That(venue.LastLevels(Silver.Symbol).Bids, Is.Not.Empty);
+        Assert.That(venue.Levels(Gold.Symbol).Bids, Is.Not.Empty);
+        Assert.That(venue.Levels(Silver.Symbol).Bids, Is.Not.Empty);
     }
 
     [Test]
@@ -409,12 +420,7 @@ public class LiquidityAgentTests
             () => new LiquidityAgentOptions(MinQuantity: 5, MaxQuantity: 4).Validate());
     }
 
-    // Rendered rather than compared directly: LevelsDataEvent holds its ladders in lists, and a
-    // record's generated equality compares those by reference.
-    private static string Describe(MarketDataEvent data) => data switch
-    {
-        LevelsDataEvent levels =>
-            $"Levels {levels.Time:O} [{string.Join(",", levels.Bids)}] [{string.Join(",", levels.Offers)}]",
-        _ => data.ToString()
-    };
+    // Every published message carries only scalars now that depth arrives a level at a time, so a
+    // record's own ToString is faithful and its equality is by value.
+    private static string Describe(MarketDataEvent data) => data.ToString()!;
 }

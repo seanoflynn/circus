@@ -8,6 +8,7 @@ internal interface IReadOnlyPriceLadder
 
     IEnumerable<(long Tick, InternalOrder First, int Count)> EnumerateFromBest();
 
-    // Aggregated depth rather than orders - see PriceLadder for why the two are separate walks.
-    IEnumerable<(long Tick, int Quantity, int Count)> EnumerateLevelsFromBest(int maxLevels);
+    // Aggregated depth rather than orders - see PriceLadder for why the two are separate walks,
+    // and why this fills a caller's list instead of returning a sequence.
+    void CopyLevelsFromBest(int maxLevels, List<(long Tick, int Quantity, int Count)> into);
 }

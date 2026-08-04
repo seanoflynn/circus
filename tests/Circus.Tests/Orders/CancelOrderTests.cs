@@ -1,5 +1,6 @@
 using Circus.Actions;
 using Circus.Events;
+using Circus.Tests.Helpers;
 using Circus.Time;
 using NUnit.Framework;
 
@@ -46,7 +47,7 @@ public class CancelOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var cancelled = events[0] as CancelOrderConfirmed;
         Assert.IsNotNull(cancelled);
         Assert.AreEqual(Gold.Symbol, cancelled.Symbol);
@@ -88,7 +89,7 @@ public class CancelOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var cancelled = events[0] as CancelOrderConfirmed;
         Assert.IsNotNull(cancelled);
         Assert.AreEqual(Gold.Symbol, cancelled.Symbol);
@@ -128,7 +129,7 @@ public class CancelOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as CancelOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(Gold.Symbol, rejected.Symbol);
@@ -154,7 +155,7 @@ public class CancelOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as CancelOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(Gold.Symbol, rejected.Symbol);
@@ -178,7 +179,7 @@ public class CancelOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as CancelOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(Gold.Symbol, rejected.Symbol);
@@ -202,7 +203,7 @@ public class CancelOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as CancelOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(CompanyId2, rejected.CompanyId);

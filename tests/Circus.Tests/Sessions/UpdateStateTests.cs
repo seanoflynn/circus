@@ -45,7 +45,7 @@ public class UpdateStateTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var statusChanged = events[0] as StatusChanged;
         Assert.IsNotNull(statusChanged);
         Assert.AreEqual(Gold.Symbol, statusChanged.Symbol);
@@ -68,7 +68,7 @@ public class UpdateStateTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(4, events.Count);
+        Assert.AreEqual(4, events.OrderFlow().Count);
         var withdrawn = events[3] as IndicativePriceChanged;
         Assert.IsNotNull(withdrawn);
         Assert.IsNull(withdrawn.Price, "the auction it was quoting has printed");
@@ -141,7 +141,7 @@ public class UpdateStateTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(2, events.Count);
+        Assert.AreEqual(2, events.OrderFlow().Count);
 
         var expired = events[1] as ExpireOrderConfirmed;
         Assert.IsNotNull(expired);
@@ -182,7 +182,7 @@ public class UpdateStateTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(2, events.Count);
+        Assert.AreEqual(2, events.OrderFlow().Count);
 
         var expired = events[1] as ExpireOrderConfirmed;
         Assert.IsNotNull(expired);
@@ -221,7 +221,7 @@ public class UpdateStateTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
 
         var statusChanged = events[0] as StatusChanged;
         Assert.IsNotNull(statusChanged);
@@ -244,7 +244,7 @@ public class UpdateStateTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
 
         var statusChanged = events[0] as StatusChanged;
         Assert.IsNotNull(statusChanged);
@@ -267,7 +267,7 @@ public class UpdateStateTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(2, events.Count);
+        Assert.AreEqual(2, events.OrderFlow().Count);
 
         var expired = events[1] as ExpireOrderConfirmed;
         Assert.IsNotNull(expired);
@@ -306,7 +306,7 @@ public class UpdateStateTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(2, events.Count);
+        Assert.AreEqual(2, events.OrderFlow().Count);
 
         var expired = events[1] as ExpireOrderConfirmed;
         Assert.IsNotNull(expired);

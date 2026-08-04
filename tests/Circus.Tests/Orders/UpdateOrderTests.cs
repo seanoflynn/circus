@@ -126,7 +126,7 @@ public class UpdateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var updated = events[0] as UpdateOrderConfirmed;
         Assert.IsNotNull(updated);
         Assert.AreEqual(Gold.Symbol, updated.Symbol);
@@ -166,7 +166,7 @@ public class UpdateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var updated = events[0] as UpdateOrderConfirmed;
         Assert.IsNotNull(updated);
         Assert.AreEqual(Gold.Symbol, updated.Symbol);
@@ -206,7 +206,7 @@ public class UpdateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var updated = events[0] as UpdateOrderConfirmed;
         Assert.IsNotNull(updated);
         Assert.AreEqual(Gold.Symbol, updated.Symbol);
@@ -248,7 +248,7 @@ public class UpdateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var updated = events[0] as UpdateOrderConfirmed;
         Assert.IsNotNull(updated);
         Assert.AreEqual(Gold.Symbol, updated.Symbol);
@@ -291,7 +291,7 @@ public class UpdateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var updated = events[0] as UpdateOrderConfirmed;
         Assert.IsNotNull(updated);
         Assert.AreEqual(Gold.Symbol, updated.Symbol);
@@ -328,7 +328,7 @@ public class UpdateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var updated = events[0] as UpdateOrderConfirmed;
         Assert.IsNotNull(updated);
         Assert.AreEqual(Gold.Symbol, updated.Symbol);
@@ -367,7 +367,7 @@ public class UpdateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var updated = events[0] as UpdateOrderConfirmed;
         Assert.IsNotNull(updated);
         Assert.AreEqual(Gold.Symbol, updated.Symbol);
@@ -406,7 +406,7 @@ public class UpdateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var updated = events[0] as UpdateOrderConfirmed;
         Assert.IsNotNull(updated);
         Assert.AreEqual(Gold.Symbol, updated.Symbol);
@@ -444,7 +444,7 @@ public class UpdateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var cancelled = events[0] as CancelOrderConfirmed;
         Assert.IsNotNull(cancelled);
         Assert.AreEqual(Gold.Symbol, cancelled.Symbol);
@@ -511,7 +511,7 @@ public class UpdateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(3, events.Count);
+        Assert.AreEqual(3, events.OrderFlow().Count);
 
         var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
@@ -582,7 +582,7 @@ public class UpdateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as UpdateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(Gold.Symbol, rejected.Symbol);
@@ -606,7 +606,7 @@ public class UpdateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as UpdateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(Gold.Symbol, rejected.Symbol);
@@ -630,7 +630,7 @@ public class UpdateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as UpdateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(Gold.Symbol, rejected.Symbol);
@@ -656,7 +656,7 @@ public class UpdateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as UpdateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(Gold.Symbol, rejected.Symbol);
@@ -682,7 +682,7 @@ public class UpdateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as UpdateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(Gold.Symbol, rejected.Symbol);
@@ -708,7 +708,7 @@ public class UpdateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as UpdateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(Gold.Symbol, rejected.Symbol);
@@ -735,7 +735,7 @@ public class UpdateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as UpdateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(Gold.Symbol, rejected.Symbol);
@@ -760,7 +760,7 @@ public class UpdateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as UpdateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(Gold.Symbol, rejected.Symbol);
@@ -787,7 +787,7 @@ public class UpdateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as UpdateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(Gold.Symbol, rejected.Symbol);
@@ -814,7 +814,7 @@ public class UpdateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as UpdateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(Gold.Symbol, rejected.Symbol);
@@ -838,7 +838,7 @@ public class UpdateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as UpdateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(Gold.Symbol, rejected.Symbol);
@@ -863,7 +863,7 @@ public class UpdateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as UpdateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(Gold.Symbol, rejected.Symbol);
@@ -888,7 +888,7 @@ public class UpdateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as UpdateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(Gold.Symbol, rejected.Symbol);
@@ -913,7 +913,7 @@ public class UpdateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as UpdateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(Gold.Symbol, rejected.Symbol);
@@ -938,7 +938,7 @@ public class UpdateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as UpdateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(Gold.Symbol, rejected.Symbol);
@@ -964,7 +964,7 @@ public class UpdateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as UpdateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(Gold.Symbol, rejected.Symbol);
@@ -990,7 +990,7 @@ public class UpdateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as UpdateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(Gold.Symbol, rejected.Symbol);

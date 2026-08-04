@@ -51,7 +51,7 @@ public class SelfTradePreventionTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(4, events.Count);
+        Assert.AreEqual(4, events.OrderFlow().Count);
 
         Assert.IsInstanceOf<CreateOrderConfirmed>(events[0]);
 
@@ -91,7 +91,7 @@ public class SelfTradePreventionTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(2, events.Count);
+        Assert.AreEqual(2, events.OrderFlow().Count);
 
         Assert.IsInstanceOf<CreateOrderConfirmed>(events[0]);
 
@@ -122,7 +122,7 @@ public class SelfTradePreventionTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(3, events.Count);
+        Assert.AreEqual(3, events.OrderFlow().Count);
 
         Assert.IsInstanceOf<CreateOrderConfirmed>(events[0]);
 
@@ -154,7 +154,7 @@ public class SelfTradePreventionTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(3, events.Count);
+        Assert.AreEqual(3, events.OrderFlow().Count);
         Assert.IsInstanceOf<CreateOrderConfirmed>(events[0]);
 
         var matched = events.Trades()[0];
@@ -178,7 +178,7 @@ public class SelfTradePreventionTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(3, events.Count);
+        Assert.AreEqual(3, events.OrderFlow().Count);
         Assert.IsInstanceOf<CreateOrderConfirmed>(events[0]);
 
         var matched = events.Trades()[0];
@@ -199,7 +199,7 @@ public class SelfTradePreventionTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(2, events.Count);
+        Assert.AreEqual(2, events.OrderFlow().Count);
 
         var cancelled = events[1] as CancelOrderConfirmed;
         Assert.IsNotNull(cancelled);
@@ -227,7 +227,7 @@ public class SelfTradePreventionTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(3, events.Count);
+        Assert.AreEqual(3, events.OrderFlow().Count);
         Assert.IsInstanceOf<CancelOrderConfirmed>(events[1]);
         Assert.IsInstanceOf<CancelOrderConfirmed>(events[2]);
         Assert.AreEqual(0, Book.GetLevels(Side.Sell, 10).Count);
@@ -248,7 +248,7 @@ public class SelfTradePreventionTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
 
         var rejected = events[0] as CreateOrderRejected;
         Assert.IsNotNull(rejected);
@@ -278,7 +278,7 @@ public class SelfTradePreventionTests
 
         // assert - accepted: the 2@100 self-match is skipped, the 5@100 behind it is enough
         Assert.IsNotNull(events);
-        Assert.AreEqual(4, events.Count);
+        Assert.AreEqual(4, events.OrderFlow().Count);
         Assert.IsInstanceOf<CreateOrderConfirmed>(events[0]);
 
         var cancelled = events[1] as CancelOrderConfirmed;
@@ -315,7 +315,7 @@ public class SelfTradePreventionTests
         // assert - rejected: reachable liquidity before the self-match is 0, well short of 5,
         // even though 10 more sits just behind it in the queue
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
 
         var rejected = events[0] as CreateOrderRejected;
         Assert.IsNotNull(rejected);
@@ -349,7 +349,7 @@ public class SelfTradePreventionTests
         // assert - rejected: the self-match at 100 stops the search cold, so the 20 sitting
         // at 110 is never even considered
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
 
         var rejected = events[0] as CreateOrderRejected;
         Assert.IsNotNull(rejected);

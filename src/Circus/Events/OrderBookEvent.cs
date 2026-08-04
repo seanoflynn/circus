@@ -108,3 +108,59 @@ public record IndicativePriceChanged(string Symbol, DateTime Time, decimal? Pric
 // rather than a status that would claim otherwise. Emitted only on a change.
 public record LimitStateChanged(string Symbol, DateTime Time, Side? Side, decimal? Price)
     : OrderBookEvent(Symbol, Time);
+// One aggregated price level of the working book, as carried inside a LevelsChanged.
+//
+// Quantity is displayed size, never remaining: an iceberg's hidden reserve is not on the book.
+// Both are zero on Removed.
+//
+// Keyed on Price, not on LevelIndex. CME's MDPriceLevel is positional - a New at level 2 shifts
+// everything below it down - which means a consumer that mislays one has every level beneath it
+// wrong. Keying on price makes each change idempotent and independently applicable, and means a
+// level whose rank moved because a better one appeared says nothing at all, where a positional
+// feed would restate the whole ladder beneath it. LevelIndex is the rank the level holds, or on
+// Removed the rank it last held, and is carried for a consumer that wants it rather than for
+// identifying the level.
+//
+// Removed covers a level leaving the published window as well as leaving the book - the window is
+// fixed at ten deep, and a level pushed past that is no longer published whether or not orders
+// still rest there. It returns as Added if it comes back.
+public record LevelChange(Side Side, int LevelIndex, decimal Price, int Quantity, int Count,
+    LevelChangeAction Action);
+
+// Every aggregated price level one action moved - the same category as IndicativePriceChanged and
+// LimitStateChanged above: not something a client did, but something only the book can see about
+// itself, reported so a consumer never has to reconstruct it.
+//
+// The price ladders carry a running total of displayed size and order count per level, so the
+// book publishes what it already knows. A by-price feed is then a translation of these rather
+// than a second book kept in step with this one - which is the whole reason they exist, since
+// deriving them means holding the book the subscriber is missing.
+//
+// One event per action carrying every level it moved, rather than one per level. The set of
+// levels an action moved is a single fact about that action: an aggressor sweeping three of them
+// took the book from one state to another in one step, and splitting that leaves every consumer
+// to recover the grouping before it can act on it. Emitted only when something actually moved, so
+// an action that touches no level - a status change, a rejected order - reports nothing.
+//
+// Changes are ordered best price outward within a side, arrivals and changes before departures.
+public record LevelsChanged(string Symbol, DateTime Time, IReadOnlyList<LevelChange> Changes)
+    : OrderBookEvent(Symbol, Time)
+{
+    // Spelled out because a record's generated equality compares a list member by reference, and
+    // two runs of the same trace build different list instances. DeterminismTests asserts that a
+    // replay reproduces every event exactly, by value - which is why OrdersMatched was flattened
+    // rather than left wrapping its fills. That property is worth keeping; carrying a collection
+    // is not a reason to give it up, only a reason to say what equality means here.
+    public virtual bool Equals(LevelsChanged? other) =>
+        other is not null
+        && EqualityContract == other.EqualityContract
+        && Symbol == other.Symbol
+        && Time == other.Time
+        && Changes.SequenceEqual(other.Changes);
+
+    public override int GetHashCode() => HashCode.Combine(Symbol, Time, Changes.Count);
+
+    public override string ToString() =>
+        $"{nameof(LevelsChanged)} {{ Symbol = {Symbol}, Time = {Time:O}, " +
+        $"Changes = [{string.Join(", ", Changes)}] }}";
+}

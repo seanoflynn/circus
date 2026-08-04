@@ -26,7 +26,7 @@ public class MarketViewTests
     {
         _clock = new ManualClock(Now);
         _book = new TimestampingOrderBook(Gold, _clock);
-        _feed = new InstrumentFeed(Gold.Symbol, maxLevels: 10);
+        _feed = new InstrumentFeed(Gold.Symbol);
         _view = new MarketView();
     }
 

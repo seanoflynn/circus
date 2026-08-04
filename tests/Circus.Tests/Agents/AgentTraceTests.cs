@@ -239,10 +239,7 @@ public class AgentTraceTests
             .ToList();
     }
 
-    private static string Render(MarketDataEvent data) => data switch
-    {
-        LevelsDataEvent levels =>
-            $"{nameof(LevelsDataEvent)} [{string.Join(",", levels.Bids)}] [{string.Join(",", levels.Offers)}]",
-        _ => data.ToString()
-    };
+    // Depth arrives a level at a time now, and the message that carries it renders its own
+    // contents, so every published message describes itself faithfully.
+    private static string Render(MarketDataEvent data) => data.ToString()!;
 }
