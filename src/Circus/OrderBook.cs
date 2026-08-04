@@ -577,8 +577,10 @@ public class OrderBook : IOrderBook, IBookView
                 (order.Status == OrderStatus.Hidden ? triggerTicks ?? order.TriggerPrice : priceTicks ?? order.Price) ??
                 throw new InvalidOperationException("missing price");
 
-            // Called before order.Update() below, so the order still carries the price it
-            // currently rests at - which is what Reprice moves it off.
+            // Reprice reads back the tick the ladder filed the order under rather than its
+            // current Price, so this no longer has to run before order.Update() to be correct.
+            // Still does, because the level correction below depends on the order having already
+            // arrived at its new level.
             _matcher.Reprice(order, updatedPriceTicks);
         }
 
@@ -586,6 +588,10 @@ public class OrderBook : IOrderBook, IBookView
         // bumped above - is where ExchangeOrderId (derived from SequenceNumber) actually changes.
         var previousExchangeOrderId = order.ExchangeOrderId;
         order.Update(sequenceNumber, time, newTotalQuantity, triggerTicks, priceTicks, clientOrderId);
+
+        // After any Reprice above, so this corrects the level the order now rests at rather than
+        // the one it left - Reprice moved it there still showing its pre-update size.
+        _matcher.SyncDisplayed(order, previousQuantity);
         _clientOrderIndex[(companyId, clientOrderId)] = order;
 
         List<OrderBookEvent> events = new();
@@ -905,13 +911,18 @@ public class OrderBook : IOrderBook, IBookView
                 order.Fill(time, quantity);
         }
 
+        // SyncDisplayed before FinishFill, not after: FinishFill can unrest the order, and
+        // removing it backs out whatever it is displaying then - so a level still carrying the
+        // pre-fill size would have the fill taken off it twice.
         var restingDisplayed = resting.DisplayedQuantity;
         FillOrder(resting);
+        _matcher.SyncDisplayed(resting, restingDisplayed);
         var restingSnapshot = resting.ToOrder();
         var restingReplenish = FinishFill(resting, time);
 
         var aggressorDisplayed = aggressor.DisplayedQuantity;
         FillOrder(aggressor);
+        _matcher.SyncDisplayed(aggressor, aggressorDisplayed);
         var aggressorSnapshot = aggressor.ToOrder();
         var aggressorReplenish = FinishFill(aggressor, time);
 

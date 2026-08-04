@@ -43,38 +43,22 @@ internal class InternalOrder
     // The shown portion of an iceberg, against RemainingQuantity's true total. Equal to it for
     // a non-iceberg order, so nothing elsewhere special-cases that.
     //
-    // Written through a setter rather than an auto-property so the level this order rests in can
-    // keep a running total of displayed size without every mutation site having to remember to
-    // tell it. Fill, FillFullSize, Replenish and Update all move this, from four different call
-    // paths in OrderBook; a running total maintained by hand at each of them is one missed call
-    // away from a level aggregate that is silently wrong for the rest of the session, which is
-    // the exact failure mode the aggregate is meant to remove. One choke point instead.
-    public int DisplayedQuantity
-    {
-        get => _displayedQuantity;
-        private set
-        {
-            var delta = value - _displayedQuantity;
-            _displayedQuantity = value;
-
-            // Null while the order is not resting - during construction, and between the Remove
-            // and Add of a requeue - where there is no level holding it to correct.
-            if (delta != 0)
-                RestingLevel?.AdjustQuantity(RestingTick, delta);
-        }
-    }
-
-    private int _displayedQuantity;
+    // Resizing this while the order rests leaves its level's aggregate stale, so every caller
+    // that does so follows with Matcher.SyncDisplayed. Deliberately not wired up from in here:
+    // an order knowing which ladder holds it, so a setter could correct it, would put a
+    // container back-reference on a domain object and make order.Fill(...) quietly mutate a
+    // structure the call site never mentions.
+    public int DisplayedQuantity { get; private set; }
 
     // Intrusive list pointers for the level currently holding this order - an order rests in
     // only one at a time. Avoids a node object per order.
     internal InternalOrder? LevelNext { get; set; }
     internal InternalOrder? LevelPrev { get; set; }
 
-    // The ladder and tick this order currently rests at, set by PriceLadder.Add and cleared by
-    // Remove. The tick is stored rather than re-derived from Price because Price moves before the
-    // ladder does on a reprice, so the two disagree for the length of an update.
-    internal PriceLadder? RestingLevel { get; set; }
+    // The tick this order was filed under, set by PriceLadder.Add. Stored rather than re-derived
+    // from Price because Price moves before the ladder does on a reprice, so the two disagree for
+    // the length of an update. Same category as the level pointers above: where the order sits,
+    // not what holds it.
     internal long RestingTick { get; set; }
 
     public InternalOrder(long sequenceNumber, string companyId, string clientOrderId, Instrument instrument, DateTime time,

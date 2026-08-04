@@ -56,7 +56,6 @@ internal sealed class PriceLadder(bool descending) : IReadOnlyPriceLadder
         _counts[index]++;
         _quantities[index] += order.DisplayedQuantity;
 
-        order.RestingLevel = this;
         order.RestingTick = tick;
     }
 
@@ -84,16 +83,15 @@ internal sealed class PriceLadder(bool descending) : IReadOnlyPriceLadder
         _counts[index]--;
         _quantities[index] -= order.DisplayedQuantity;
 
-        order.RestingLevel = null;
-
         if (_heads[index] == null && index == _bestIndex)
         {
             AdvanceBest();
         }
     }
 
-    // Called by InternalOrder when a resting order's displayed size moves under it - a fill, an
-    // auction print re-deriving the peak, or an update resizing the order in place.
+    // Corrects a level after a resting order's displayed size moved under it - a fill, an auction
+    // print re-deriving the peak, or an update resizing the order in place. Reached through
+    // Matcher.SyncDisplayed, which is what the callers actually hold.
     internal void AdjustQuantity(long tick, int delta) => _quantities[(int) (tick - _minTick)] += delta;
 
     public bool TryGetBest(out long tick, out InternalOrder? firstOrder)

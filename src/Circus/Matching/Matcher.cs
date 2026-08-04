@@ -53,6 +53,24 @@ internal sealed class Matcher
 
     public void Unrest(InternalOrder order) => LadderFor(order).Remove(order);
 
+    // Corrects the level for a resize that happened while the order was resting, which its
+    // aggregate would otherwise still be carrying at the old size.
+    //
+    // Called explicitly rather than raised from InternalOrder: the alternative is a back-reference
+    // from the order to the ladder holding it, which makes order.Fill(...) mutate a structure the
+    // call site never names. There are three of these - both sides of a trade, and an update
+    // resizing in place - and each sits beside a previous-displayed local the caller already
+    // captured for the event it emits. A replenish needs none, going through Unrest/Rest.
+    //
+    // Must run before anything that unrests the order: Remove backs out whatever the order is
+    // displaying at the time, so an uncorrected level would have the fill subtracted twice.
+    public void SyncDisplayed(InternalOrder order, int previousDisplayedQuantity)
+    {
+        var delta = order.DisplayedQuantity - previousDisplayedQuantity;
+        if (delta != 0)
+            LadderFor(order).AdjustQuantity(order.RestingTick, delta);
+    }
+
     // Lands at the back of the new level. Passing the price it already rests at requeues it in
     // place, which is what a quantity increase needs - losing time priority is the point.
     public void Reprice(InternalOrder order, long newPriceTicks)
