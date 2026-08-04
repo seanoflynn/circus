@@ -213,7 +213,7 @@ public class AgentTraceTests
         var trace = AgentTrace.Record(new[] {Gold, Silver}, 500, seed: 12345);
         var actual = Fingerprint(trace);
 
-        Assert.That(actual, Is.EqualTo("REPLACE_WITH_THE_VALUE_IN_THE_FAILURE_MESSAGE"),
+        Assert.That(actual, Is.EqualTo("8E13AAF0E66FBAC5E31DBE74B066BD80F879D226A6C1105D96853F905334BAE5"),
             $"the recording for this seed has changed. If that was deliberate, the new fingerprint is {actual}");
     }
 
