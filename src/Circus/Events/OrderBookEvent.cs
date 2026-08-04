@@ -108,3 +108,28 @@ public record IndicativePriceChanged(string Symbol, DateTime Time, decimal? Pric
 // rather than a status that would claim otherwise. Emitted only on a change.
 public record LimitStateChanged(string Symbol, DateTime Time, Side? Side, decimal? Price)
     : OrderBookEvent(Symbol, Time);
+// One aggregated price level of the working book changed - the same category as
+// IndicativePriceChanged and LimitStateChanged above: not something a client did, but something
+// only the book can see about itself, reported so a consumer never has to reconstruct it.
+//
+// The price ladders carry a running total of displayed size and order count per level, so the
+// book publishes what it already knows. A by-price feed is then a translation of these rather
+// than a second book kept in step with this one - which is the whole reason they exist, since
+// deriving them means holding the book the subscriber is missing.
+//
+// Quantity is displayed size, never remaining: an iceberg's hidden reserve is not on the book.
+// Both are zero on Removed.
+//
+// Keyed on Price, not on LevelIndex. CME's MDPriceLevel is positional - a New at level 2 shifts
+// everything below it down - which means a consumer that misses one message has every level
+// beneath it wrong. Keying on price makes each of these idempotent and independently
+// applicable, and it means a level whose rank moved because a better one appeared emits nothing
+// at all, where a positional feed would restate the whole ladder beneath it. LevelIndex is
+// carried for a consumer that wants the rank, and on Removed it is the rank the level last held.
+//
+// Removed covers a level leaving the published window as well as leaving the book - the window
+// is fixed at ten deep, and a level pushed past that is no longer published whether or not
+// orders still rest there. It returns as Added if it comes back.
+public record LevelChanged(string Symbol, DateTime Time, Side Side, int LevelIndex, decimal Price,
+        int Quantity, int Count, LevelChangeAction Action)
+    : OrderBookEvent(Symbol, Time);

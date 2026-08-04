@@ -58,6 +58,20 @@ public class OrderBook : IOrderBook
     // enough. Cleared at the top of every call rather than left to grow unbounded across them.
     private readonly List<InternalOrder> _pendingImmediateOrCancelStops = new();
 
+    // How deep the published book runs. A property of the feed rather than of matching, but a
+    // fixed one - every by-price product here is ten deep, as CME's futures books are - which is
+    // what lets the book say which levels changed rather than leaving a consumer to work out
+    // whether a change fell inside the window it happens to be publishing.
+    private const int PublishedDepth = 10;
+
+    // The published window as it stood before the action and as it stands after, diffed to
+    // produce LevelChanged. Reused per book for the reason the buffer above is: one action at a
+    // time, so four lists outlive every call rather than being allocated within it.
+    private readonly List<(long Tick, int Quantity, int Count)> _bidsBefore = new(PublishedDepth);
+    private readonly List<(long Tick, int Quantity, int Count)> _offersBefore = new(PublishedDepth);
+    private readonly List<(long Tick, int Quantity, int Count)> _bidsAfter = new(PublishedDepth);
+    private readonly List<(long Tick, int Quantity, int Count)> _offersAfter = new(PublishedDepth);
+
     // Nothing outside this table names a status - the rest of the book reads the current phase
     // and acts on what it says. Pre-open's auction instance is also what prints on the way out
     // of it, so the opening print is the quote it had been publishing.
@@ -195,12 +209,25 @@ public class OrderBook : IOrderBook
 
         _lastActionTime = time;
 
+        // Captured before anything runs, including the resumption below - a resumption can carry
+        // an auction print with it, and the levels that moved doing so are as much a part of what
+        // this action did as the ones the action itself moved.
+        CaptureWindow(_bidsBefore, Side.Buy);
+        CaptureWindow(_offersBefore, Side.Sell);
+
         // Before the action rather than after: an order arriving once the interruption has
         // elapsed should meet a resumed book, not the paused one it would otherwise land in.
         // Doing it here rather than only on AdvanceTime means a book being fed order flow
         // resumes on its own, without needing anything to poke it.
         var events = ResumeIfDue(time);
         events.AddRange(Handle(action, time));
+
+        // After the order events, so a consumer sees what happened before what it left behind,
+        // and reporting the net effect of the whole action rather than each state it passed
+        // through: an aggressor sweeping three levels leaves one report per level touched, not
+        // one per fill along the way. That is the shape of a real incremental refresh, which
+        // carries every level a single matching-engine event moved.
+        AppendLevelChanges(events, time);
 
         // Last, so it reports where the action left the book rather than any state it passed
         // through - a pre-open cancel that uncrosses the book withdraws the quote, and the
@@ -401,6 +428,65 @@ public class OrderBook : IOrderBook
 
     private decimal ToDecimal(long ticks) => ticks * _instrument.TickSize;
 
+    private void CaptureWindow(List<(long Tick, int Quantity, int Count)> into, Side side) =>
+        _matcher.Working[side].CopyLevelsFromBest(PublishedDepth, into);
+
+    private void AppendLevelChanges(List<OrderBookEvent> events, DateTime time)
+    {
+        CaptureWindow(_bidsAfter, Side.Buy);
+        CaptureWindow(_offersAfter, Side.Sell);
+
+        AppendLevelChanges(events, time, Side.Buy, _bidsBefore, _bidsAfter);
+        AppendLevelChanges(events, time, Side.Sell, _offersBefore, _offersAfter);
+    }
+
+    // Diffed by price rather than by position - see LevelChanged for why - which also means a
+    // level that only moved rank reports nothing, since its price, size and count are all
+    // unchanged. Ten a side at most, so the nested scans below are bounded at a hundred
+    // comparisons and need no index to beat that.
+    private void AppendLevelChanges(List<OrderBookEvent> events, DateTime time, Side side,
+        List<(long Tick, int Quantity, int Count)> before, List<(long Tick, int Quantity, int Count)> after)
+    {
+        // Arrivals and changes first, best price outward, so a consumer applying them in order
+        // builds the near side of the book before the far side.
+        for (var i = 0; i < after.Count; i++)
+        {
+            var (tick, quantity, count) = after[i];
+            var previous = IndexOfTick(before, tick);
+
+            if (previous < 0)
+            {
+                events.Add(new LevelChanged(_instrument.Symbol, time, side, i + 1, ToDecimal(tick),
+                    quantity, count, LevelChangeAction.Added));
+            }
+            else if (before[previous].Quantity != quantity || before[previous].Count != count)
+            {
+                events.Add(new LevelChanged(_instrument.Symbol, time, side, i + 1, ToDecimal(tick),
+                    quantity, count, LevelChangeAction.Modified));
+            }
+        }
+
+        // Then departures, carrying the rank each last held and nothing left at it.
+        for (var i = 0; i < before.Count; i++)
+        {
+            var tick = before[i].Tick;
+            if (IndexOfTick(after, tick) < 0)
+                events.Add(new LevelChanged(_instrument.Symbol, time, side, i + 1, ToDecimal(tick),
+                    0, 0, LevelChangeAction.Removed));
+        }
+    }
+
+    private static int IndexOfTick(List<(long Tick, int Quantity, int Count)> levels, long tick)
+    {
+        for (var i = 0; i < levels.Count; i++)
+        {
+            if (levels[i].Tick == tick)
+                return i;
+        }
+
+        return -1;
+    }
+
     // Internal on purpose, and not on IOrderBook. Process is the whole public API of a book:
     // everything a consumer knows arrives as an event, so a market data feed can be rebuilt from
     // a journal of those events with no book involved. A query method in the public surface
@@ -425,8 +511,13 @@ public class OrderBook : IOrderBook
         if (maxLevels <= 0)
             return Array.Empty<Level>();
 
-        var levels = new List<Level>(maxLevels);
-        foreach (var (tick, quantity, count) in _matcher.Working[side].EnumerateLevelsFromBest(maxLevels))
+        // Its own list rather than the scratch buffers above: this is the snapshot path, taken on
+        // a tick rather than per action, and it hands the result out where those are reused.
+        var scratch = new List<(long Tick, int Quantity, int Count)>(maxLevels);
+        _matcher.Working[side].CopyLevelsFromBest(maxLevels, scratch);
+
+        var levels = new List<Level>(scratch.Count);
+        foreach (var (tick, quantity, count) in scratch)
             levels.Add(new Level(ToDecimal(tick), quantity, count));
 
         return levels;

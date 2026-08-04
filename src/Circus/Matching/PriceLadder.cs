@@ -124,19 +124,23 @@ internal sealed class PriceLadder(bool descending) : IReadOnlyPriceLadder
 
     // The aggregate view, from best outward: what a by-price feed publishes, and deliberately
     // separate from EnumerateFromBest so matching keeps walking orders and market data never
-    // needs to. Stops at maxLevels occupied levels rather than scanning the whole array, which is
-    // what makes this cheap enough to call on every publish.
-    public IEnumerable<(long Tick, int Quantity, int Count)> EnumerateLevelsFromBest(int maxLevels)
+    // needs to. Stops at maxLevels occupied levels rather than scanning the whole array.
+    //
+    // Fills a caller-owned list rather than returning a sequence, because the book takes this
+    // twice per action to work out what changed - an iterator would allocate four times per
+    // action on the hot path, which is the cost this class exists to avoid. The list is cleared
+    // and refilled, so a caller reusing one allocates nothing after the first call.
+    public void CopyLevelsFromBest(int maxLevels, List<(long Tick, int Quantity, int Count)> into)
     {
-        var step = descending ? -1 : 1;
-        var found = 0;
+        into.Clear();
 
-        for (var i = _bestIndex; i >= 0 && i < _heads.Length && found < maxLevels; i += step)
+        var step = descending ? -1 : 1;
+
+        for (var i = _bestIndex; i >= 0 && i < _heads.Length && into.Count < maxLevels; i += step)
         {
             if (_heads[i] != null)
             {
-                found++;
-                yield return (_minTick + i, _quantities[i], _counts[i]);
+                into.Add((_minTick + i, _quantities[i], _counts[i]));
             }
         }
     }
