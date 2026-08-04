@@ -12,7 +12,7 @@ namespace Circus.MarketData;
 // for an iceberg: a peak exhausted in continuous trading arrives as its own requeue event
 // (Removed at 0, then Added showing a fresh peak), and an auction print can trade straight
 // through the peak into the reserve, leaving the order still showing one.
-public class LevelDataProducer : IDataProducer<LevelsDataEvent>
+public class LevelDataProducer : IIncrementalProducer<LevelsDataEvent>
 {
     private class LevelState
     {

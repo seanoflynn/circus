@@ -42,12 +42,24 @@ internal class InternalOrder
 
     // The shown portion of an iceberg, against RemainingQuantity's true total. Equal to it for
     // a non-iceberg order, so nothing elsewhere special-cases that.
+    //
+    // Resizing this while the order rests leaves its level's aggregate stale, so every caller
+    // that does so follows with Matcher.SyncDisplayed. Deliberately not wired up from in here:
+    // an order knowing which ladder holds it, so a setter could correct it, would put a
+    // container back-reference on a domain object and make order.Fill(...) quietly mutate a
+    // structure the call site never mentions.
     public int DisplayedQuantity { get; private set; }
 
     // Intrusive list pointers for the level currently holding this order - an order rests in
     // only one at a time. Avoids a node object per order.
     internal InternalOrder? LevelNext { get; set; }
     internal InternalOrder? LevelPrev { get; set; }
+
+    // The tick this order was filed under, set by PriceLadder.Add. Stored rather than re-derived
+    // from Price because Price moves before the ladder does on a reprice, so the two disagree for
+    // the length of an update. Same category as the level pointers above: where the order sits,
+    // not what holds it.
+    internal long RestingTick { get; set; }
 
     public InternalOrder(long sequenceNumber, string companyId, string clientOrderId, Instrument instrument, DateTime time,
         OrderStatus status, OrderType type, OrderValidity validity, Side side, int quantity, long? price,

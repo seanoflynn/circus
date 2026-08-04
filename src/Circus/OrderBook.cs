@@ -1,5 +1,6 @@
 using Circus.Actions;
 using Circus.Events;
+using Circus.MarketData;
 using Circus.Matching;
 using Circus.Restrictions;
 
@@ -400,6 +401,37 @@ public class OrderBook : IOrderBook
 
     private decimal ToDecimal(long ticks) => ticks * _instrument.TickSize;
 
+    // Internal on purpose, and not on IOrderBook. Process is the whole public API of a book:
+    // everything a consumer knows arrives as an event, so a market data feed can be rebuilt from
+    // a journal of those events with no book involved. A query method in the public surface
+    // breaks that twice over - it lets a consumer read state that never crossed the feed, and it
+    // would make a snapshot built by calling it unreproducible from the journal, since the call
+    // leaves no trace in the event stream.
+    //
+    // The snapshot feed needs this aggregate, but it reaches it the same way everything else
+    // does: a snapshot tick dispatches an action, and the book answers with an event carrying
+    // the image. This is how the book builds that image, which makes it an implementation
+    // detail rather than a seam. Visible to the tests, which assert the aggregate directly.
+    //
+    // The ladders already carry the totals, maintained as orders rest, fill and leave, so this
+    // reads them rather than computing them. The iceberg cases come out right without
+    // special-casing: an auction print can trade straight through a peak into the reserve,
+    // leaving the order displaying a fresh peak and firing no requeue event, which a producer
+    // deriving depth has to reconstruct from the change in displayed size across the fill. That
+    // is why FillOrderConfirmed carries PreviousDisplayedQuantity at all. Reading the level,
+    // there is nothing to reconstruct.
+    internal IReadOnlyList<Level> GetLevels(Side side, int maxLevels)
+    {
+        if (maxLevels <= 0)
+            return Array.Empty<Level>();
+
+        var levels = new List<Level>(maxLevels);
+        foreach (var (tick, quantity, count) in _matcher.Working[side].EnumerateLevelsFromBest(maxLevels))
+            levels.Add(new Level(ToDecimal(tick), quantity, count));
+
+        return levels;
+    }
+
     private bool TryGetLimitPrice(Side side, int protectionTicks, out long? priceTicks)
     {
         priceTicks = null;
@@ -556,8 +588,10 @@ public class OrderBook : IOrderBook
                 (order.Status == OrderStatus.Hidden ? triggerTicks ?? order.TriggerPrice : priceTicks ?? order.Price) ??
                 throw new InvalidOperationException("missing price");
 
-            // Called before order.Update() below, so the order still carries the price it
-            // currently rests at - which is what Reprice moves it off.
+            // Reprice reads back the tick the ladder filed the order under rather than its
+            // current Price, so this no longer has to run before order.Update() to be correct.
+            // Still does, because the level correction below depends on the order having already
+            // arrived at its new level.
             _matcher.Reprice(order, updatedPriceTicks);
         }
 
@@ -565,6 +599,10 @@ public class OrderBook : IOrderBook
         // bumped above - is where ExchangeOrderId (derived from SequenceNumber) actually changes.
         var previousExchangeOrderId = order.ExchangeOrderId;
         order.Update(sequenceNumber, time, newTotalQuantity, triggerTicks, priceTicks, clientOrderId);
+
+        // After any Reprice above, so this corrects the level the order now rests at rather than
+        // the one it left - Reprice moved it there still showing its pre-update size.
+        _matcher.SyncDisplayed(order, previousQuantity);
         _clientOrderIndex[(companyId, clientOrderId)] = order;
 
         List<OrderBookEvent> events = new();
@@ -884,13 +922,18 @@ public class OrderBook : IOrderBook
                 order.Fill(time, quantity);
         }
 
+        // SyncDisplayed before FinishFill, not after: FinishFill can unrest the order, and
+        // removing it backs out whatever it is displaying then - so a level still carrying the
+        // pre-fill size would have the fill taken off it twice.
         var restingDisplayed = resting.DisplayedQuantity;
         FillOrder(resting);
+        _matcher.SyncDisplayed(resting, restingDisplayed);
         var restingSnapshot = resting.ToOrder();
         var restingReplenish = FinishFill(resting, time);
 
         var aggressorDisplayed = aggressor.DisplayedQuantity;
         FillOrder(aggressor);
+        _matcher.SyncDisplayed(aggressor, aggressorDisplayed);
         var aggressorSnapshot = aggressor.ToOrder();
         var aggressorReplenish = FinishFill(aggressor, time);
 

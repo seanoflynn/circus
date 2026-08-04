@@ -19,7 +19,7 @@ namespace Circus.MarketData;
 // shows this as the old id leaving the book and a new one arriving at the back of the queue,
 // since a consumer reconstructing time priority needs to see that, not just a quantity/price
 // change against an id that kept its place.
-public class FullBookDataProducer : IDataProducer<OrderBookDeltaEvent>
+public class FullBookDataProducer : IIncrementalProducer<OrderBookDeltaEvent>
 {
     public IList<OrderBookDeltaEvent> Process(IReadOnlyList<OrderBookEvent> events)
     {

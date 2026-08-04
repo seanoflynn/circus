@@ -7,4 +7,7 @@ internal interface IReadOnlyPriceLadder
     bool TryGetBest(out long tick, out InternalOrder? firstOrder);
 
     IEnumerable<(long Tick, InternalOrder First, int Count)> EnumerateFromBest();
+
+    // Aggregated depth rather than orders - see PriceLadder for why the two are separate walks.
+    IEnumerable<(long Tick, int Quantity, int Count)> EnumerateLevelsFromBest(int maxLevels);
 }

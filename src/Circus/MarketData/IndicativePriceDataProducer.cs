@@ -9,7 +9,7 @@ namespace Circus.MarketData;
 //
 // A null Price withdraws the quote (the book stopped crossing, or the auction ended), which a
 // subscriber must publish as such rather than leaving the last price standing.
-public class IndicativePriceDataProducer : IDataProducer<IndicativePriceDataEvent>
+public class IndicativePriceDataProducer : IIncrementalProducer<IndicativePriceDataEvent>
 {
     public IList<IndicativePriceDataEvent> Process(IReadOnlyList<OrderBookEvent> events)
     {
