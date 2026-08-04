@@ -5,9 +5,9 @@ namespace Circus.Agents;
 // an impatient one churning at the touch - without any of them being a different type.
 //
 // The probabilities are independent draws, not weights that share a budget: a tick can cancel,
-// reprice, cross and quote, or do none of those. That is the opposite of how SimulatorOptions
-// read, where the weights were cut-offs carving up a single roll, and it is the more useful shape
-// here because the behaviours are not alternatives to each other.
+// reprice, cross and quote, or do none of those. Weights carving up a single roll would make the
+// behaviours alternatives to each other, which they are not - an agent that repriced a quote has
+// not thereby decided against adding one.
 public record LiquidityAgentOptions(
     // Where to quote around before the market has said anything - no mid, no last trade. Aligned
     // to the instrument's tick before use.

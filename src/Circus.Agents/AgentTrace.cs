@@ -25,8 +25,8 @@ namespace Circus.Agents;
 public static class AgentTrace
 {
     // The instant the first recorded action lands on. Fixed rather than read from a clock, since a
-    // trace is supposed to reproduce from its seed alone - and it is the same 09:00 the simulator
-    // used, so the schedules its consumers built around it still hold.
+    // trace is supposed to reproduce from its seed alone - and 09:00 in particular because every
+    // consumer of a recording puts its own schedule's boundaries either side of that.
     private static readonly DateTime Epoch = new(2000, 1, 1, 9, 0, 0, DateTimeKind.Utc);
 
     private static readonly TimeSpan Step = TimeSpan.FromMilliseconds(1);

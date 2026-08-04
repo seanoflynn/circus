@@ -162,8 +162,9 @@ public class LiquidityAgentTests
     public void ALoneAgent_IsNeverRefusedAnything()
     {
         // No other participant, so nothing can race it: every action it sends is one the venue
-        // should accept. This is the property the simulator's shadow book existed to provide,
-        // now checked against the real venue rather than assumed.
+        // should accept. A generator keeping a private copy of the book would have this by
+        // construction; an agent has it only if it read its own events properly, so it is
+        // checked against the real venue rather than assumed.
         var venue = new Venue(Gold);
         var agent = new Recording(Agent("MM", new LiquidityAgentOptions(), 3, Gold));
         venue.Swarm.Add(agent);

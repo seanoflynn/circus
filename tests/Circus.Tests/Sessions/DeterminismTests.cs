@@ -119,8 +119,9 @@ public class DeterminismTests
     }
 
     // A varied but fixed action sequence: resting orders on both sides, updates, cancels, and
-    // orders that cross and print. Built here rather than by OrderFlowSimulator, which lives in
-    // a project this one does not reference.
+    // orders that cross and print. Built here rather than recorded from agents, so the flow this
+    // claim is being made over is visible in the file making it rather than being a function of
+    // somebody else's seed.
     private static IReadOnlyList<OrderBookAction> Trace()
     {
         var actions = new List<OrderBookAction>();

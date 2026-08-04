@@ -101,8 +101,8 @@ public class AgentTraceTests
         var trace = AgentTrace.Record(new[] {Gold, Silver}, 600, seed: 9);
 
         // an update or cancel naming an order that never existed would be routed to the book and
-        // refused - which is what the simulator kept a shadow book to avoid, and what an agent
-        // avoids by tracking its own events
+        // refused. A generator rolling dice needs a private copy of the book to avoid that; an
+        // agent avoids it by having watched its own events.
         var known = new HashSet<(string Symbol, string CompanyId, string ClientOrderId)>();
 
         foreach (var action in trace)
@@ -140,9 +140,9 @@ public class AgentTraceTests
     {
         var trace = AgentTrace.Record(Gold, 400, seed: 11);
 
-        // the simulator minted a fresh company for every order, which put self-match prevention,
-        // inventory and anything else about a participant out of reach. A recording carries the
-        // agents that wrote it.
+        // a recording carries the agents that wrote it, so a company means something across the
+        // whole of it. A generator minting a fresh company per order would put self-match
+        // prevention, inventory and anything else about a participant out of reach.
         Assert.That(trace.OfType<OrderAction>().Select(a => a.CompanyId).Distinct().Count(),
             Is.EqualTo(2));
     }
