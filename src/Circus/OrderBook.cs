@@ -1,5 +1,6 @@
 using Circus.Actions;
 using Circus.Events;
+using Circus.MarketData;
 using Circus.Matching;
 using Circus.Restrictions;
 
@@ -13,7 +14,7 @@ namespace Circus;
 // A pure function of the actions it is given: it reads no clock and consults nothing ambient,
 // so the same actions always produce the same events. Time arrives stamped on each action -
 // see TimestampingOrderBook for the boundary that does the stamping.
-public class OrderBook : IOrderBook
+public class OrderBook : IOrderBook, IBookView
 {
     private readonly Instrument _instrument;
 
@@ -399,6 +400,26 @@ public class OrderBook : IOrderBook
     }
 
     private decimal ToDecimal(long ticks) => ticks * _instrument.TickSize;
+
+    // The ladders already carry the aggregate, so this reads it rather than computing it: the
+    // running totals are maintained as orders rest, fill and leave.
+    //
+    // The iceberg cases come out right here without special-casing. An auction print can trade
+    // straight through a peak into the reserve, leaving the order displaying a fresh peak and
+    // firing no requeue event; a producer deriving depth has to reconstruct that from the change
+    // in displayed size across the fill, which is why FillOrderConfirmed carries
+    // PreviousDisplayedQuantity at all. Reading the level, there is nothing to reconstruct.
+    public IReadOnlyList<Level> GetLevels(Side side, int maxLevels)
+    {
+        if (maxLevels <= 0)
+            return Array.Empty<Level>();
+
+        var levels = new List<Level>(maxLevels);
+        foreach (var (tick, quantity, count) in _matcher.Working[side].EnumerateLevelsFromBest(maxLevels))
+            levels.Add(new Level(ToDecimal(tick), quantity, count));
+
+        return levels;
+    }
 
     private bool TryGetLimitPrice(Side side, int protectionTicks, out long? priceTicks)
     {

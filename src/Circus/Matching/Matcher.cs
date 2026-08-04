@@ -51,14 +51,14 @@ internal sealed class Matcher
 
     public void Rest(InternalOrder order) => LadderFor(order).Add(RestingPriceOf(order), order);
 
-    public void Unrest(InternalOrder order) => LadderFor(order).Remove(RestingPriceOf(order), order);
+    public void Unrest(InternalOrder order) => LadderFor(order).Remove(order);
 
     // Lands at the back of the new level. Passing the price it already rests at requeues it in
     // place, which is what a quantity increase needs - losing time priority is the point.
     public void Reprice(InternalOrder order, long newPriceTicks)
     {
         var ladder = LadderFor(order);
-        ladder.Remove(RestingPriceOf(order), order);
+        ladder.Remove(order);
         ladder.Add(newPriceTicks, order);
     }
 

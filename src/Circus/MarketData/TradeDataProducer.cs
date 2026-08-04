@@ -14,7 +14,7 @@ namespace Circus.MarketData;
 // The last id is kept across calls, not just within one. A trade's fills always arrive in the
 // same batch, so this only matters for the pathological case of a trade id repeating across
 // consecutive batches, which the book's forward-only numbering already rules out.
-public class TradeDataProducer : IDataProducer<TradeDataEvent>
+public class TradeDataProducer : IIncrementalProducer<TradeDataEvent>
 {
     private string? _lastTradeId;
 

@@ -15,7 +15,7 @@ namespace Circus.MarketData;
 //
 // Starts where a book starts - closed, nothing pending, no limit - so the first status change
 // is a change from something true rather than from a guess.
-public class InstrumentStatusDataProducer : IDataProducer<InstrumentStatusDataEvent>
+public class InstrumentStatusDataProducer : IIncrementalProducer<InstrumentStatusDataEvent>
 {
     private OrderBookStatus _status = OrderBookStatus.Closed;
     private OrderBookStatusChangeReason _reason = OrderBookStatusChangeReason.Requested;
