@@ -34,20 +34,37 @@ public sealed class LevelBook
 
     public decimal? BestOffer => _offerLevels.Count > 0 ? _offerLevels[0].Price : null;
 
-    public void Apply(MarketByPriceDeltaEvent delta)
+    // The whole message or none of it. A book update carrying several levels is one step from one
+    // consistent state to another, and applying it a level at a time would leave anything reading
+    // this between them looking at a book that never existed - a swept level gone with the
+    // aggressor's remainder not yet arrived.
+    public void Apply(MarketByPriceDeltaEvent message)
     {
-        ArgumentNullException.ThrowIfNull(delta);
+        ArgumentNullException.ThrowIfNull(message);
 
-        var side = delta.Side == Side.Buy ? _bids : _offers;
+        var touchedBids = false;
+        var touchedOffers = false;
 
-        if (delta.Action == MarketByPriceDeltaAction.Removed)
-            side.Remove(delta.Price);
-        else
-            side[delta.Price] = (delta.Quantity, delta.Count);
+        foreach (var change in message.Changes)
+        {
+            var side = change.Side == Side.Buy ? _bids : _offers;
 
-        if (delta.Side == Side.Buy)
+            if (change.Action == MarketByPriceDeltaAction.Removed)
+                side.Remove(change.Price);
+            else
+                side[change.Price] = (change.Quantity, change.Count);
+
+            if (change.Side == Side.Buy)
+                touchedBids = true;
+            else
+                touchedOffers = true;
+        }
+
+        // Rebuilt once per message rather than per change, so a sweep across a side costs one
+        // rebuild however many levels it moved.
+        if (touchedBids)
             _bidLevels = Materialize(_bids);
-        else
+        if (touchedOffers)
             _offerLevels = Materialize(_offers);
     }
 

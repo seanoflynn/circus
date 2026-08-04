@@ -10,9 +10,14 @@ public class LevelBookTests
 {
     private static readonly DateTime Now = new(2000, 1, 1, 12, 0, 0);
 
+    // A message carrying one change, which is what most of these are about. Message() below
+    // carries several, for the cases that are about a message being applied as a whole.
     private static MarketByPriceDeltaEvent Delta(Side side, decimal price, int quantity, int count,
         MarketByPriceDeltaAction action, int levelIndex = 1) =>
-        new("GCZ6", Now, side, levelIndex, price, quantity, count, action);
+        Message(new MarketByPriceDelta(side, levelIndex, price, quantity, count, action));
+
+    private static MarketByPriceDeltaEvent Message(params MarketByPriceDelta[] changes) =>
+        new("GCZ6", Now, changes);
 
     [Test]
     public void ANewBook_IsEmpty()
@@ -97,6 +102,26 @@ public class LevelBookTests
         Assert.AreEqual(1, book.Bids.Count);
         Assert.AreEqual(7, book.Bids[0].Quantity, "applied twice, counted once");
         Assert.AreEqual(2, book.Bids[0].Count);
+    }
+
+    // What batching is for: one message moves the book from one consistent state to another, and
+    // a reader never sees the half of it.
+    [Test]
+    public void AMessageMovingSeveralLevels_AppliesAllOfThem()
+    {
+        var book = new LevelBook();
+        book.Apply(Message(
+            new MarketByPriceDelta(Side.Sell, 1, 100, 2, 1, MarketByPriceDeltaAction.Added),
+            new MarketByPriceDelta(Side.Sell, 2, 110, 3, 1, MarketByPriceDeltaAction.Added)));
+
+        book.Apply(Message(
+            new MarketByPriceDelta(Side.Sell, 1, 100, 0, 0, MarketByPriceDeltaAction.Removed),
+            new MarketByPriceDelta(Side.Sell, 1, 110, 0, 0, MarketByPriceDeltaAction.Removed),
+            new MarketByPriceDelta(Side.Buy, 1, 90, 4, 1, MarketByPriceDeltaAction.Added)));
+
+        Assert.IsEmpty(book.Offers, "both swept levels gone");
+        Assert.AreEqual(new[] {90m}, book.Bids.Select(l => l.Price).ToArray(),
+            "and the far side of the same message applied too");
     }
 
     [Test]

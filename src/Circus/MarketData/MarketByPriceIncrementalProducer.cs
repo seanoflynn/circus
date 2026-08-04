@@ -11,21 +11,32 @@ namespace Circus.MarketData;
 // previous LevelDataProducer did - and why it could never resync after a missed event.
 public class MarketByPriceIncrementalProducer : IIncrementalProducer<MarketByPriceDeltaEvent>
 {
+    // One message per dispatch, carrying every level that moved, rather than one per level - see
+    // MarketByPriceDeltaEvent for why a book update is the unit. The book reports the levels
+    // singly and this composes them, which is the same division as fills and the trade print.
+    //
+    // A dispatch is one action's events, so gathering across the batch is gathering exactly what
+    // that action did.
     public IList<MarketByPriceDeltaEvent> Process(IReadOnlyList<OrderBookEvent> events)
     {
-        List<MarketByPriceDeltaEvent>? output = null;
+        List<MarketByPriceDelta>? changes = null;
 
         foreach (var ev in events)
         {
             if (ev is not LevelChanged level)
                 continue;
 
-            output ??= new List<MarketByPriceDeltaEvent>();
-            output.Add(new MarketByPriceDeltaEvent(level.Symbol, level.Time, level.Side, level.LevelIndex,
-                level.Price, level.Quantity, level.Count, ToAction(level.Action)));
+            changes ??= new List<MarketByPriceDelta>();
+            changes.Add(new MarketByPriceDelta(level.Side, level.LevelIndex, level.Price, level.Quantity,
+                level.Count, ToAction(level.Action)));
         }
 
-        return output ?? (IList<MarketByPriceDeltaEvent>) Array.Empty<MarketByPriceDeltaEvent>();
+        if (changes == null)
+            return Array.Empty<MarketByPriceDeltaEvent>();
+
+        // Both carried by every event in the batch: one dispatch is one instrument at one instant.
+        var first = events[0];
+        return new[] {new MarketByPriceDeltaEvent(first.Symbol, first.Time, changes)};
     }
 
     // The two enums are deliberately separate rather than one shared between the book's events and
