@@ -29,7 +29,7 @@ public class InstrumentFeedTests
 
         // assert
         Assert.IsNotEmpty(data.OfType<TradeDataEvent>());
-        Assert.IsNotEmpty(data.OfType<LevelsDataEvent>());
+        Assert.IsNotEmpty(data.OfType<MarketByPriceDeltaEvent>());
         Assert.IsNotEmpty(data.OfType<OrderBookDeltaEvent>());
     }
 
@@ -83,7 +83,7 @@ public class InstrumentFeedTests
         // what a subscriber gets. Fixed, so it is the same on every run.
         var kinds = data.Select(d => d.GetType().Name).Distinct().ToList();
         Assert.AreEqual(
-            new[] {nameof(TradeDataEvent), nameof(LevelsDataEvent), nameof(OrderBookDeltaEvent)},
+            new[] {nameof(TradeDataEvent), nameof(MarketByPriceDeltaEvent), nameof(OrderBookDeltaEvent)},
             kinds);
     }
 
@@ -98,6 +98,6 @@ public class InstrumentFeedTests
     private static (InstrumentFeed Feed, IOrderBook Book) Feed()
     {
         var book = new TimestampingOrderBook(Gold, new ManualClock(Now1));
-        return (new InstrumentFeed(Gold.Symbol, maxLevels: 10), book);
+        return (new InstrumentFeed(Gold.Symbol), book);
     }
 }

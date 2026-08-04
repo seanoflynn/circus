@@ -41,7 +41,10 @@ public sealed class MarketView
 // agent quoting ten deep off a five-deep feed is guessing about the other five, and should be.
 public sealed class InstrumentView
 {
-    private static readonly IReadOnlyList<Level> NoLevels = Array.Empty<Level>();
+    // Depth is rebuilt from the incremental feed rather than handed over whole, because that is
+    // what the feed carries: the venue publishes each level as it moves, and a subscriber wanting
+    // a ladder keeps one. Aggregation belongs on this side of the wire.
+    private readonly LevelBook _levels = new();
 
     internal InstrumentView(string symbol)
     {
@@ -54,13 +57,13 @@ public sealed class InstrumentView
     // clock reading: an agent's sense of time comes from the venue, like everything else it knows.
     public DateTime Time { get; private set; }
 
-    public IReadOnlyList<Level> Bids { get; private set; } = NoLevels;
+    public IReadOnlyList<Level> Bids => _levels.Bids;
 
-    public IReadOnlyList<Level> Offers { get; private set; } = NoLevels;
+    public IReadOnlyList<Level> Offers => _levels.Offers;
 
-    public decimal? BestBid => Bids.Count > 0 ? Bids[0].Price : null;
+    public decimal? BestBid => _levels.BestBid;
 
-    public decimal? BestOffer => Offers.Count > 0 ? Offers[0].Price : null;
+    public decimal? BestOffer => _levels.BestOffer;
 
     // Null unless both sides are quoting. A one-sided book has no mid, and inventing one from the
     // side that is there would be an agent's own assumption rather than something the feed said.
@@ -100,11 +103,8 @@ public sealed class InstrumentView
 
         switch (data)
         {
-            case LevelsDataEvent levels:
-                // Held by reference: the level producer builds a fresh snapshot per message
-                // rather than handing out a buffer it goes on writing to.
-                Bids = levels.Bids;
-                Offers = levels.Offers;
+            case MarketByPriceDeltaEvent level:
+                _levels.Apply(level);
                 break;
 
             case TradeDataEvent trade:

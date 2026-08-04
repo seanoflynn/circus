@@ -39,14 +39,15 @@ public static class ReplayExample
         Console.WriteLine($"  {trace.Count} actions produced {data.Count} channel messages");
         Console.WriteLine($"  {trades.Count} trades, {trades.Sum(t => t.Quantity)} lots");
 
-        // The last depth message is the book a subscriber would be holding when the trace runs
-        // out - rebuilt from the event stream alone, since nothing ever asked the book what it
-        // was holding.
-        if (data.OfType<LevelsDataEvent>().LastOrDefault() is { } levels)
-        {
-            Console.WriteLine($"  best bid   {Top(levels.Bids)}");
-            Console.WriteLine($"  best offer {Top(levels.Offers)}");
-        }
+        // The book a subscriber would be holding when the trace runs out, rebuilt by applying
+        // every depth message the channel published - which is all a subscriber ever gets, and
+        // the whole of what it can know. Nothing here asks the book what it was holding.
+        var levels = new LevelBook();
+        foreach (var delta in data.OfType<MarketByPriceDeltaEvent>())
+            levels.Apply(delta);
+
+        Console.WriteLine($"  best bid   {Top(levels.Bids)}");
+        Console.WriteLine($"  best offer {Top(levels.Offers)}");
     }
 
     private static string Top(IReadOnlyList<Level> levels) =>

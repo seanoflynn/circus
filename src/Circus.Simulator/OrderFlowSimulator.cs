@@ -221,9 +221,11 @@ public sealed class OrderFlowSimulator
     {
         private readonly OrderBook _shadowBook;
 
-        // The touch, rebuilt from the shadow book's events the same way any market data consumer
-        // would - the book itself answers no questions about its levels.
-        private readonly LevelDataProducer _touch = new(1);
+        // The touch, rebuilt from the shadow book's feed the same way any market data consumer
+        // would - through the published deltas rather than by asking the book, which is the whole
+        // point of the shadow book being here at all.
+        private readonly MarketByPriceIncrementalProducer _byPrice = new();
+        private readonly LevelBook _levels = new();
 
         // Keyed by ClientOrderId, not ExchangeOrderId - the latter no longer stays constant for
         // an order's whole life (a reprice, a quantity increase, or an iceberg peak refilling
@@ -238,14 +240,13 @@ public sealed class OrderFlowSimulator
         public BookState(Instrument instrument, DateTime openedAt)
         {
             Instrument = instrument;
-            Levels = new LevelsDataEvent(instrument.Symbol, default, Array.Empty<Level>(), Array.Empty<Level>());
             _shadowBook = new OrderBook(instrument);
             _shadowBook.Process(new OpenTrading {Symbol = instrument.Symbol, Time = openedAt});
         }
 
         public Instrument Instrument { get; }
 
-        public LevelsDataEvent Levels { get; private set; }
+        public LevelBook Levels => _levels;
 
         public bool HasLive => _liveIds.Count > 0;
 
@@ -255,8 +256,8 @@ public sealed class OrderFlowSimulator
         {
             var events = _shadowBook.Process(action);
 
-            foreach (var levels in _touch.Process(events))
-                Levels = levels;
+            foreach (var level in _byPrice.Process(events))
+                _levels.Apply(level);
 
             foreach (var e in events)
             {

@@ -67,10 +67,10 @@ public class ChannelFromDispatchTests
         sequencer.Add(new OrderBook(Silver), OpenThroughout());
 
         var goldChannel = new MarketDataChannel();
-        goldChannel.Add(new InstrumentFeed(Gold.Symbol, maxLevels: 10));
+        goldChannel.Add(new InstrumentFeed(Gold.Symbol));
 
         var silverChannel = new MarketDataChannel();
-        silverChannel.Add(new InstrumentFeed(Silver.Symbol, maxLevels: 10));
+        silverChannel.Add(new InstrumentFeed(Silver.Symbol));
 
         var trace = new OrderFlowSimulator(new[] {Gold, Silver}, seed: 22).Generate(400);
 
@@ -129,12 +129,7 @@ public class ChannelFromDispatchTests
         return rendered;
     }
 
-    // Rendered rather than compared directly: LevelsDataEvent holds its ladders in lists, and a
-    // record's generated equality compares those by reference.
-    private static string Describe(MarketDataEvent data) => data switch
-    {
-        LevelsDataEvent levels =>
-            $"Levels {levels.Time:O} [{string.Join(",", levels.Bids)}] [{string.Join(",", levels.Offers)}]",
-        _ => data.ToString()!
-    };
+    // Every published message carries only scalars now that depth arrives a level at a time, so a
+    // record's own ToString is faithful and its equality is by value.
+    private static string Describe(MarketDataEvent data) => data.ToString()!;
 }

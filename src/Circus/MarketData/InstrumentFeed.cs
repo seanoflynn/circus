@@ -5,30 +5,29 @@ namespace Circus.MarketData;
 // Everything a venue publishes about one instrument, assembled in one place. A book's events go
 // in, the messages a subscriber would receive come out.
 //
-// One bundle per instrument, created before that book processes its first action: the level, depth
-// and status producers inside it are each stateful and none can resync after a missed event.
+// One bundle per instrument. Only the status producer still accumulates anything - the rest are
+// pure functions of the events they are handed, since the book now reports which price levels
+// moved rather than leaving a producer to work it out by shadowing the book.
 //
-// One level producer at one depth, unlike the several a caller might otherwise run side by side.
-// Two LevelsDataEvent streams at different depths are indistinguishable once merged into a
-// channel, so depth is a property of the feed rather than something stacked within it - which is
-// also how a venue does it, publishing a five-deep and a ten-deep product as two feeds rather
-// than one carrying both.
+// No depth to configure. Every by-price product here is ten deep, fixed in the book that reports
+// the levels, as CME's futures books are. Two depth streams merged into one channel would be
+// indistinguishable anyway, so a venue publishing a five-deep and a ten-deep product does it as
+// two feeds rather than one carrying both.
 //
 // A venue separating market-by-price from market-by-order would compose its own bundle rather
 // than use this: both are here, which is the useful default for a simulator and more than a real
 // depth feed carries.
 public sealed class InstrumentFeed
 {
-    private readonly LevelDataProducer _levels;
+    private readonly MarketByPriceIncrementalProducer _levels = new();
     private readonly FullBookDataProducer _orderByOrder = new();
     private readonly TradeDataProducer _trades = new();
     private readonly IndicativePriceDataProducer _indicative = new();
     private readonly InstrumentStatusDataProducer _status = new();
 
-    public InstrumentFeed(string symbol, int maxLevels)
+    public InstrumentFeed(string symbol)
     {
         Symbol = symbol ?? throw new ArgumentNullException(nameof(symbol));
-        _levels = new LevelDataProducer(maxLevels);
     }
 
     public string Symbol { get; }

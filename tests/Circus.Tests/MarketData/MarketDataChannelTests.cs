@@ -133,14 +133,14 @@ public class MarketDataChannelTests
     {
         var channel = Channel(Gold);
 
-        Assert.Throws<ArgumentException>(() => channel.Add(new InstrumentFeed(Gold.Symbol, maxLevels: 10)));
+        Assert.Throws<ArgumentException>(() => channel.Add(new InstrumentFeed(Gold.Symbol)));
     }
 
     private static MarketDataChannel Channel(params Instrument[] instruments)
     {
         var channel = new MarketDataChannel();
         foreach (var instrument in instruments)
-            channel.Add(new InstrumentFeed(instrument.Symbol, maxLevels: 10));
+            channel.Add(new InstrumentFeed(instrument.Symbol));
 
         return channel;
     }
