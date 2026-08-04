@@ -10,6 +10,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Circus.Simulator", "src\Cir
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Circus.Benchmarks", "benchmarks\Circus.Benchmarks\Circus.Benchmarks.csproj", "{9AAADD20-6473-4A0D-BA43-CE936C83435F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Circus.Agents", "src\Circus.Agents\Circus.Agents.csproj", "{2B8E4C21-6F0A-4D3E-9C57-1A4F0B9D6E88}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -80,6 +82,18 @@ Global
 		{9AAADD20-6473-4A0D-BA43-CE936C83435F}.Release|x64.Build.0 = Release|Any CPU
 		{9AAADD20-6473-4A0D-BA43-CE936C83435F}.Release|x86.ActiveCfg = Release|Any CPU
 		{9AAADD20-6473-4A0D-BA43-CE936C83435F}.Release|x86.Build.0 = Release|Any CPU
+		{2B8E4C21-6F0A-4D3E-9C57-1A4F0B9D6E88}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2B8E4C21-6F0A-4D3E-9C57-1A4F0B9D6E88}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2B8E4C21-6F0A-4D3E-9C57-1A4F0B9D6E88}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{2B8E4C21-6F0A-4D3E-9C57-1A4F0B9D6E88}.Debug|x64.Build.0 = Debug|Any CPU
+		{2B8E4C21-6F0A-4D3E-9C57-1A4F0B9D6E88}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{2B8E4C21-6F0A-4D3E-9C57-1A4F0B9D6E88}.Debug|x86.Build.0 = Debug|Any CPU
+		{2B8E4C21-6F0A-4D3E-9C57-1A4F0B9D6E88}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2B8E4C21-6F0A-4D3E-9C57-1A4F0B9D6E88}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2B8E4C21-6F0A-4D3E-9C57-1A4F0B9D6E88}.Release|x64.ActiveCfg = Release|Any CPU
+		{2B8E4C21-6F0A-4D3E-9C57-1A4F0B9D6E88}.Release|x64.Build.0 = Release|Any CPU
+		{2B8E4C21-6F0A-4D3E-9C57-1A4F0B9D6E88}.Release|x86.ActiveCfg = Release|Any CPU
+		{2B8E4C21-6F0A-4D3E-9C57-1A4F0B9D6E88}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!-- TargetFramework, Nullable and IsPackable=false come from Directory.Build.props. -->
+
+    <ItemGroup>
+      <ProjectReference Include="..\Circus\Circus.csproj" />
+    </ItemGroup>
+
+</Project>
