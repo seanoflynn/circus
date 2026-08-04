@@ -14,7 +14,7 @@ namespace Circus;
 // A pure function of the actions it is given: it reads no clock and consults nothing ambient,
 // so the same actions always produce the same events. Time arrives stamped on each action -
 // see TimestampingOrderBook for the boundary that does the stamping.
-public class OrderBook : IOrderBook, IBookView
+public class OrderBook : IOrderBook
 {
     private readonly Instrument _instrument;
 
@@ -401,15 +401,26 @@ public class OrderBook : IOrderBook, IBookView
 
     private decimal ToDecimal(long ticks) => ticks * _instrument.TickSize;
 
-    // The ladders already carry the aggregate, so this reads it rather than computing it: the
-    // running totals are maintained as orders rest, fill and leave.
+    // Internal on purpose, and not on IOrderBook. Process is the whole public API of a book:
+    // everything a consumer knows arrives as an event, so a market data feed can be rebuilt from
+    // a journal of those events with no book involved. A query method in the public surface
+    // breaks that twice over - it lets a consumer read state that never crossed the feed, and it
+    // would make a snapshot built by calling it unreproducible from the journal, since the call
+    // leaves no trace in the event stream.
     //
-    // The iceberg cases come out right here without special-casing. An auction print can trade
-    // straight through a peak into the reserve, leaving the order displaying a fresh peak and
-    // firing no requeue event; a producer deriving depth has to reconstruct that from the change
-    // in displayed size across the fill, which is why FillOrderConfirmed carries
-    // PreviousDisplayedQuantity at all. Reading the level, there is nothing to reconstruct.
-    public IReadOnlyList<Level> GetLevels(Side side, int maxLevels)
+    // The snapshot feed needs this aggregate, but it reaches it the same way everything else
+    // does: a snapshot tick dispatches an action, and the book answers with an event carrying
+    // the image. This is how the book builds that image, which makes it an implementation
+    // detail rather than a seam. Visible to the tests, which assert the aggregate directly.
+    //
+    // The ladders already carry the totals, maintained as orders rest, fill and leave, so this
+    // reads them rather than computing them. The iceberg cases come out right without
+    // special-casing: an auction print can trade straight through a peak into the reserve,
+    // leaving the order displaying a fresh peak and firing no requeue event, which a producer
+    // deriving depth has to reconstruct from the change in displayed size across the fill. That
+    // is why FillOrderConfirmed carries PreviousDisplayedQuantity at all. Reading the level,
+    // there is nothing to reconstruct.
+    internal IReadOnlyList<Level> GetLevels(Side side, int maxLevels)
     {
         if (maxLevels <= 0)
             return Array.Empty<Level>();

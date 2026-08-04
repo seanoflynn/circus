@@ -2,19 +2,31 @@ using Circus.Events;
 
 namespace Circus.MarketData;
 
-// Turns a book's events into what a subscriber sees change. A pure function of the event stream
-// and nothing else: no incremental producer is handed the book, because everything a consumer
-// knows is derived from the events rather than queried back out of it - which is also what lets
-// market data be rebuilt from a journal of those events, with no books involved at all.
+// Turns a book's events into what a subscriber sees. A pure function of the event stream and
+// nothing else: no producer is handed the book, because everything a consumer knows is derived
+// from the events rather than queried back out of it - which is also what lets market data be
+// rebuilt from a journal of those events, with no books involved at all.
 //
-// The counterpart is ISnapshotProducer, which is handed the book precisely because a snapshot
-// cannot be derived that way. The split is the one CME and Eurex publish along: an incremental
-// feed carrying changes, and a separate snapshot feed carrying state, with the second existing so
-// a subscriber can start or restart against the first.
+// That holds for snapshots too, which is why there is no second interface here for them. A
+// snapshot is a statement of current state, and the temptation is to build one by reading the
+// book - but a snapshot produced that way leaves no trace in the event stream and so cannot be
+// reproduced by replaying it, which costs more than it saves. Instead a snapshot tick dispatches
+// an action like any other, and the book answers with an event carrying the image; the producer
+// that publishes it is an ordinary implementation of this interface reading an ordinary event.
 //
-// Most implementations hold no state at all. Those that do (InstrumentStatusDataProducer, which
-// accumulates a composite no single event carries) hold only what one instrument's stream implies,
-// and the snapshot feed is what lets a subscriber recover it after a missed event.
+// Most implementations hold no state. Those that do - InstrumentStatusDataProducer accumulates a
+// composite no single event carries, and the by-price producer tracks the window it last
+// published - cannot rebuild it after a missed event, and are not expected to. That is what the
+// snapshot feed is for, and it is how the real feeds solve the same problem: CME and Eurex both
+// publish incremental changes on one stream and periodic full state on another, so a subscriber
+// joining mid-session or recovering from a detected gap starts from something true rather than
+// replaying a session it never saw.
+//
+// The join is made on a sequence number: a snapshot says which incremental message it is
+// consistent as of - CME calls it LastMsgSeqNumProcessed - and a subscriber buffers the
+// incremental stream, waits for a snapshot, applies it, discards the buffered messages up to and
+// including that number, then applies the rest. The channel stamps it at publish time, since the
+// channel is what knows its own sequence.
 public interface IIncrementalProducer<T> where T : MarketDataEvent
 {
     IList<T> Process(IReadOnlyList<OrderBookEvent> events);

@@ -7,6 +7,10 @@ namespace Circus.Tests.MarketData;
 // OrderBook.GetLevels reads the aggregate the price ladders maintain as orders rest, fill and
 // leave, rather than deriving it from the event stream the way LevelDataProducer does.
 //
+// Internal rather than public, and asserted here directly, because it is how the book will build
+// the image a snapshot tick asks it for - not a seam a consumer reaches through. Process stays
+// the only way anything outside learns what a book is holding.
+//
 // The two are independent implementations of the same answer, so most of this file is written as
 // a differential: drive a scenario, then assert the book and the producer agree. That is worth
 // more than either set of expected values on its own - a shared misunderstanding would have to be
