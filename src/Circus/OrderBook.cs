@@ -449,9 +449,33 @@ public class OrderBook : IOrderBook
     private BookSnapshot Snapshot(DateTime time) =>
         new(_instrument.Symbol, time,
             GetLevels(Side.Buy, PublishedDepth), GetLevels(Side.Sell, PublishedDepth),
+            GetRestingOrders(),
             _status, _statusReason, _resumeAt, _limitState,
             _indicativeQuote is { } quote ? ToDecimal(quote.PriceTicks) : null,
             _indicativeQuote?.Quantity ?? 0);
+
+    // Every order in the working book, best price outward and in queue order within a price -
+    // walking the ladders' own lists, so what comes out is the order the book would match in.
+    //
+    // The whole book rather than the published window, unlike the levels above: an order-by-order
+    // product exists to carry all of it. Untriggered stops rest in a separate ladder and are not
+    // in the working book, so they do not appear.
+    internal IReadOnlyList<RestingOrder> GetRestingOrders()
+    {
+        var orders = new List<RestingOrder>();
+
+        foreach (var side in new[] {Side.Buy, Side.Sell})
+        {
+            foreach (var (tick, first, _) in _matcher.Working[side].EnumerateFromBest())
+            {
+                for (var order = first; order != null; order = order.LevelNext)
+                    orders.Add(new RestingOrder(side, order.ExchangeOrderId, ToDecimal(tick),
+                        order.DisplayedQuantity));
+            }
+        }
+
+        return orders;
+    }
 
     private void CaptureWindow(List<(long Tick, int Quantity, int Count)> into, Side side) =>
         _matcher.Working[side].CopyLevelsFromBest(PublishedDepth, into);

@@ -20,7 +20,7 @@ namespace Circus.MarketData;
 public sealed class InstrumentFeed
 {
     private readonly MarketByPriceIncrementalProducer _levels = new();
-    private readonly FullBookDataProducer _orderByOrder = new();
+    private readonly MarketByOrderIncrementalProducer _orderByOrder = new();
     private readonly TradeDataProducer _trades = new();
     private readonly IndicativePriceDataProducer _indicative = new();
     private readonly InstrumentStatusDataProducer _status = new();
@@ -31,6 +31,7 @@ public sealed class InstrumentFeed
     private readonly MarketByPriceSnapshotProducer _levelsSnapshot = new();
     private readonly InstrumentStatusSnapshotProducer _statusSnapshot = new();
     private readonly IndicativePriceSnapshotProducer _indicativeSnapshot = new();
+    private readonly MarketByOrderSnapshotProducer _orderByOrderSnapshot = new();
 
     public InstrumentFeed(string symbol)
     {
@@ -74,6 +75,7 @@ public sealed class InstrumentFeed
 
         Collect(ref output, _statusSnapshot.Process(events));
         Collect(ref output, _levelsSnapshot.Process(events));
+        Collect(ref output, _orderByOrderSnapshot.Process(events));
         Collect(ref output, _indicativeSnapshot.Process(events));
 
         return output ?? (IReadOnlyList<MarketDataEvent>) Array.Empty<MarketDataEvent>();

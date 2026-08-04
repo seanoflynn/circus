@@ -77,3 +77,24 @@ public class IndicativePriceSnapshotProducer : IIncrementalProducer<IndicativePr
         return output ?? (IList<IndicativePriceDataEvent>) Array.Empty<IndicativePriceDataEvent>();
     }
 }
+
+// Every resting order, for a subscriber joining or recovering an order-by-order book. The
+// heaviest message this venue publishes, and the reason a real snapshot feed cycles slowly.
+public class MarketByOrderSnapshotProducer : IIncrementalProducer<OrdersDataEvent>
+{
+    public IList<OrdersDataEvent> Process(IReadOnlyList<OrderBookEvent> events)
+    {
+        List<OrdersDataEvent>? output = null;
+
+        foreach (var ev in events)
+        {
+            if (ev is not BookSnapshot snapshot)
+                continue;
+
+            output ??= new List<OrdersDataEvent>();
+            output.Add(new OrdersDataEvent(snapshot.Symbol, snapshot.Time, snapshot.Orders));
+        }
+
+        return output ?? (IList<OrdersDataEvent>) Array.Empty<OrdersDataEvent>();
+    }
+}

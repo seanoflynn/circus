@@ -1,6 +1,6 @@
 namespace Circus.MarketData;
 
-public enum OrderBookDeltaAction
+public enum MarketByOrderDeltaAction
 {
     Added,
     Modified,

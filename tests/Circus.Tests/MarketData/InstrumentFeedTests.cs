@@ -30,7 +30,7 @@ public class InstrumentFeedTests
         // assert
         Assert.IsNotEmpty(data.OfType<TradeDataEvent>());
         Assert.IsNotEmpty(data.OfType<MarketByPriceDeltaEvent>());
-        Assert.IsNotEmpty(data.OfType<OrderBookDeltaEvent>());
+        Assert.IsNotEmpty(data.OfType<MarketByOrderDeltaEvent>());
     }
 
     [Test]
@@ -83,7 +83,7 @@ public class InstrumentFeedTests
         // what a subscriber gets. Fixed, so it is the same on every run.
         var kinds = data.Select(d => d.GetType().Name).Distinct().ToList();
         Assert.AreEqual(
-            new[] {nameof(TradeDataEvent), nameof(MarketByPriceDeltaEvent), nameof(OrderBookDeltaEvent)},
+            new[] {nameof(TradeDataEvent), nameof(MarketByPriceDeltaEvent), nameof(MarketByOrderDeltaEvent)},
             kinds);
     }
 
