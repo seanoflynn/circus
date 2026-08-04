@@ -155,8 +155,14 @@ public sealed class Sequencer
     // The book's own resume time stays the authority throughout. This only pokes it on time.
     private void QueueInterruptionTicks(IReadOnlyList<OrderBookEvent> events, DateTime dispatchedAt)
     {
-        foreach (var status in events.OfType<StatusChanged>())
+        // Indexed rather than events.OfType<StatusChanged>(): a StatusChanged is present in a
+        // small fraction of dispatches, so this avoids an iterator allocation to find one that
+        // usually is not there.
+        for (var i = 0; i < events.Count; i++)
         {
+            if (events[i] is not StatusChanged status)
+                continue;
+
             // Strictly ahead: a deadline that has already arrived was served by the action that
             // set it, and a poke queued at the instant being dispatched would only spin.
             if (status.ResumesAt is { } resumesAt && resumesAt > dispatchedAt)

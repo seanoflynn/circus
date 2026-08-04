@@ -46,13 +46,19 @@ internal sealed class AuctionMatchingAlgorithm : IMatchingAlgorithm
         priceTicks = 0;
         quantity = 0;
 
+        // Uncrossed - or one-sided, which TryGetBest failing covers - declines here, off the
+        // ladders' own best-price cache rather than after materialising every level on both
+        // sides. Worth the extra check: this runs on every action a pre-open session sees, and
+        // an uncrossed book is the common state for most of it.
+        if (!working[Side.Buy].TryGetBest(out var bestBid, out _) ||
+            !working[Side.Sell].TryGetBest(out var bestAsk, out _) ||
+            bestBid < bestAsk)
+            return false;
+
         var buyLevels = working[Side.Buy].EnumerateFromBest()
             .Select(x => (Tick: x.Tick, Qty: SumRemaining(x.First))).ToList();
         var sellLevels = working[Side.Sell].EnumerateFromBest()
             .Select(x => (Tick: x.Tick, Qty: SumRemaining(x.First))).ToList();
-
-        if (buyLevels.Count == 0 || sellLevels.Count == 0 || buyLevels[0].Tick < sellLevels[0].Tick)
-            return false;
 
         var candidates = buyLevels.Select(l => l.Tick).Concat(sellLevels.Select(l => l.Tick)).Distinct();
 

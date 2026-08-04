@@ -147,28 +147,40 @@ internal sealed class Matcher
     // every trade, even repeatedly at one price, since an order an earlier StopsTriggered
     // already removed is not found again. Buy stops fire as price rises to their level and
     // sell stops as it falls, which is the direction each ladder is already ordered in.
+    //
+    // Gated on TryGetBest before enumerating either ladder: a single array read says whether
+    // that side's nearest stop is even in reach, and it almost never is - most trades touch
+    // nothing standing in either stop ladder, so the common case pays for two reads and no
+    // iterator rather than walking (and allocating an enumerator over) a ladder with nothing
+    // to find.
     private List<InternalOrder>? GatherTriggeredStops(long priceTicks)
     {
         SortedDictionary<long, InternalOrder>? triggered = null;
 
-        foreach (var (tick, first, _) in _stops[Side.Buy].EnumerateFromBest())
+        if (_stops[Side.Buy].TryGetBest(out var bestBuyStop, out _) && bestBuyStop <= priceTicks)
         {
-            if (tick > priceTicks)
-                break;
+            foreach (var (tick, first, _) in _stops[Side.Buy].EnumerateFromBest())
+            {
+                if (tick > priceTicks)
+                    break;
 
-            triggered ??= new SortedDictionary<long, InternalOrder>();
-            for (var order = first; order != null; order = order.LevelNext)
-                triggered.Add(order.SequenceNumber, order);
+                triggered ??= new SortedDictionary<long, InternalOrder>();
+                for (var order = first; order != null; order = order.LevelNext)
+                    triggered.Add(order.SequenceNumber, order);
+            }
         }
 
-        foreach (var (tick, first, _) in _stops[Side.Sell].EnumerateFromBest())
+        if (_stops[Side.Sell].TryGetBest(out var bestSellStop, out _) && bestSellStop >= priceTicks)
         {
-            if (tick < priceTicks)
-                break;
+            foreach (var (tick, first, _) in _stops[Side.Sell].EnumerateFromBest())
+            {
+                if (tick < priceTicks)
+                    break;
 
-            triggered ??= new SortedDictionary<long, InternalOrder>();
-            for (var order = first; order != null; order = order.LevelNext)
-                triggered.Add(order.SequenceNumber, order);
+                triggered ??= new SortedDictionary<long, InternalOrder>();
+                for (var order = first; order != null; order = order.LevelNext)
+                    triggered.Add(order.SequenceNumber, order);
+            }
         }
 
         return triggered?.Values.ToList();
