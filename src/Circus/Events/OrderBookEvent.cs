@@ -177,10 +177,12 @@ public record LevelsChanged(string Symbol, DateTime Time, IReadOnlyList<LevelCha
 // something true. That is what CME's snapshot does, carrying instrument status alongside the book.
 //
 // Levels are the published window, ten deep, in displayed size - the same aggregate LevelsChanged
-// reports moves to.
+// reports moves to. Orders are the whole working book, best price outward and in queue order
+// within a price, since an order-by-order product carries the book rather than a window.
 public record BookSnapshot(string Symbol, DateTime Time, IReadOnlyList<Level> Bids,
-        IReadOnlyList<Level> Offers, OrderBookStatus Status, OrderBookStatusChangeReason StatusReason,
-        DateTime? ResumesAt, Side? LimitState, decimal? IndicativePrice, int IndicativeQuantity)
+        IReadOnlyList<Level> Offers, IReadOnlyList<RestingOrder> Orders, OrderBookStatus Status,
+        OrderBookStatusChangeReason StatusReason, DateTime? ResumesAt, Side? LimitState,
+        decimal? IndicativePrice, int IndicativeQuantity)
     : OrderBookEvent(Symbol, Time)
 {
     // Spelled out for the reason LevelsChanged spells them out: a record's generated equality
@@ -198,7 +200,8 @@ public record BookSnapshot(string Symbol, DateTime Time, IReadOnlyList<Level> Bi
         && IndicativePrice == other.IndicativePrice
         && IndicativeQuantity == other.IndicativeQuantity
         && Bids.SequenceEqual(other.Bids)
-        && Offers.SequenceEqual(other.Offers);
+        && Offers.SequenceEqual(other.Offers)
+        && Orders.SequenceEqual(other.Orders);
 
     public override int GetHashCode() =>
         HashCode.Combine(Symbol, Time, Status, Bids.Count, Offers.Count, IndicativePrice);
