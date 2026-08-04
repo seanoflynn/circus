@@ -1,8 +1,8 @@
 using Circus.Actions;
+using Circus.Agents;
 using Circus.Events;
 using Circus.Sequencing;
 using Circus.Sessions;
-using Circus.Simulator;
 using Circus.Tests.Helpers;
 using NUnit.Framework;
 
@@ -57,15 +57,15 @@ public class ReplayTests
     {
         // arrange - a trace long enough, and mixed enough, that a difference in tie-breaking
         // would show up somewhere in it
-        var trace = new OrderFlowSimulator(new[] {Gold, Silver}, seed: 99).Generate(400);
+        var trace = AgentTrace.Record(new[] {Gold, Silver}, 400, seed: 99);
 
         // act
         var streamed = new List<string>();
-        var streamedSequencer = Venue();
+        var streamedSequencer = Venue(trace);
         Replay.Run(streamedSequencer, trace, d => streamed.Add(Describe(d)));
 
         var upFront = new List<string>();
-        var upFrontSequencer = Venue();
+        var upFrontSequencer = Venue(trace);
         foreach (var action in trace)
             upFrontSequencer.Submit(action);
         foreach (var d in upFrontSequencer.AdvanceTo(trace[^1].Time))
@@ -83,14 +83,14 @@ public class ReplayTests
     public void Run_TwiceOverTheSameTrace_ReproducesItExactly()
     {
         // arrange
-        var trace = new OrderFlowSimulator(new[] {Gold, Silver}, seed: 4).Generate(400);
+        var trace = AgentTrace.Record(new[] {Gold, Silver}, 400, seed: 4);
 
         // act
         var first = new List<string>();
-        Replay.Run(Venue(), trace, d => first.Add(Describe(d)));
+        Replay.Run(Venue(trace), trace, d => first.Add(Describe(d)));
 
         var second = new List<string>();
-        Replay.Run(Venue(), trace, d => second.Add(Describe(d)));
+        Replay.Run(Venue(trace), trace, d => second.Add(Describe(d)));
 
         // assert - the same events, timestamps included, which is what a journal of the trace
         // would be worth
@@ -160,16 +160,23 @@ public class ReplayTests
         Assert.AreEqual(At(12, 0), sequencer.LogicalNow);
     }
 
-    // A simulator trace steps a millisecond per action, so 400 of them span 400ms and an ordinary
-    // day's boundaries would leave only the pre-open falling inside it. Compressed so all three
-    // land in the middle of the flow instead: a transition sharing an instant with client flow is
-    // the tie the ordering has to get right, and one at the very start barely tests it.
-    private static Sequencer Venue()
+    // A day compressed into the trace's own span, so all three boundaries fall among the client
+    // flow rather than either side of it. That interleaving is the whole point of these two tests:
+    // a schedule transition tying with an action is exactly where streaming and submitting up
+    // front could disagree.
+    //
+    // Derived from the trace rather than written as fixed instants, because how long a trace of n
+    // actions lasts is a property of whatever produced it - agents write as many actions in a
+    // millisecond as they feel like, where the simulator wrote exactly one.
+    private static Sequencer Venue(IReadOnlyList<OrderBookAction> trace)
     {
+        var start = trace[0].Time;
+        var span = trace[^1].Time - start;
+
         var compressed = new MarketSchedule(
-            new TimeSpan(0, 0, 9, 0, 50),
-            new TimeSpan(0, 0, 9, 0, 150),
-            new TimeSpan(0, 0, 9, 0, 300));
+            (start + span * 0.25).TimeOfDay,
+            (start + span * 0.5).TimeOfDay,
+            (start + span * 0.9).TimeOfDay);
 
         var sequencer = new Sequencer(Day);
         sequencer.Add(new OrderBook(Gold), compressed);
