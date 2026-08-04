@@ -20,6 +20,11 @@ public class OrderBook : IOrderBook
 
     private OrderBookStatus _status = OrderBookStatus.Closed;
 
+    // Why the book is in that status, kept beside it so a snapshot can restate the whole composite
+    // rather than the half of it a status alone carries. Starts where a book starts: closed
+    // because nobody has opened it yet, which is a request rather than anything having happened.
+    private OrderBookStatusChangeReason _statusReason = OrderBookStatusChangeReason.Requested;
+
     // The last action's stamp, kept only to refuse one that moves time backwards. Set from the
     // first action, so a book has no opinion about what time it is until something tells it.
     private DateTime _lastActionTime;
@@ -265,6 +270,12 @@ public class OrderBook : IOrderBook
             // Carries nothing and does nothing: the work is the due-interruption check every
             // Process already runs, and this is how a caller with no order flow reaches it.
             AdvanceTime => new List<OrderBookEvent>(),
+
+            // Changes nothing either - it reports where the action stream has already left the
+            // book. Note this runs after ResumeIfDue in Process, so a snapshot tick arriving past
+            // a resume deadline describes the resumed book rather than the paused one, and the
+            // resumption itself is reported ahead of it as an ordinary status change.
+            PublishSnapshot => new List<OrderBookEvent> {Snapshot(time)},
             _ => throw new ArgumentException("Unknown order book action")
         };
     }
@@ -427,6 +438,20 @@ public class OrderBook : IOrderBook
     }
 
     private decimal ToDecimal(long ticks) => ticks * _instrument.TickSize;
+
+    // Everything a subscriber joining mid-session cannot derive from a stream it did not hear the
+    // start of: the published depth, and the composite the book assembles from separate events -
+    // status with its reason and any pending resumption, the limit state, the auction quote.
+    //
+    // Not the trades. A print is a thing that happened rather than a state the book is in, and a
+    // joiner does not need the last one to be correct from here on; it simply starts hearing them.
+    // The same goes for order-by-order, which gets a snapshot of its own once it has one to give.
+    private BookSnapshot Snapshot(DateTime time) =>
+        new(_instrument.Symbol, time,
+            GetLevels(Side.Buy, PublishedDepth), GetLevels(Side.Sell, PublishedDepth),
+            _status, _statusReason, _resumeAt, _limitState,
+            _indicativeQuote is { } quote ? ToDecimal(quote.PriceTicks) : null,
+            _indicativeQuote?.Quantity ?? 0);
 
     private void CaptureWindow(List<(long Tick, int Quantity, int Count)> into, Side side) =>
         _matcher.Working[side].CopyLevelsFromBest(PublishedDepth, into);
@@ -963,7 +988,8 @@ public class OrderBook : IOrderBook
                     ? OrderBookStatus.Halted
                     : OrderBookStatus.Paused;
                 _resumeAt = breach.ResumeAfter.HasValue ? time + breach.ResumeAfter.Value : null;
-                events.Add(new StatusChanged(_instrument.Symbol, time, _status, OrderBookStatusChangeReason.PriceRestriction,
+                _statusReason = OrderBookStatusChangeReason.PriceRestriction;
+                events.Add(new StatusChanged(_instrument.Symbol, time, _status, _statusReason,
                     _resumeAt));
                 break;
 
@@ -1143,8 +1169,9 @@ public class OrderBook : IOrderBook
             // is unchanged and re-reported: what a subscriber needs to know is that the
             // interruption is still running and why, which is the same thing a fresh one says.
             _resumeAt = extension.Value.ResumeAfter.HasValue ? time + extension.Value.ResumeAfter.Value : null;
+            _statusReason = OrderBookStatusChangeReason.PriceRestriction;
             return new List<OrderBookEvent>
-                {new StatusChanged(_instrument.Symbol, time, _status, OrderBookStatusChangeReason.PriceRestriction, _resumeAt)};
+                {new StatusChanged(_instrument.Symbol, time, _status, _statusReason, _resumeAt)};
         }
 
         // Any transition supersedes a pending one, so a session closing over a running pause
@@ -1176,6 +1203,7 @@ public class OrderBook : IOrderBook
 
         // _resumeAt was cleared above, so this reports nothing pending - which is what an
         // explicit transition means, having just superseded whatever was.
+        _statusReason = reason;
         var events = new List<OrderBookEvent> {new StatusChanged(_instrument.Symbol, time, _status, reason, _resumeAt)};
 
         // A quoting phase has been accumulating orders for a print, and leaving it is where

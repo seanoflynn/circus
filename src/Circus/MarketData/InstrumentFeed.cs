@@ -25,6 +25,13 @@ public sealed class InstrumentFeed
     private readonly IndicativePriceDataProducer _indicative = new();
     private readonly InstrumentStatusDataProducer _status = new();
 
+    // The other half of what a venue publishes, on its own stream: where the book is, rather than
+    // what changed about it. Each republishes the same message type its incremental counterpart
+    // does, so a subscriber applies a snapshot the same way it applies an update.
+    private readonly MarketByPriceSnapshotProducer _levelsSnapshot = new();
+    private readonly InstrumentStatusSnapshotProducer _statusSnapshot = new();
+    private readonly IndicativePriceSnapshotProducer _indicativeSnapshot = new();
+
     public InstrumentFeed(string symbol)
     {
         Symbol = symbol ?? throw new ArgumentNullException(nameof(symbol));
@@ -48,6 +55,26 @@ public sealed class InstrumentFeed
         Collect(ref output, _levels.Process(events));
         Collect(ref output, _orderByOrder.Process(events));
         Collect(ref output, _indicative.Process(events));
+
+        return output ?? (IReadOnlyList<MarketDataEvent>) Array.Empty<MarketDataEvent>();
+    }
+
+    // The snapshot half, kept a separate call rather than a second return value because the two
+    // streams are numbered separately and published independently - a subscriber in sync reads
+    // only the incremental one, and a channel is free to carry no snapshot feed at all.
+    //
+    // A dispatch that is not a snapshot tick produces nothing here, so the common path costs three
+    // scans that find nothing rather than a branch the caller has to know to take.
+    public IReadOnlyList<MarketDataEvent> Snapshot(IReadOnlyList<OrderBookEvent> events)
+    {
+        if (events.Count == 0)
+            return Array.Empty<MarketDataEvent>();
+
+        List<MarketDataEvent>? output = null;
+
+        Collect(ref output, _statusSnapshot.Process(events));
+        Collect(ref output, _levelsSnapshot.Process(events));
+        Collect(ref output, _indicativeSnapshot.Process(events));
 
         return output ?? (IReadOnlyList<MarketDataEvent>) Array.Empty<MarketDataEvent>();
     }

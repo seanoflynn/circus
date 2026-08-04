@@ -17,5 +17,10 @@ internal enum DispatchKind
     InterruptionTick,
 
     // Last, ordered among itself by submission counter.
-    ClientFlow
+    ClientFlow,
+
+    // After client flow at the same instant, because a snapshot describes where an instant left
+    // the book rather than where it found it - an order stamped exactly on the cycle belongs in
+    // the snapshot that follows it, not the one before.
+    SnapshotTick
 }

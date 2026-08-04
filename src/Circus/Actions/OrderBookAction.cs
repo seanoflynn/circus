@@ -47,6 +47,16 @@ public sealed record HaltTrading : OrderBookAction;
 // why it declares no members of its own.
 public sealed record AdvanceTime : OrderBookAction;
 
+// Report the current state of the book, as a snapshot feed does on its cycle. Changes nothing:
+// the book answers with a BookSnapshot describing where it already is, which is the one thing a
+// subscriber joining mid-session cannot derive from a stream it did not hear the start of.
+//
+// An action rather than a query, for the reason everything else here is one - it goes through the
+// sequencer like any other, so a snapshot lands at a defined point in the dispatch order and a
+// replay of the action stream reproduces the snapshot feed along with everything else. Carries
+// nothing but the Time every action carries.
+public sealed record PublishSnapshot : OrderBookAction;
+
 public abstract record OrderAction : OrderBookAction
 {
     public required string CompanyId { get; init; }

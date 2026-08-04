@@ -1,3 +1,5 @@
+using Circus.MarketData;
+
 namespace Circus.Events;
 
 public record OrderBookEvent(string Symbol, DateTime Time);
@@ -163,4 +165,45 @@ public record LevelsChanged(string Symbol, DateTime Time, IReadOnlyList<LevelCha
     public override string ToString() =>
         $"{nameof(LevelsChanged)} {{ Symbol = {Symbol}, Time = {Time:O}, " +
         $"Changes = [{string.Join(", ", Changes)}] }}";
+}
+
+// Where the book is right now, rather than what just changed about it - the answer to a
+// PublishSnapshot, and the only event here that describes state instead of a transition.
+//
+// It exists because some of what a subscriber holds cannot be derived from a stream it joined
+// late. Aggregated depth is the obvious part; the instrument's status is the subtler one, since a
+// status change and a limit lock arrive as separate events and a joiner has heard neither. Both
+// are carried here, so a snapshot feed can republish them and a subscriber can start from
+// something true. That is what CME's snapshot does, carrying instrument status alongside the book.
+//
+// Levels are the published window, ten deep, in displayed size - the same aggregate LevelsChanged
+// reports moves to.
+public record BookSnapshot(string Symbol, DateTime Time, IReadOnlyList<Level> Bids,
+        IReadOnlyList<Level> Offers, OrderBookStatus Status, OrderBookStatusChangeReason StatusReason,
+        DateTime? ResumesAt, Side? LimitState, decimal? IndicativePrice, int IndicativeQuantity)
+    : OrderBookEvent(Symbol, Time)
+{
+    // Spelled out for the reason LevelsChanged spells them out: a record's generated equality
+    // compares a list member by reference, and DeterminismTests asserts a replay reproduces every
+    // event by value.
+    public virtual bool Equals(BookSnapshot? other) =>
+        other is not null
+        && EqualityContract == other.EqualityContract
+        && Symbol == other.Symbol
+        && Time == other.Time
+        && Status == other.Status
+        && StatusReason == other.StatusReason
+        && ResumesAt == other.ResumesAt
+        && LimitState == other.LimitState
+        && IndicativePrice == other.IndicativePrice
+        && IndicativeQuantity == other.IndicativeQuantity
+        && Bids.SequenceEqual(other.Bids)
+        && Offers.SequenceEqual(other.Offers);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Symbol, Time, Status, Bids.Count, Offers.Count, IndicativePrice);
+
+    public override string ToString() =>
+        $"{nameof(BookSnapshot)} {{ Symbol = {Symbol}, Time = {Time:O}, Status = {Status}, " +
+        $"Bids = [{string.Join(", ", Bids)}], Offers = [{string.Join(", ", Offers)}] }}";
 }
