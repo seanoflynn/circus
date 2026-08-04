@@ -13,7 +13,8 @@ internal static class Program
         ("order-book", OrderBookExample.Run),
         ("market-data", MarketDataExample.Run),
         ("replay", ReplayExample.Run),
-        ("live-venue", LiveVenueExample.Run)
+        ("live-venue", LiveVenueExample.Run),
+        ("agent-swarm", AgentSwarmExample.Run)
     };
 
     private static int Main(string[] args)
