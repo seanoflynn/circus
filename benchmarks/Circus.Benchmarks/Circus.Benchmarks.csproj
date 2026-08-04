@@ -12,7 +12,9 @@
 
     <ItemGroup>
         <ProjectReference Include="..\..\src\Circus\Circus.csproj" />
-        <ProjectReference Include="..\..\src\Circus.Simulator\Circus.Simulator.csproj" />
+
+        <!-- The trace the throughput benchmark replays is recorded from agents. -->
+        <ProjectReference Include="..\..\src\Circus.Agents\Circus.Agents.csproj" />
     </ItemGroup>
 
 </Project>

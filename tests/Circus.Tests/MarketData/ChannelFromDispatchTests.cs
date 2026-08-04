@@ -1,8 +1,8 @@
 using Circus.Actions;
+using Circus.Agents;
 using Circus.MarketData;
 using Circus.Sequencing;
 using Circus.Sessions;
-using Circus.Simulator;
 using NUnit.Framework;
 
 namespace Circus.Tests.MarketData;
@@ -34,7 +34,7 @@ public class ChannelFromDispatchTests
         group.Add(Gold, OpenThroughout());
         group.Add(Silver, OpenThroughout());
 
-        var trace = new OrderFlowSimulator(new[] {Gold, Silver}, seed: 21).Generate(400);
+        var trace = AgentTrace.Record(new[] {Gold, Silver}, 400, seed: 21);
 
         // act - the group wires sequencer dispatch to channel publish automatically
         var published = Replay.Run(group, trace);
@@ -72,7 +72,7 @@ public class ChannelFromDispatchTests
         var silverChannel = new MarketDataChannel();
         silverChannel.Add(new InstrumentFeed(Silver.Symbol));
 
-        var trace = new OrderFlowSimulator(new[] {Gold, Silver}, seed: 22).Generate(400);
+        var trace = AgentTrace.Record(new[] {Gold, Silver}, 400, seed: 22);
 
         // act
         var goldMessages = new List<ChannelMessage>();
@@ -105,7 +105,7 @@ public class ChannelFromDispatchTests
     [Test]
     public void ReplayingTheSameTrace_PublishesTheSameMessages()
     {
-        var trace = new OrderFlowSimulator(new[] {Gold, Silver}, seed: 23).Generate(400);
+        var trace = AgentTrace.Record(new[] {Gold, Silver}, 400, seed: 23);
 
         var first = PublishAll(trace);
         var second = PublishAll(trace);

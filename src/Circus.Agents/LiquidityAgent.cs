@@ -28,8 +28,7 @@ namespace Circus.Agents;
 //
 // One Random for the whole agent rather than one per instrument. Draws therefore interleave across
 // instruments, so a trace covering several is not the same as several traces laid side by side -
-// which is exactly what the simulator did too, and what a single participant trading a book of
-// products actually looks like.
+// which is what a single participant trading a book of products actually looks like.
 public sealed class LiquidityAgent : IAgent
 {
     // A fixed order, so which side is considered first is a property of the code rather than of

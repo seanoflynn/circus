@@ -8,7 +8,9 @@
 
     <ItemGroup>
       <ProjectReference Include="..\..\src\Circus\Circus.csproj" />
-      <ProjectReference Include="..\..\src\Circus.Simulator\Circus.Simulator.csproj" />
+
+      <!-- ReplayExample stands a recorded agent run in for a capture of real venue flow. -->
+      <ProjectReference Include="..\..\src\Circus.Agents\Circus.Agents.csproj" />
     </ItemGroup>
 
 </Project>
