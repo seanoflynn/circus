@@ -2,17 +2,18 @@ using Circus.Actions;
 using Circus.Agents;
 using Circus.Events;
 using Circus.MarketData;
+using Circus.Sequencing;
 using Circus.Sessions;
 using Circus.Time;
 using NUnit.Framework;
 
 namespace Circus.Tests.Agents;
 
-// The harness, tested with scripted agents rather than deciding ones: what is worth pinning here
-// is the wiring - that events reached the participant they belong to, that actions left in the
-// order the venue was told to ask in, and that the loop between the two is well founded.
+// The swarm, tested with scripted agents rather than deciding ones: what is worth pinning here is
+// the wiring - that events reached the participant they belong to, that actions left in the order
+// the swarm was told to ask in, and that the loop between the two is well founded.
 [TestFixture]
-public class AgentVenueTests
+public class AgentSwarmTests
 {
     private static readonly Instrument Gold = new("GCZ6", 10, 10);
     private static readonly Instrument Silver = new("SIZ6", 10, 10);
@@ -38,27 +39,54 @@ public class AgentVenueTests
             OrderValidity = new OrderValidity.Day(), Side = side, Quantity = quantity, Price = price
         };
 
+    // A venue wired the way a host wires one - a group holding the books and their schedules, a
+    // driver pumping its sequencer off a clock - with a swarm attached to both. The swarm builds
+    // none of it, which is the point: the same group could be carrying restrictions, other
+    // instruments, and flow from gateways that are not agents at all.
+    private sealed class Venue
+    {
+        public Venue(params Instrument[] instruments)
+        {
+            Clock = new ManualClock(BeforeTheDay);
+            Group = new InstrumentGroup(Clock.GetCurrentTime());
+
+            foreach (var instrument in instruments)
+                Group.Add(instrument, OpenThroughout());
+
+            Driver = new LiveDriver(Group.Sequencer, Clock);
+            Swarm = new AgentSwarm(Group, Driver);
+        }
+
+        public ManualClock Clock { get; }
+        public InstrumentGroup Group { get; }
+        public LiveDriver Driver { get; }
+        public AgentSwarm Swarm { get; }
+
+        // What a host does on a timer: move the clock, then tick.
+        public IReadOnlyList<ChannelMessage> TickAt(DateTime time)
+        {
+            Clock.SetCurrentTime(time);
+            return Swarm.Tick(time);
+        }
+    }
+
     [Test]
     public void AgentOrders_ReachTheBookOnTheFollowingTick()
     {
-        var clock = new ManualClock(BeforeTheDay);
-        var venue = new AgentVenue(clock);
-        venue.Add(Gold, OpenThroughout());
+        var venue = new Venue(Gold);
 
         var agent = new ScriptedAgent("Buyer", Gold.Symbol);
         agent.Enqueue(Limit(Gold, "Buyer", "B1", Side.Buy, 3, 100));
-        venue.Add(agent);
+        venue.Swarm.Add(agent);
 
         // the tick that opens the book is also the one the agent acts on, so nothing of its own
         // has been dispatched yet
-        clock.SetCurrentTime(Trading);
-        venue.Tick();
+        venue.TickAt(Trading);
         Assert.That(agent.Market.Of(Gold.Symbol).IsOpen, Is.True);
         Assert.That(agent.Orders.LiveCount, Is.EqualTo(0));
 
         // one tick of latency, which is what makes the loop well founded rather than re-entrant
-        clock.SetCurrentTime(Trading + Step);
-        venue.Tick();
+        venue.TickAt(Trading + Step);
         Assert.That(agent.Orders.LiveCount, Is.EqualTo(1));
         Assert.That(agent.Orders["B1"].Price, Is.EqualTo(100));
         Assert.That(agent.Market.Of(Gold.Symbol).BestBid, Is.EqualTo(100));
@@ -67,9 +95,7 @@ public class AgentVenueTests
     [Test]
     public void OwnEvents_ReachOnlyTheCompanyTheyBelongTo()
     {
-        var clock = new ManualClock(BeforeTheDay);
-        var venue = new AgentVenue(clock);
-        venue.Add(Gold, OpenThroughout());
+        var venue = new Venue(Gold);
 
         var buyer = new ScriptedAgent("Buyer", Gold.Symbol);
         buyer.Enqueue(Limit(Gold, "Buyer", "B1", Side.Buy, 3, 100));
@@ -77,13 +103,11 @@ public class AgentVenueTests
         var seller = new ScriptedAgent("Seller", Gold.Symbol);
         seller.Enqueue(Limit(Gold, "Seller", "S1", Side.Sell, 3, 100));
 
-        venue.Add(buyer);
-        venue.Add(seller);
+        venue.Swarm.Add(buyer);
+        venue.Swarm.Add(seller);
 
-        clock.SetCurrentTime(Trading);
-        venue.Tick();
-        clock.SetCurrentTime(Trading + Step);
-        venue.Tick();
+        venue.TickAt(Trading);
+        venue.TickAt(Trading + Step);
 
         // neither has been handed anything belonging to the other, which is what a participant
         // feed is: a filter over the event stream by company
@@ -103,21 +127,17 @@ public class AgentVenueTests
     [Test]
     public void MarketData_ReachesOnlyTheInstrumentsAnAgentSubscribedTo()
     {
-        var clock = new ManualClock(BeforeTheDay);
-        var venue = new AgentVenue(clock);
-        venue.Add(Gold, OpenThroughout());
-        venue.Add(Silver, OpenThroughout());
+        var venue = new Venue(Gold, Silver);
 
         var agent = new ScriptedAgent("Buyer", Gold.Symbol);
-        venue.Add(agent);
+        venue.Swarm.Add(agent);
 
-        clock.SetCurrentTime(Trading);
-        venue.Tick();
+        venue.TickAt(Trading);
 
-        // flow in the instrument it does not follow
-        venue.Submit(Limit(Silver, "Other", "O1", Side.Buy, 3, 100));
-        clock.SetCurrentTime(Trading + Step);
-        venue.Tick();
+        // flow in the instrument it does not follow, submitted straight to the driver the way a
+        // gateway would
+        venue.Driver.Submit(Limit(Silver, "Other", "O1", Side.Buy, 3, 100));
+        venue.TickAt(Trading + Step);
 
         Assert.That(agent.MarketData, Is.Not.Empty);
         Assert.That(agent.MarketData.Select(m => m.Symbol).Distinct(), Is.EqualTo(new[] {Gold.Symbol}));
@@ -127,27 +147,21 @@ public class AgentVenueTests
     [Test]
     public void ExternalFlow_TradesAgainstTheAgents()
     {
-        var clock = new ManualClock(BeforeTheDay);
-        var venue = new AgentVenue(clock);
-        venue.Add(Gold, OpenThroughout());
+        var venue = new Venue(Gold);
 
         var agent = new ScriptedAgent("Maker", Gold.Symbol);
         agent.Enqueue(Limit(Gold, "Maker", "M1", Side.Buy, 3, 100));
-        venue.Add(agent);
+        venue.Swarm.Add(agent);
 
-        clock.SetCurrentTime(Trading);
-        venue.Tick();
-
-        clock.SetCurrentTime(Trading + Step);
-        venue.Tick();
+        venue.TickAt(Trading);
+        venue.TickAt(Trading + Step);
         Assert.That(agent.Orders.LiveCount, Is.EqualTo(1));
 
-        // somebody outside the agent population, trading into what they are quoting - the same
-        // path a gateway would submit on, stamped by the same driver
-        venue.Submit(Limit(Gold, "Human", "H1", Side.Sell, 2, 100));
+        // somebody outside the swarm entirely, trading into what the agents are quoting - the
+        // same driver, stamped the same way, which is why the swarm need not know it happened
+        venue.Driver.Submit(Limit(Gold, "Human", "H1", Side.Sell, 2, 100));
 
-        clock.SetCurrentTime(Trading + Step + Step);
-        venue.Tick();
+        venue.TickAt(Trading + Step + Step);
 
         Assert.That(agent.Orders.Position(Gold.Symbol), Is.EqualTo(2));
         Assert.That(agent.Orders["M1"].RemainingQuantity, Is.EqualTo(1));
@@ -157,19 +171,15 @@ public class AgentVenueTests
     [Test]
     public void Rejections_ReachTheAgentThatCausedThem()
     {
-        var clock = new ManualClock(BeforeTheDay);
-        var venue = new AgentVenue(clock);
-        venue.Add(Gold, OpenThroughout());
+        var venue = new Venue(Gold);
 
         // 105 is not a multiple of the instrument's tick
         var agent = new ScriptedAgent("Buyer", Gold.Symbol);
         agent.Enqueue(Limit(Gold, "Buyer", "B1", Side.Buy, 3, 105));
-        venue.Add(agent);
+        venue.Swarm.Add(agent);
 
-        clock.SetCurrentTime(Trading);
-        venue.Tick();
-        clock.SetCurrentTime(Trading + Step);
-        venue.Tick();
+        venue.TickAt(Trading);
+        venue.TickAt(Trading + Step);
 
         // an agent told nothing about a refusal would go on believing in an order that does not
         // exist, so the refusal is part of what it is owed
@@ -182,9 +192,7 @@ public class AgentVenueTests
     [Test]
     public void AgentsAreAskedInRegistrationOrder()
     {
-        var clock = new ManualClock(BeforeTheDay);
-        var venue = new AgentVenue(clock);
-        venue.Add(Gold, OpenThroughout());
+        var venue = new Venue(Gold);
 
         // the same bid from both, on the same tick, so the only thing separating them in the
         // queue is the order they were asked in
@@ -194,17 +202,14 @@ public class AgentVenueTests
         var second = new ScriptedAgent("Second", Gold.Symbol);
         second.Enqueue(Limit(Gold, "Second", "S1", Side.Buy, 3, 100));
 
-        venue.Add(first);
-        venue.Add(second);
+        venue.Swarm.Add(first);
+        venue.Swarm.Add(second);
 
-        clock.SetCurrentTime(Trading);
-        venue.Tick();
-        clock.SetCurrentTime(Trading + Step);
-        venue.Tick();
+        venue.TickAt(Trading);
+        venue.TickAt(Trading + Step);
 
-        venue.Submit(Limit(Gold, "Human", "H1", Side.Sell, 3, 100));
-        clock.SetCurrentTime(Trading + Step + Step);
-        venue.Tick();
+        venue.Driver.Submit(Limit(Gold, "Human", "H1", Side.Sell, 3, 100));
+        venue.TickAt(Trading + Step + Step);
 
         // price-time, and the first agent asked was the first in the book
         Assert.That(first.Orders.Position(Gold.Symbol), Is.EqualTo(3));
@@ -215,22 +220,18 @@ public class AgentVenueTests
     [Test]
     public void AgentsSharingACompany_BothSeeTheFirmsEvents()
     {
-        var clock = new ManualClock(BeforeTheDay);
-        var venue = new AgentVenue(clock);
-        venue.Add(Gold, OpenThroughout());
+        var venue = new Venue(Gold);
 
         var desk = new ScriptedAgent("Firm", Gold.Symbol);
         desk.Enqueue(Limit(Gold, "Firm", "D1", Side.Buy, 3, 100));
 
         var backOffice = new ScriptedAgent("Firm", Gold.Symbol);
 
-        venue.Add(desk);
-        venue.Add(backOffice);
+        venue.Swarm.Add(desk);
+        venue.Swarm.Add(backOffice);
 
-        clock.SetCurrentTime(Trading);
-        venue.Tick();
-        clock.SetCurrentTime(Trading + Step);
-        venue.Tick();
+        venue.TickAt(Trading);
+        venue.TickAt(Trading + Step);
 
         // one company, so both are handed the firm's events - the shape a drop copy has, and
         // what makes self-match prevention reachable at all
@@ -242,19 +243,17 @@ public class AgentVenueTests
     [Test]
     public void Run_StepsTheClockAndTicks()
     {
-        var clock = new ManualClock(BeforeTheDay);
-        var venue = new AgentVenue(clock);
-        venue.Add(Gold, OpenThroughout());
+        var venue = new Venue(Gold);
 
         var agent = new ScriptedAgent("Buyer", Gold.Symbol);
-        venue.Add(agent);
+        venue.Swarm.Add(agent);
 
-        clock.SetCurrentTime(Trading);
+        venue.Clock.SetCurrentTime(Trading);
 
         var published = new List<ChannelMessage>();
-        AgentVenue.Run(venue, Step, 5, published.Add);
+        AgentSwarm.Run(venue.Swarm, venue.Clock, Step, 5, published.Add);
 
-        Assert.That(clock.GetCurrentTime(), Is.EqualTo(Trading + TimeSpan.FromMilliseconds(5)));
+        Assert.That(venue.Clock.GetCurrentTime(), Is.EqualTo(Trading + TimeSpan.FromMilliseconds(5)));
 
         // the schedule's own boundaries came due within the run, so the agent was told the book
         // opened without anything here submitting it
@@ -267,35 +266,25 @@ public class AgentVenueTests
     }
 
     [Test]
-    public void Run_OnASystemClock_Refused()
-    {
-        var venue = new AgentVenue(new SystemClock());
-
-        Assert.Throws<ArgumentException>(() => AgentVenue.Run(venue, Step, 5));
-    }
-
-    [Test]
     public void Run_ANonAdvancingStep_Refused()
     {
-        var venue = new AgentVenue(new ManualClock(BeforeTheDay));
+        var venue = new Venue(Gold);
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => AgentVenue.Run(venue, TimeSpan.Zero, 5));
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => AgentSwarm.Run(venue.Swarm, venue.Clock, TimeSpan.Zero, 5));
     }
 
     [Test]
     public void TheSameRunTwice_PublishesTheSameMessages()
     {
-        // the harness itself must add no nondeterminism of its own - no dictionary iteration
+        // the swarm itself must add no nondeterminism of its own - no dictionary iteration
         // deciding who is asked first, no ordering that depends on how routing was indexed
         Assert.That(Render(), Is.EqualTo(Render()));
         Assert.That(Render(), Is.Not.Empty);
 
         static List<string> Render()
         {
-            var clock = new ManualClock(BeforeTheDay);
-            var venue = new AgentVenue(clock);
-            venue.Add(Gold, OpenThroughout());
-            venue.Add(Silver, OpenThroughout());
+            var venue = new Venue(Gold, Silver);
 
             var buyer = new ScriptedAgent("Buyer", Gold.Symbol, Silver.Symbol);
             buyer.Enqueue(Limit(Gold, "Buyer", "B1", Side.Buy, 3, 100));
@@ -305,13 +294,13 @@ public class AgentVenueTests
             seller.Enqueue(Limit(Gold, "Seller", "S1", Side.Sell, 5, 110));
             seller.Enqueue(Limit(Gold, "Seller", "S2", Side.Sell, 5, 100));
 
-            venue.Add(buyer);
-            venue.Add(seller);
+            venue.Swarm.Add(buyer);
+            venue.Swarm.Add(seller);
 
-            clock.SetCurrentTime(Trading);
+            venue.Clock.SetCurrentTime(Trading);
 
             var rendered = new List<string>();
-            AgentVenue.Run(venue, Step, 10,
+            AgentSwarm.Run(venue.Swarm, venue.Clock, Step, 10,
                 m => rendered.Add($"{m.Sequence} {m.Data.Symbol} {Describe(m.Data)}"));
 
             return rendered;

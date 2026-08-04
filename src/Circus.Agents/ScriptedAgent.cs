@@ -8,7 +8,7 @@ namespace Circus.Agents;
 // actions, handed over in order and then nothing.
 //
 // It exists so the harness can be exercised without a strategy's judgement in the way. What a
-// test wants to know about AgentVenue is that events reached the right participant and that
+// test wants to know about AgentSwarm is that events reached the right participant and that
 // actions left it in the right order, and neither is easier to see through an agent that is
 // deciding things. It is also what a test wanting one specific sequence of orders should reach
 // for, rather than tuning a seed until the flow it needs falls out.

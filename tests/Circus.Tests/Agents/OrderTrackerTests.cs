@@ -34,7 +34,7 @@ public class OrderTrackerTests
         Feed(_book.UpdateStatus(OrderBookStatus.Open));
     }
 
-    // What AgentVenue routes: order events carrying this company's id, and nothing else.
+    // What AgentSwarm routes: order events carrying this company's id, and nothing else.
     private void Feed(IReadOnlyList<OrderBookEvent> events)
     {
         foreach (var ev in events)

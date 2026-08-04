@@ -1,24 +1,28 @@
-using Circus.Actions;
 using Circus.Events;
 using Circus.MarketData;
 using Circus.Sequencing;
-using Circus.Sessions;
 using Circus.Time;
 
 namespace Circus.Agents;
 
-// A venue with participants in it: an InstrumentGroup, the LiveDriver that stamps and pumps it,
-// and the agents trading at it.
+// A population of participants trading at a venue that already exists.
 //
-// It introduces nothing the engine did not already have. Time still comes from one place, the
-// driver's clock; dispatch order is still the sequencer's; market data is still the channel's.
-// What is added is the return path - taking what the venue published and handing each agent the
-// part it is entitled to - and that is the whole of it.
+// The venue is not this class's to build. An InstrumentGroup holding the books and their
+// schedules, and the LiveDriver pumping its sequencer off a clock, are wired by whoever owns the
+// venue - which is what a host does anyway, and is what lets the same group carry restrictions,
+// matching algorithms and instruments the agents know nothing about, alongside flow from gateways
+// that are not agents at all. A swarm is the participants and the return path to them, and
+// nothing else.
 //
 //     tick:  dispatch what has come due
 //            for each dispatch: own events to the agent they belong to, then the channel's
 //                               messages to everyone subscribed to that instrument
 //            then, in registration order, ask each agent what it wants to send
+//
+// No clock is read here. `now` is passed in by whoever owns one, the way a book is told the
+// instant an action happened rather than looking it up - and what the agents send is stamped by
+// the driver on its own reading, so the swarm never has to agree with it about anything beyond
+// order.
 //
 // Orders sent on a tick are dispatched on the next one. That single tick of latency is what makes
 // the loop well founded rather than re-entrant - an agent never sees the consequences of its own
@@ -28,15 +32,14 @@ namespace Circus.Agents;
 // a real participant sees them in: a fill is reported to the party to it before the print reaches
 // the feed.
 //
-// The clock decides what kind of run this is, and nothing else changes. A ManualClock stepped by
-// Run gives a run that reproduces exactly - the shape tests and recorded traces want. A
-// SystemClock with Tick pumped on a timer gives a live venue that agents quote into and anything
-// else can trade against through Submit.
+// The driver's clock decides what kind of run this is, and nothing here changes. A ManualClock
+// stepped by Run gives a run that reproduces exactly - the shape tests and recorded traces want.
+// A SystemClock with Tick pumped on a timer gives a live venue that agents quote into and
+// anything else can trade against by submitting to the same driver.
 //
-// Single-threaded, like everything it composes.
-public sealed class AgentVenue
+// Single-threaded, like everything it attaches to.
+public sealed class AgentSwarm
 {
-    private readonly IClock _clock;
     private readonly InstrumentGroup _group;
     private readonly LiveDriver _driver;
 
@@ -44,28 +47,17 @@ public sealed class AgentVenue
     private readonly Dictionary<string, List<IAgent>> _byCompany = new();
     private readonly Dictionary<string, List<IAgent>> _bySymbol = new();
 
-    public AgentVenue(IClock clock)
+    // The driver must be the one pumping this group's sequencer. Nothing here can check that -
+    // a driver does not expose the sequencer it drives - and a mismatched pair would dispatch
+    // one venue while publishing another's feed.
+    public AgentSwarm(InstrumentGroup group, LiveDriver driver)
     {
-        _clock = clock ?? throw new ArgumentNullException(nameof(clock));
-        _group = new InstrumentGroup(clock.GetCurrentTime());
-        _driver = new LiveDriver(_group.Sequencer, clock);
+        _group = group ?? throw new ArgumentNullException(nameof(group));
+        _driver = driver ?? throw new ArgumentNullException(nameof(driver));
     }
-
-    public IClock Clock => _clock;
-
-    public InstrumentGroup Group => _group;
-
-    public MarketDataChannel Channel => _group.Channel;
 
     // In registration order, which is the order they are asked to act in.
     public IReadOnlyList<IAgent> Agents => _agents;
-
-    public void Add(Instrument instrument, MarketSchedule schedule, int maxLevels = 10) =>
-        _group.Add(instrument, schedule, maxLevels);
-
-    // A pre-built book, for an instrument that needs restrictions wired onto it.
-    public void Add(IOrderBook book, MarketSchedule schedule, int maxLevels = 10) =>
-        _group.Add(book, schedule, maxLevels);
 
     // Agents may share a company id - one firm, two desks - and each then sees the other's order
     // events, the way a firm's drop copy carries the whole firm rather than one desk of it. It is
@@ -81,22 +73,14 @@ public sealed class AgentVenue
             Subscribe(_bySymbol, symbol, agent);
     }
 
-    // Flow from outside the agent population - a test's own orders, a gateway, whatever is
-    // trading against them. Stamped by the driver exactly as an agent's own actions are, because
-    // neither gets to say when it arrived.
-    public void Submit(OrderBookAction action) => _driver.Submit(action);
-
-    // Dispatches everything due as of the clock, routes what came back, and collects what the
-    // agents want to send. Returns the channel's messages for this tick, so a host can publish
-    // them onward - a subscriber outside the venue sees exactly what the agents saw.
-    public IReadOnlyList<ChannelMessage> Tick()
+    // Dispatches everything the driver's clock says is due, routes what came back, and submits
+    // whatever the agents want to send. Returns the channel's messages for this tick, so a host
+    // can publish them onward - a subscriber outside the venue sees exactly what the agents saw.
+    //
+    // `now` is what the agents are told the time is. A host passes its own clock's reading, which
+    // is the same one the driver is about to dispatch and stamp against.
+    public IReadOnlyList<ChannelMessage> Tick(DateTime now)
     {
-        // Read once, so every agent acting on this tick is answering the same question. The
-        // driver reads the clock again for the dispatch and for each stamp; on a system clock
-        // those readings can differ by a shade, and the sequencer only requires that they never
-        // go backwards.
-        var now = _clock.GetCurrentTime();
-
         List<ChannelMessage>? published = null;
 
         foreach (var dispatched in _driver.Tick())
@@ -135,17 +119,14 @@ public sealed class AgentVenue
     // a venue whose flow does not exist yet - a trace is submitted and advanced through, whereas
     // agents have to be given the time in which to produce one.
     //
-    // Deterministic given deterministic agents, which is what a seeded one is: the same seeds and
-    // the same step produce the same run, message for message.
-    public static void Run(AgentVenue venue, TimeSpan step, int ticks,
+    // The clock passed must be the one the swarm's driver holds, since this steps that clock and
+    // the driver reads it. Deterministic given deterministic agents, which is what a seeded one
+    // is: the same seeds and the same step produce the same run, message for message.
+    public static void Run(AgentSwarm swarm, ManualClock clock, TimeSpan step, int ticks,
         Action<ChannelMessage>? onPublished = null)
     {
-        ArgumentNullException.ThrowIfNull(venue);
-
-        if (venue.Clock is not ManualClock clock)
-            throw new ArgumentException(
-                "a stepped run drives the clock itself, so the venue must hold a ManualClock. A venue " +
-                "on a system clock is ticked by whoever owns that clock.", nameof(venue));
+        ArgumentNullException.ThrowIfNull(swarm);
+        ArgumentNullException.ThrowIfNull(clock);
 
         if (step <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(step), step,
@@ -155,9 +136,10 @@ public sealed class AgentVenue
 
         for (var i = 0; i < ticks; i++)
         {
-            clock.SetCurrentTime(clock.GetCurrentTime() + step);
+            var now = clock.GetCurrentTime() + step;
+            clock.SetCurrentTime(now);
 
-            foreach (var message in venue.Tick())
+            foreach (var message in swarm.Tick(now))
                 onPublished?.Invoke(message);
         }
     }

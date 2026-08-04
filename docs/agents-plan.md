@@ -126,31 +126,41 @@ liquidity.
 A `TakerAgent` is not a separate type to begin with - aggression on this one covers it. If the
 behaviours diverge enough later, split then.
 
-### `AgentVenue`
+### `AgentSwarm`
 
-The harness, and the only new moving part:
+The population of participants, and the only new moving part:
 
 ```csharp
 Tick(now):
     dispatched = driver.Tick()                  // LiveDriver.Tick -> Sequencer.AdvanceTo(clock)
     for each dispatch:
-        route channel.Publish(events)  by symbol     -> OnMarketData
         route events carrying a CompanyId            -> OnOwnEvent, to that agent
+        route channel.Publish(events)  by symbol     -> OnMarketData
     for each agent, in registration order:
         driver.Submit(action) for each action from agent.Act(now)
 ```
 
-It composes `InstrumentGroup` (sequencer + channel) and `LiveDriver`. Agent orders submitted on a
-tick dispatch on the next one - one tick of latency, which is both realistic and what makes the
-feedback loop well founded rather than re-entrant.
+It builds no venue. An `InstrumentGroup` and the `LiveDriver` pumping its sequencer are wired by
+whoever owns the venue and handed in - which is what a host does anyway, and is what lets the same
+group carry restrictions, matching algorithms and instruments the agents know nothing about,
+alongside flow from gateways that are not agents at all. The swarm is the participants and the
+return path to them, and nothing else.
 
-Two ways to run it, mirroring the `LiveDriver` / `Replay` symmetry that already exists:
+It reads no clock either: `now` is passed into `Tick`, the way a book is told the instant an
+action happened rather than looking it up. What the agents send is stamped by the driver on its
+own reading.
+
+Agent orders submitted on a tick dispatch on the next one - one tick of latency, which is both
+realistic and what makes the feedback loop well founded rather than re-entrant.
+
+Two ways to drive it, mirroring the `LiveDriver` / `Replay` symmetry that already exists:
 
 - **Deterministic.** A `ManualClock` and a fixed step, ticked N times. Same seed, same run, every
   time. This is what tests and recorded traces use.
-- **Live.** A `SystemClock`, `Tick()` pumped on a timer, and `Submit` left open so a human or a
-  test client can trade against the agents. This is the "test trading against" case, and it needs
-  no new code - only a different clock, exactly as the engine's own live/replay split does.
+- **Live.** A `SystemClock`, `Tick()` pumped on a timer, and the driver left open so a human or a
+  test client can submit into the same venue and trade against the agents. This is the "test
+  trading against" case, and it needs no new code - only a different clock, exactly as the
+  engine's own live/replay split does.
 
 ### `AgentTrace`
 
@@ -159,7 +169,7 @@ public static IReadOnlyList<OrderBookAction> Record(
     IReadOnlyList<Instrument> instruments, int actionCount, int? seed = null, ...);
 ```
 
-Runs a deterministic `AgentVenue` and records every action submitted, in submission order, stopping
+Wires a venue, runs a deterministic swarm at it, and records every action submitted, stopping
 once `actionCount` have been captured. Returns the type today's consumers already take, so the
 migration below is a one-line change in each of them, and the recorded trace replays into a fresh
 venue to the same market data - which the shadow book could never quite promise.
@@ -195,12 +205,12 @@ Two consequences worth stating rather than discovering:
 
 Each step compiles and leaves the suite green.
 
-1. **`Circus.Agents` with the plumbing.** `IAgent`, `OrderTracker`, `MarketView`, `AgentVenue`, and
+1. **`Circus.Agents` with the plumbing.** `IAgent`, `OrderTracker`, `MarketView`, `AgentSwarm`, and
    a trivial scripted agent to test the harness with. The simulator stays where it is.
 2. **`LiquidityAgent` and its options**, with behavioural tests per parameter.
 3. **`AgentTrace.Record`**, and switch the five trace consumers over. The simulator is now unused.
 4. **Delete `Circus.Simulator`** and `OrderFlowSimulatorTests`; update the solution and README.
-5. **`AgentVenueExample`** in the samples: agents quoting into a live venue while a manual order
+5. **`AgentSwarmExample`** in the samples: agents quoting into a live venue while a manual order
    trades through them, printed as a subscriber would see it.
 
 ## Tests worth having
