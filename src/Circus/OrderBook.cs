@@ -65,7 +65,7 @@ public class OrderBook : IOrderBook
     private const int PublishedDepth = 10;
 
     // The published window as it stood before the action and as it stands after, diffed to
-    // produce LevelChanged. Reused per book for the reason the buffer above is: one action at a
+    // produce LevelsChanged. Reused per book for the reason the buffer above is: one action at a
     // time, so four lists outlive every call rather than being allocated within it.
     private readonly List<(long Tick, int Quantity, int Count)> _bidsBefore = new(PublishedDepth);
     private readonly List<(long Tick, int Quantity, int Count)> _offersBefore = new(PublishedDepth);
@@ -431,20 +431,26 @@ public class OrderBook : IOrderBook
     private void CaptureWindow(List<(long Tick, int Quantity, int Count)> into, Side side) =>
         _matcher.Working[side].CopyLevelsFromBest(PublishedDepth, into);
 
+    // One event carrying every level the action moved, or none at all if it moved none - an
+    // action that touches no level, a status change or a rejected order, says nothing here.
     private void AppendLevelChanges(List<OrderBookEvent> events, DateTime time)
     {
         CaptureWindow(_bidsAfter, Side.Buy);
         CaptureWindow(_offersAfter, Side.Sell);
 
-        AppendLevelChanges(events, time, Side.Buy, _bidsBefore, _bidsAfter);
-        AppendLevelChanges(events, time, Side.Sell, _offersBefore, _offersAfter);
+        List<LevelChange>? changes = null;
+        CollectLevelChanges(ref changes, Side.Buy, _bidsBefore, _bidsAfter);
+        CollectLevelChanges(ref changes, Side.Sell, _offersBefore, _offersAfter);
+
+        if (changes != null)
+            events.Add(new LevelsChanged(_instrument.Symbol, time, changes));
     }
 
-    // Diffed by price rather than by position - see LevelChanged for why - which also means a
-    // level that only moved rank reports nothing, since its price, size and count are all
+    // Diffed by price rather than by position - see LevelChange for why - which also means a
+    // level that only moved rank contributes nothing, since its price, size and count are all
     // unchanged. Ten a side at most, so the nested scans below are bounded at a hundred
     // comparisons and need no index to beat that.
-    private void AppendLevelChanges(List<OrderBookEvent> events, DateTime time, Side side,
+    private void CollectLevelChanges(ref List<LevelChange>? changes, Side side,
         List<(long Tick, int Quantity, int Count)> before, List<(long Tick, int Quantity, int Count)> after)
     {
         // Arrivals and changes first, best price outward, so a consumer applying them in order
@@ -456,12 +462,12 @@ public class OrderBook : IOrderBook
 
             if (previous < 0)
             {
-                events.Add(new LevelChanged(_instrument.Symbol, time, side, i + 1, ToDecimal(tick),
+                (changes ??= new List<LevelChange>()).Add(new LevelChange(side, i + 1, ToDecimal(tick),
                     quantity, count, LevelChangeAction.Added));
             }
             else if (before[previous].Quantity != quantity || before[previous].Count != count)
             {
-                events.Add(new LevelChanged(_instrument.Symbol, time, side, i + 1, ToDecimal(tick),
+                (changes ??= new List<LevelChange>()).Add(new LevelChange(side, i + 1, ToDecimal(tick),
                     quantity, count, LevelChangeAction.Modified));
             }
         }
@@ -471,7 +477,7 @@ public class OrderBook : IOrderBook
         {
             var tick = before[i].Tick;
             if (IndexOfTick(after, tick) < 0)
-                events.Add(new LevelChanged(_instrument.Symbol, time, side, i + 1, ToDecimal(tick),
+                (changes ??= new List<LevelChange>()).Add(new LevelChange(side, i + 1, ToDecimal(tick),
                     0, 0, LevelChangeAction.Removed));
         }
     }

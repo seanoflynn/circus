@@ -9,7 +9,7 @@ namespace Circus.Tests.MarketData;
 // for, not a seam a consumer reaches through: Process stays the only way anything outside learns
 // what a book is holding.
 //
-// The book publishes that same aggregate as LevelChanged, the by-price feed turns those into
+// The book publishes that same aggregate as LevelsChanged, the by-price feed turns that into
 // deltas, and a subscriber applies them to a LevelBook of its own. So most of this file is a
 // differential across that whole path: drive a scenario, then assert the book's own view and a
 // subscriber's rebuilt one agree. That is worth more than either set of expected values alone -

@@ -9,7 +9,7 @@ namespace Circus.Tests.Helpers;
 //
 // The book keeps that aggregate itself now - the price ladders carry displayed size and order
 // count per level - so this asks it rather than rebuilding one from the event stream. What the
-// book reports as LevelChanged is the same aggregate, and BookLevelViewTests holds the two
+// book reports as LevelsChanged is the same aggregate, and BookLevelViewTests holds the two
 // against each other; a test that only wants to know where an order rested reads it here.
 internal sealed class LevelTrackingOrderBook : IOrderBook
 {

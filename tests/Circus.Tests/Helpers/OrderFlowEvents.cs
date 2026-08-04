@@ -16,5 +16,5 @@ internal static class OrderFlowEvents
     // asserts trades through Trades() rather than by grouping fills at every site. A test that is
     // about the depth reports reads them directly.
     public static IReadOnlyList<OrderBookEvent> OrderFlow(this IEnumerable<OrderBookEvent> events) =>
-        events.Where(e => e is not LevelChanged).ToList();
+        events.Where(e => e is not LevelsChanged).ToList();
 }

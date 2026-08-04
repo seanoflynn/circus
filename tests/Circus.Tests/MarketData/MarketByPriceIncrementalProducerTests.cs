@@ -4,7 +4,7 @@ using NUnit.Framework;
 
 namespace Circus.Tests.MarketData;
 
-// The producer composes the LevelChanged events of one dispatch into a single message and holds
+// The producer translates the book's LevelsChanged into the message a venue publishes and holds
 // nothing, so these are about the shape of what a subscriber receives - one message per book
 // update, carrying every level it moved. That the numbers in it are right is BookLevelViewTests'
 // subject, which drives the whole path and compares the ends.

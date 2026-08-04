@@ -3,40 +3,39 @@ using Circus.Events;
 namespace Circus.MarketData;
 
 // The by-price incremental feed, and nothing more than a translation: the book already worked out
-// which levels moved, because its price ladders carry the running totals, so there is no second
-// book to keep in step here and no state to lose.
+// which levels moved and reported them as one update, because its price ladders carry the running
+// totals. There is no second book to keep in step here and no state to lose.
 //
-// That is the whole point of the book publishing LevelChanged. A producer deriving aggregated
+// That is the whole point of the book publishing LevelsChanged. A producer deriving aggregated
 // depth from order events has to hold the book the subscriber is missing, which is what the
 // previous LevelDataProducer did - and why it could never resync after a missed event.
+//
+// A dispatch is one action's events, and the book emits at most one LevelsChanged for it, so the
+// loop below normally runs once. It is a loop rather than a lookup because a dispatch spanning
+// instruments would carry one per book, and each has to become its own message.
 public class MarketByPriceIncrementalProducer : IIncrementalProducer<MarketByPriceDeltaEvent>
 {
-    // One message per dispatch, carrying every level that moved, rather than one per level - see
-    // MarketByPriceDeltaEvent for why a book update is the unit. The book reports the levels
-    // singly and this composes them, which is the same division as fills and the trade print.
-    //
-    // A dispatch is one action's events, so gathering across the batch is gathering exactly what
-    // that action did.
     public IList<MarketByPriceDeltaEvent> Process(IReadOnlyList<OrderBookEvent> events)
     {
-        List<MarketByPriceDelta>? changes = null;
+        List<MarketByPriceDeltaEvent>? output = null;
 
         foreach (var ev in events)
         {
-            if (ev is not LevelChanged level)
+            if (ev is not LevelsChanged levels)
                 continue;
 
-            changes ??= new List<MarketByPriceDelta>();
-            changes.Add(new MarketByPriceDelta(level.Side, level.LevelIndex, level.Price, level.Quantity,
-                level.Count, ToAction(level.Action)));
+            var changes = new List<MarketByPriceDelta>(levels.Changes.Count);
+            foreach (var change in levels.Changes)
+            {
+                changes.Add(new MarketByPriceDelta(change.Side, change.LevelIndex, change.Price,
+                    change.Quantity, change.Count, ToAction(change.Action)));
+            }
+
+            output ??= new List<MarketByPriceDeltaEvent>();
+            output.Add(new MarketByPriceDeltaEvent(levels.Symbol, levels.Time, changes));
         }
 
-        if (changes == null)
-            return Array.Empty<MarketByPriceDeltaEvent>();
-
-        // Both carried by every event in the batch: one dispatch is one instrument at one instant.
-        var first = events[0];
-        return new[] {new MarketByPriceDeltaEvent(first.Symbol, first.Time, changes)};
+        return output ?? (IList<MarketByPriceDeltaEvent>) Array.Empty<MarketByPriceDeltaEvent>();
     }
 
     // The two enums are deliberately separate rather than one shared between the book's events and

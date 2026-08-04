@@ -23,18 +23,28 @@ public record MarketByPriceDelta(Side Side, int LevelIndex, decimal Price, int Q
 // remainder not yet added. And the channel stamps one sequence number per message, so every
 // sequence marks a coherent book - which is what lets a snapshot say it is consistent as of one.
 //
-// The book reports these singly, as LevelChanged, and this composes them. Same split as a trade:
-// FillOrderConfirmed is emitted per side because a fill belongs to one participant, and the
-// public print is derived from the pair. Flat events compare by value, which is what keeps a
-// replay assertable event by event; the composing belongs on the way out.
+// The book reports the same set as one LevelsChanged, and this is its published form. The two
+// stay separate types because what a book says about itself and what a subscriber is told are
+// different vocabularies - the same reason FillOrderConfirmed and TradeDataEvent are not one
+// type - not because either needs reassembling on the way through.
 //
 // Changes are ordered best price outward within a side, arrivals and changes before departures.
 public record MarketByPriceDeltaEvent(string Symbol, DateTime Time, IReadOnlyList<MarketByPriceDelta> Changes)
     : MarketDataEvent(Symbol, Time)
 {
-    // A record's generated ToString renders a list as its type name, and this is the only
-    // published message carrying one. Spelled out so a printed feed is readable and so the tests
-    // that compare two runs by rendering them still see the contents.
+    // Both spelled out for the reason LevelsChanged spells them out: a record's generated equality
+    // compares a list member by reference, and its ToString renders one as a type name. This is
+    // the only published message carrying a collection, and it should compare and print like every
+    // other one rather than being the exception nobody remembers.
+    public virtual bool Equals(MarketByPriceDeltaEvent? other) =>
+        other is not null
+        && EqualityContract == other.EqualityContract
+        && Symbol == other.Symbol
+        && Time == other.Time
+        && Changes.SequenceEqual(other.Changes);
+
+    public override int GetHashCode() => HashCode.Combine(Symbol, Time, Changes.Count);
+
     public override string ToString() =>
         $"{nameof(MarketByPriceDeltaEvent)} {{ Symbol = {Symbol}, Time = {Time:O}, " +
         $"Changes = [{string.Join(", ", Changes)}] }}";
