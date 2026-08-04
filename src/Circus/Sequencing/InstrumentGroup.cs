@@ -18,9 +18,12 @@ public sealed class InstrumentGroup
     private readonly MarketDataChannel _channel;
     private readonly List<string> _symbols = new();
 
-    public InstrumentGroup(DateTime start)
+    // snapshotInterval is how often each book restates itself on the channel's snapshot stream.
+    // Null publishes no snapshot feed, which leaves a subscriber unable to join mid-session or
+    // recover from a gap - the position everything here was in before there was one.
+    public InstrumentGroup(DateTime start, TimeSpan? snapshotInterval = null)
     {
-        _sequencer = new Sequencer(start);
+        _sequencer = new Sequencer(start, snapshotInterval);
         _channel = new MarketDataChannel();
     }
 

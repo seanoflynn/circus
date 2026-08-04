@@ -53,9 +53,19 @@ public sealed class Sequencer
     private long _sequence;
     private DateTime _now;
 
-    public Sequencer(DateTime start)
+    // How often each book is asked to describe itself, or null for a venue that publishes no
+    // snapshot feed. Logical, never wall-clock: a replay reproduces the snapshots along with
+    // everything else because the ticks come from the same queue as every other action.
+    private readonly TimeSpan? _snapshotInterval;
+
+    public Sequencer(DateTime start, TimeSpan? snapshotInterval = null)
     {
+        if (snapshotInterval is { } interval && interval <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(snapshotInterval), interval,
+                "a snapshot cycle must move forward");
+
         _now = start;
+        _snapshotInterval = snapshotInterval;
     }
 
     // Everything at or before this instant has been dispatched, so nothing may be inserted there
@@ -77,6 +87,7 @@ public sealed class Sequencer
                 $"a book is already registered for {book.Symbol}", nameof(book));
 
         QueueNextTransition(book.Symbol, schedule, _now);
+        QueueNextSnapshot(book.Symbol, _now);
     }
 
     // Queues client flow at its own stamp.
@@ -138,6 +149,11 @@ public sealed class Sequencer
             if (next.Kind == DispatchKind.ScheduleTransition)
                 QueueNextTransition(action.Symbol, schedule, next.Time);
 
+            // Queued one ahead, like a schedule boundary, so the queue holds a single pending tick
+            // per book however long the run.
+            if (next.Kind == DispatchKind.SnapshotTick)
+                QueueNextSnapshot(action.Symbol, next.Time);
+
             QueueInterruptionTicks(events, next.Time);
         }
 
@@ -169,6 +185,18 @@ public sealed class Sequencer
                 Enqueue(new AdvanceTime {Symbol = status.Symbol, Time = resumesAt},
                     DispatchKind.InterruptionTick);
         }
+    }
+
+    // Every book on its own interval from where it was registered, all of them due together on a
+    // shared start. A real venue rotates instead, spreading its instruments across the cycle to
+    // flatten the bandwidth of a feed nobody in sync is reading - which is a wire concern this has
+    // no equivalent of, and rotating here would only make the cycle harder to reason about.
+    private void QueueNextSnapshot(string symbol, DateTime after)
+    {
+        if (_snapshotInterval is not { } interval) return;
+
+        Enqueue(new PublishSnapshot {Symbol = symbol, Time = after + interval},
+            DispatchKind.SnapshotTick);
     }
 
     private void QueueNextTransition(string symbol, MarketSchedule schedule, DateTime after)

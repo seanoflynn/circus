@@ -28,9 +28,16 @@ public sealed class MarketDataChannel
     private readonly Dictionary<string, InstrumentFeed> _feeds = new();
 
     private long _sequence;
+    private long _snapshotSequence;
 
     // What a subscriber has seen so far, so a caller resuming one can say where it got to.
     public long Sequence => _sequence;
+
+    // The snapshot stream's own count, numbered apart from the incremental one. A subscriber in
+    // sync never reads it, and would otherwise watch its sequence jump by a cycle's worth of
+    // messages it deliberately ignored - a gap indistinguishable from a loss, which is the one
+    // thing numbering is for.
+    public long SnapshotSequence => _snapshotSequence;
 
     public void Add(InstrumentFeed feed)
     {
@@ -64,6 +71,17 @@ public sealed class MarketDataChannel
             {
                 output ??= new List<ChannelMessage>();
                 output.Add(new ChannelMessage(++_sequence, data));
+            }
+
+            // After the incrementals of the same dispatch, and stamped with the incremental
+            // sequence as it stands once they are published. That number is the whole mechanism:
+            // it is what a joining subscriber discards its buffer up to, and it can only be right
+            // if the snapshot is numbered after everything it already reflects.
+            foreach (var data in feed.Snapshot(forInstrument))
+            {
+                output ??= new List<ChannelMessage>();
+                output.Add(new ChannelMessage(++_snapshotSequence, data, ChannelStream.Snapshot,
+                    _sequence));
             }
         }
 

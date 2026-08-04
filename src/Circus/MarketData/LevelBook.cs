@@ -38,6 +38,30 @@ public sealed class LevelBook
     // consistent state to another, and applying it a level at a time would leave anything reading
     // this between them looking at a book that never existed - a swept level gone with the
     // aggressor's remainder not yet arrived.
+    // Starts again from a snapshot, discarding whatever was here. This is how a subscriber joins
+    // mid-session or comes back from a gap: it cannot patch its way to the truth from a stream it
+    // did not hear the start of, so it takes the image whole and applies the incrementals that
+    // follow it.
+    //
+    // Replaces rather than merges, and that is the point - a level this held and the snapshot does
+    // not is a level that is gone, not one the snapshot forgot to mention. Merging would leave a
+    // recovering subscriber holding whatever it was wrong about.
+    public void Reset(LevelsDataEvent snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+
+        _bids.Clear();
+        _offers.Clear();
+
+        foreach (var level in snapshot.Bids)
+            _bids[level.Price] = (level.Quantity, level.Count);
+        foreach (var level in snapshot.Offers)
+            _offers[level.Price] = (level.Quantity, level.Count);
+
+        _bidLevels = Materialize(_bids);
+        _offerLevels = Materialize(_offers);
+    }
+
     public void Apply(MarketByPriceDeltaEvent message)
     {
         ArgumentNullException.ThrowIfNull(message);
