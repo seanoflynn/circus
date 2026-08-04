@@ -166,8 +166,8 @@ public class ReplayTests
     // front could disagree.
     //
     // Derived from the trace rather than written as fixed instants, because how long a trace of n
-    // actions lasts is a property of whatever produced it - agents write as many actions in a
-    // millisecond as they feel like, where the simulator wrote exactly one.
+    // actions lasts is a property of whatever produced it: agents write as many actions in a
+    // millisecond as they feel like.
     private static Sequencer Venue(IReadOnlyList<OrderBookAction> trace)
     {
         var start = trace[0].Time;

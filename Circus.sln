@@ -6,8 +6,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Circus.Tests", "tests\Circu
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Circus.Examples", "samples\Circus.Examples\Circus.Examples.csproj", "{6BA53765-A118-41CD-9BBC-28C0904EFD36}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Circus.Simulator", "src\Circus.Simulator\Circus.Simulator.csproj", "{67401FA1-C1B4-4AAA-8DF3-B1DD7FDD55A1}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Circus.Benchmarks", "benchmarks\Circus.Benchmarks\Circus.Benchmarks.csproj", "{9AAADD20-6473-4A0D-BA43-CE936C83435F}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Circus.Agents", "src\Circus.Agents\Circus.Agents.csproj", "{2B8E4C21-6F0A-4D3E-9C57-1A4F0B9D6E88}"
@@ -58,18 +56,6 @@ Global
 		{6BA53765-A118-41CD-9BBC-28C0904EFD36}.Release|x64.Build.0 = Release|Any CPU
 		{6BA53765-A118-41CD-9BBC-28C0904EFD36}.Release|x86.ActiveCfg = Release|Any CPU
 		{6BA53765-A118-41CD-9BBC-28C0904EFD36}.Release|x86.Build.0 = Release|Any CPU
-		{67401FA1-C1B4-4AAA-8DF3-B1DD7FDD55A1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{67401FA1-C1B4-4AAA-8DF3-B1DD7FDD55A1}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{67401FA1-C1B4-4AAA-8DF3-B1DD7FDD55A1}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{67401FA1-C1B4-4AAA-8DF3-B1DD7FDD55A1}.Debug|x64.Build.0 = Debug|Any CPU
-		{67401FA1-C1B4-4AAA-8DF3-B1DD7FDD55A1}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{67401FA1-C1B4-4AAA-8DF3-B1DD7FDD55A1}.Debug|x86.Build.0 = Debug|Any CPU
-		{67401FA1-C1B4-4AAA-8DF3-B1DD7FDD55A1}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{67401FA1-C1B4-4AAA-8DF3-B1DD7FDD55A1}.Release|Any CPU.Build.0 = Release|Any CPU
-		{67401FA1-C1B4-4AAA-8DF3-B1DD7FDD55A1}.Release|x64.ActiveCfg = Release|Any CPU
-		{67401FA1-C1B4-4AAA-8DF3-B1DD7FDD55A1}.Release|x64.Build.0 = Release|Any CPU
-		{67401FA1-C1B4-4AAA-8DF3-B1DD7FDD55A1}.Release|x86.ActiveCfg = Release|Any CPU
-		{67401FA1-C1B4-4AAA-8DF3-B1DD7FDD55A1}.Release|x86.Build.0 = Release|Any CPU
 		{9AAADD20-6473-4A0D-BA43-CE936C83435F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{9AAADD20-6473-4A0D-BA43-CE936C83435F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{9AAADD20-6473-4A0D-BA43-CE936C83435F}.Debug|x64.ActiveCfg = Debug|Any CPU

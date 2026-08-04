@@ -1,6 +1,14 @@
 # Replacing the simulator and its shadow book with agents
 
-A plan. Nothing here is built yet.
+A plan, mostly carried out. Steps 1 to 4 have landed: `Circus.Agents` exists, `LiquidityAgent`
+generates flow, `AgentTrace` records it, and `Circus.Simulator` is gone. Step 5 - a sample of a
+live venue with agents quoting into it - is outstanding.
+
+What follows is the plan as written, not a description of what was built, and the two differ in
+places: `AgentSwarm` attaches to a venue rather than building one, and aggression split into a
+probability and a sweep depth. Once step 5 lands this document should either be deleted or
+rewritten as a design note on why participants hold no book - the reasoning is worth keeping, the
+step list is not.
 
 ## Where we are
 

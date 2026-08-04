@@ -25,12 +25,8 @@
     <ItemGroup>
       <ProjectReference Include="..\..\src\Circus\Circus.csproj" />
 
-      <!-- The simulator generates the traces the replay tests feed through a sequencer, and has
-           behaviour of its own worth pinning now that it covers several instruments. -->
-      <ProjectReference Include="..\..\src\Circus.Simulator\Circus.Simulator.csproj" />
-
-      <!-- Participants: what a venue looks like with something trading at it. Replaces the
-           simulator once the agents can generate the traces it does. -->
+      <!-- Participants, and the traces recorded from them: what a venue looks like with something
+           trading at it, and what the replay and market data tests are fed on. -->
       <ProjectReference Include="..\..\src\Circus.Agents\Circus.Agents.csproj" />
     </ItemGroup>
 

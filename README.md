@@ -30,6 +30,16 @@ is the venue's order of events.
                     └──────────────┘                        └──────────────┘
 ```
 
+Agents are subscribers that send orders back. An agent knows the market because it subscribed to
+the feed and knows what it is holding because it saw its own confirms and fills, so a venue with
+agents in it is the same venue with the return path joined up - no component in the diagram
+changes, and there is no second book anywhere modelling the first.
+
+That gives two things a venue on its own does not. Point a swarm at a live venue and there is
+something to trade against, arriving through the same driver a gateway would use. Record what a
+seeded swarm sent and there is a trace: reproducible from its seed, replayable into a fresh venue,
+and the input the benchmarks and the replay tests run on.
+
 See `samples/Circus.Examples` for each of these; `dotnet run --project samples/Circus.Examples`
 runs them all.
 
@@ -79,3 +89,9 @@ Matching algorithms, selected per instrument
 - [x] Open auction
 - [x] Pro-rata
 - [ ] Allocation (top-order priority, split FIFO/pro-rata)
+
+Agents
+- [x] Participants that read the feed and their own events, and hold no book
+- [x] Seeded liquidity agents (depth, spacing, size, aggression, sweep, churn, position limit)
+- [x] Recorded traces, reproducible from a seed and replayable
+- [ ] Quoting into an auction rather than only continuous trading
