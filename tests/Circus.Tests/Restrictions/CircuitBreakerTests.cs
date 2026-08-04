@@ -1,5 +1,6 @@
 using Circus.Actions;
 using Circus.Events;
+using Circus.Tests.Helpers;
 using Circus.Time;
 using NUnit.Framework;
 
@@ -89,7 +90,7 @@ public class CircuitBreakerTests
 
         // assert - still halted, because the level it actually reached never resumes on its own
         Assert.AreEqual(OrderBookStatus.Halted, book.Status);
-        Assert.AreEqual(0, events.Count);
+        Assert.AreEqual(0, events.OrderFlow().Count);
     }
 
     [Test]

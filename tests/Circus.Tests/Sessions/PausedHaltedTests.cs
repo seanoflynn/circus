@@ -43,7 +43,7 @@ public class PausedHaltedTests
         var events = Book.UpdateStatus(status);
 
         // assert
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var statusChanged = events[0] as StatusChanged;
         Assert.IsNotNull(statusChanged);
         Assert.AreEqual(status, statusChanged.Status);

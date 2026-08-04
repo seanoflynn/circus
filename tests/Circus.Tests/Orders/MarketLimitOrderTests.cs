@@ -45,7 +45,7 @@ public class MarketLimitOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(3, events.Count);
+        Assert.AreEqual(3, events.OrderFlow().Count);
 
         var created = events[0] as CreateOrderConfirmed;
         Assert.IsNotNull(created);
@@ -75,7 +75,7 @@ public class MarketLimitOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(3, events.Count);
+        Assert.AreEqual(3, events.OrderFlow().Count);
 
         var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
@@ -155,7 +155,7 @@ public class MarketLimitOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as CreateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(OrderRejectedReason.NoOrdersToMatchMarketOrder, rejected.Reason);
@@ -174,7 +174,7 @@ public class MarketLimitOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(4, events.Count);
+        Assert.AreEqual(4, events.OrderFlow().Count);
 
         var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
@@ -209,7 +209,7 @@ public class MarketLimitOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as CreateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(OrderRejectedReason.InsufficientLiquidityForMinQuantity, rejected.Reason);

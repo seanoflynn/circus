@@ -216,7 +216,7 @@ public class AuctionMatchingAlgorithmTests
         var events = book.UpdateStatus(OrderBookStatus.Open);
 
         // assert
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         Assert.IsInstanceOf<StatusChanged>(events[0]);
         var buyLevels = book.GetLevels(Side.Buy, 10);
         Assert.AreEqual(1, buyLevels.Count);
@@ -370,7 +370,7 @@ public class AuctionMatchingAlgorithmTests
         var events = book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 10, 200);
 
         // assert - accepted normally, no pause
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         Assert.IsInstanceOf<CreateOrderConfirmed>(events[0]);
         Assert.AreEqual(OrderBookStatus.Open, book.Status);
     }
@@ -398,7 +398,7 @@ public class AuctionMatchingAlgorithmTests
         var events = book.CreateLimitOrder(CompanyId5, OrderId5, new OrderValidity.Day(), Side.Buy, 10, 200);
 
         // assert
-        Assert.AreEqual(3, events.Count);
+        Assert.AreEqual(3, events.OrderFlow().Count);
         Assert.IsInstanceOf<CreateOrderConfirmed>(events[0]);
         Assert.AreEqual(OrderBookStatus.Paused, ((StatusChanged) events[1]).Status);
         Assert.AreEqual(OrderBookStatus.Paused, book.Status);

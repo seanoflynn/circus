@@ -222,19 +222,19 @@ public class OrderBook : IOrderBook
         var events = ResumeIfDue(time);
         events.AddRange(Handle(action, time));
 
-        // After the order events, so a consumer sees what happened before what it left behind,
-        // and reporting the net effect of the whole action rather than each state it passed
-        // through: an aggressor sweeping three levels leaves one report per level touched, not
-        // one per fill along the way. That is the shape of a real incremental refresh, which
-        // carries every level a single matching-engine event moved.
-        AppendLevelChanges(events, time);
-
-        // Last, so it reports where the action left the book rather than any state it passed
-        // through - a pre-open cancel that uncrosses the book withdraws the quote, and the
-        // opening print withdraws it after the trades it produced.
+        // Last of the order-flow events, so it reports where the action left the book rather than
+        // any state it passed through - a pre-open cancel that uncrosses the book withdraws the
+        // quote, and the opening print withdraws it after the trades it produced.
         var quoteChange = TakeIndicativeQuoteChange(time);
         if (quoteChange != null)
             events.Add(quoteChange);
+
+        // After everything that describes what happened, because these describe what it left
+        // behind - and reporting the net effect of the whole action rather than each state it
+        // passed through: an aggressor sweeping three levels leaves one report per level touched,
+        // not one per fill along the way. That is the shape of a real incremental refresh, which
+        // carries every level a single matching-engine event moved.
+        AppendLevelChanges(events, time);
 
         return events;
     }

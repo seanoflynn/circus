@@ -48,7 +48,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
 
         var created = events[0] as CreateOrderConfirmed;
         Assert.IsNotNull(created);
@@ -89,7 +89,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(3, events.Count);
+        Assert.AreEqual(3, events.OrderFlow().Count);
 
         var created = events[0] as CreateOrderConfirmed;
         Assert.IsNotNull(created);
@@ -183,7 +183,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
 
         var created = events[0] as CreateOrderConfirmed;
         Assert.IsNotNull(created);
@@ -222,7 +222,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
 
         var created = events[0] as CreateOrderConfirmed;
         Assert.IsNotNull(created);
@@ -259,7 +259,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(3, events.Count);
+        Assert.AreEqual(3, events.OrderFlow().Count);
 
         var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
@@ -330,7 +330,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(3, events.Count);
+        Assert.AreEqual(3, events.OrderFlow().Count);
 
         var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
@@ -401,7 +401,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(3, events.Count);
+        Assert.AreEqual(3, events.OrderFlow().Count);
 
         var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
@@ -479,7 +479,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(3, events.Count);
+        Assert.AreEqual(3, events.OrderFlow().Count);
 
         var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
@@ -552,7 +552,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(5, events.Count);
+        Assert.AreEqual(5, events.OrderFlow().Count);
 
         var matched1 = events.Trades()[0];
         Assert.IsNotNull(matched1);
@@ -680,7 +680,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(3, events.Count);
+        Assert.AreEqual(3, events.OrderFlow().Count);
 
         var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
@@ -758,7 +758,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(5, events.Count);
+        Assert.AreEqual(5, events.OrderFlow().Count);
 
         var matched1 = events.Trades()[0];
         Assert.IsNotNull(matched1);
@@ -886,7 +886,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(3, events.Count);
+        Assert.AreEqual(3, events.OrderFlow().Count);
 
         var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
@@ -959,7 +959,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(5, events.Count);
+        Assert.AreEqual(5, events.OrderFlow().Count);
 
         var matched1 = events.Trades()[0];
         Assert.IsNotNull(matched1);
@@ -1087,7 +1087,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(3, events.Count);
+        Assert.AreEqual(3, events.OrderFlow().Count);
 
         var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
@@ -1165,7 +1165,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(5, events.Count);
+        Assert.AreEqual(5, events.OrderFlow().Count);
 
         var matched1 = events.Trades()[0];
         Assert.IsNotNull(matched1);
@@ -1295,7 +1295,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(3, events.Count);
+        Assert.AreEqual(3, events.OrderFlow().Count);
 
         var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
@@ -1370,7 +1370,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(5, events.Count);
+        Assert.AreEqual(5, events.OrderFlow().Count);
 
         var matched1 = events.Trades()[0];
         Assert.IsNotNull(matched1);
@@ -1500,7 +1500,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(3, events.Count);
+        Assert.AreEqual(3, events.OrderFlow().Count);
 
         var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
@@ -1580,7 +1580,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(5, events.Count);
+        Assert.AreEqual(5, events.OrderFlow().Count);
 
         var matched1 = events.Trades()[0];
         Assert.IsNotNull(matched1);
@@ -1710,7 +1710,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(3, events.Count);
+        Assert.AreEqual(3, events.OrderFlow().Count);
 
         var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
@@ -1777,7 +1777,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as CreateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(Gold.Symbol, rejected.Symbol);
@@ -1799,7 +1799,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as CreateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(Gold.Symbol, rejected.Symbol);
@@ -1821,7 +1821,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as CreateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(Gold.Symbol, rejected.Symbol);
@@ -1845,7 +1845,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as CreateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(Gold.Symbol, rejected.Symbol);
@@ -1887,7 +1887,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as CreateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(Gold.Symbol, rejected.Symbol);
@@ -1908,7 +1908,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as CreateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(Gold.Symbol, rejected.Symbol);
@@ -1929,7 +1929,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as CreateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(Gold.Symbol, rejected.Symbol);
@@ -1950,7 +1950,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as CreateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(Gold.Symbol, rejected.Symbol);
@@ -1974,7 +1974,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as CreateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(Gold.Symbol, rejected.Symbol);
@@ -1998,7 +1998,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as CreateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(Gold.Symbol, rejected.Symbol);
@@ -2019,7 +2019,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as CreateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(Gold.Symbol, rejected.Symbol);
@@ -2041,7 +2041,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as CreateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(Gold.Symbol, rejected.Symbol);
@@ -2064,7 +2064,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as CreateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(CompanyId1, rejected.CompanyId);
@@ -2085,7 +2085,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as CreateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(CompanyId1, rejected.CompanyId);
@@ -2105,7 +2105,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as CreateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(OrderRejectedReason.OrderInBook, rejected.Reason);
@@ -2124,7 +2124,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var created = events[0] as CreateOrderConfirmed;
         Assert.IsNotNull(created);
         Assert.AreEqual(CompanyId2, created.Order.CompanyId);
@@ -2143,7 +2143,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var created = events[0] as CreateOrderConfirmed;
         Assert.IsNotNull(created);
         Assert.AreEqual(new OrderValidity.GoodTilDate { Date = goodTilDate }, created.Order.OrderValidity);
@@ -2161,7 +2161,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var created = events[0] as CreateOrderConfirmed;
         Assert.IsNotNull(created);
         Assert.AreEqual(new OrderValidity.GoodTilDate { Date = goodTilDate }, created.Order.OrderValidity);
@@ -2179,7 +2179,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as CreateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(CompanyId1, rejected.CompanyId);
@@ -2199,7 +2199,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as CreateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(CompanyId1, rejected.CompanyId);
@@ -2218,7 +2218,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var created = events[0] as CreateOrderConfirmed;
         Assert.IsNotNull(created);
         Assert.AreEqual(clientOrderId, created.Order.ClientOrderId);
@@ -2237,7 +2237,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as CreateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(CompanyId1, rejected.CompanyId);
@@ -2256,7 +2256,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as CreateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(OrderId1, rejected.ClientOrderId);
@@ -2275,7 +2275,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var created = events[0] as CreateOrderConfirmed;
         Assert.IsNotNull(created);
         Assert.AreEqual(companyId, created.Order.CompanyId);
@@ -2294,7 +2294,7 @@ public class CreateOrderTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as CreateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(OrderId1, rejected.ClientOrderId);

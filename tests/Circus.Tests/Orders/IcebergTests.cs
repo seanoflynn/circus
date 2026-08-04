@@ -89,7 +89,7 @@ public class IcebergTests
         // replenishes (to a full peak of 5 again) and is requeued behind Company2 - visible in
         // the feed as its own UpdateOrderConfirmed, with a fresh ExchangeOrderId marking the
         // lost priority
-        Assert.AreEqual(6, events.Count);
+        Assert.AreEqual(6, events.OrderFlow().Count);
         Assert.IsInstanceOf<CreateOrderConfirmed>(events[0]);
 
         var firstMatch = events.Trades()[0];
@@ -137,7 +137,7 @@ public class IcebergTests
         // assert - three separate prints as the peak replenishes: 5, 5, then the 2 left over,
         // with a replenish event after each of the first two (not after the last - the
         // iceberg is fully filled at that point, nothing left to replenish)
-        Assert.AreEqual(9, events.Count);
+        Assert.AreEqual(9, events.OrderFlow().Count);
         var matches = events.Trades().ToList();
         Assert.AreEqual(3, matches.Count);
         Assert.AreEqual(5, matches[0].Quantity);
@@ -248,7 +248,7 @@ public class IcebergTests
         // remaining size, down to whatever's left at the end (3, 3, 3, then 1). The aggressor
         // itself replenishes (and loses priority) after each of the first three fills, but not
         // the last, since it's fully filled at that point.
-        Assert.AreEqual(12, events.Count);
+        Assert.AreEqual(12, events.OrderFlow().Count);
         var matches = events.Trades().ToList();
         Assert.AreEqual(4, matches.Count);
         Assert.AreEqual(3, matches[0].Quantity);

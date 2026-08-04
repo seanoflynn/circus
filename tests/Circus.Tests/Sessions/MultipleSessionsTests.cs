@@ -149,7 +149,7 @@ public class MultipleSessionsTests
         var events = Book.CloseTrading(endsTradingDay: false);
 
         // assert
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         Assert.IsInstanceOf<StatusChanged>(events[0]);
         Assert.AreEqual(0, events.OfType<ExpireOrderConfirmed>().Count(), "a break does not retire day orders");
     }
@@ -235,7 +235,7 @@ public class MultipleSessionsTests
         var events = Book.CloseTrading();
 
         // assert
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         Assert.IsInstanceOf<StatusChanged>(events[0]);
     }
 }

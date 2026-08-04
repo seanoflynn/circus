@@ -85,7 +85,7 @@ public class TimedResumeTests
 
         // assert
         Assert.AreEqual(OrderBookStatus.Paused, book.Status);
-        Assert.AreEqual(0, events.Count);
+        Assert.AreEqual(0, events.OrderFlow().Count);
     }
 
     [Test]
@@ -101,7 +101,7 @@ public class TimedResumeTests
 
         // assert
         Assert.AreEqual(OrderBookStatus.Paused, book.Status);
-        Assert.AreEqual(0, events.Count);
+        Assert.AreEqual(0, events.OrderFlow().Count);
     }
 
     [Test]
@@ -206,7 +206,7 @@ public class TimedResumeTests
 
         // assert - a closed book must not spring back open
         Assert.AreEqual(OrderBookStatus.Closed, book.Status);
-        Assert.AreEqual(0, events.Count);
+        Assert.AreEqual(0, events.OrderFlow().Count);
     }
 
     [Test]
@@ -220,7 +220,7 @@ public class TimedResumeTests
         var events = book.AdvanceTime();
 
         // assert
-        Assert.AreEqual(0, events.Count);
+        Assert.AreEqual(0, events.OrderFlow().Count);
         Assert.AreEqual(OrderBookStatus.Open, book.Status);
     }
 

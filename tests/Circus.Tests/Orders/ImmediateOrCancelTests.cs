@@ -61,7 +61,7 @@ public class ImmediateOrCancelTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(3, events.Count);
+        Assert.AreEqual(3, events.OrderFlow().Count);
 
         var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
@@ -89,7 +89,7 @@ public class ImmediateOrCancelTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(4, events.Count);
+        Assert.AreEqual(4, events.OrderFlow().Count);
 
         var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
@@ -126,7 +126,7 @@ public class ImmediateOrCancelTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(2, events.Count);
+        Assert.AreEqual(2, events.OrderFlow().Count);
 
         var created = events[0] as CreateOrderConfirmed;
         Assert.IsNotNull(created);
@@ -158,7 +158,7 @@ public class ImmediateOrCancelTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(4, events.Count);
+        Assert.AreEqual(4, events.OrderFlow().Count);
 
         var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
@@ -202,7 +202,7 @@ public class ImmediateOrCancelTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(7, events.Count);
+        Assert.AreEqual(7, events.OrderFlow().Count);
 
         Assert.IsInstanceOf<CreateOrderConfirmed>(events[0]);
         Assert.IsInstanceOf<FillOrderConfirmed>(events[1]);
@@ -248,7 +248,7 @@ public class ImmediateOrCancelTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(3, events.Count);
+        Assert.AreEqual(3, events.OrderFlow().Count);
 
         var matched = events.Trades()[0];
         Assert.IsNotNull(matched);
@@ -275,7 +275,7 @@ public class ImmediateOrCancelTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(5, events.Count);
+        Assert.AreEqual(5, events.OrderFlow().Count);
 
         var matched1 = events.Trades()[0];
         Assert.IsNotNull(matched1);
@@ -306,7 +306,7 @@ public class ImmediateOrCancelTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
 
         var rejected = events[0] as CreateOrderRejected;
         Assert.IsNotNull(rejected);
@@ -349,7 +349,7 @@ public class ImmediateOrCancelTests
 
         // assert
         Assert.IsNotNull(events);
-        Assert.AreEqual(4, events.Count);
+        Assert.AreEqual(4, events.OrderFlow().Count);
 
         Assert.IsInstanceOf<CreateOrderConfirmed>(events[0]);
         Assert.IsInstanceOf<FillOrderConfirmed>(events[1]);
@@ -406,7 +406,7 @@ public class ImmediateOrCancelTests
 
         // assert - proceeds like classic IOC once the gate is satisfied: fills what's
         // available, cancels the rest
-        Assert.AreEqual(4, events.Count);
+        Assert.AreEqual(4, events.OrderFlow().Count);
         Assert.IsInstanceOf<CreateOrderConfirmed>(events[0]);
 
         var matched = events.Trades()[0];
@@ -433,7 +433,7 @@ public class ImmediateOrCancelTests
             new OrderValidity.ImmediateOrCancel { MinQuantity = 3 }, Side.Buy, 5, 100);
 
         // assert - rejected outright, not even a partial fill below the minimum
-        Assert.AreEqual(1, events.Count);
+        Assert.AreEqual(1, events.OrderFlow().Count);
         var rejected = events[0] as CreateOrderRejected;
         Assert.IsNotNull(rejected);
         Assert.AreEqual(OrderRejectedReason.InsufficientLiquidityForMinQuantity, rejected.Reason);
@@ -470,7 +470,7 @@ public class ImmediateOrCancelTests
 
         // assert - stop triggers, but the available 1 unit doesn't meet its MinQuantity of 2,
         // so it's cancelled directly rather than being converted to a working limit order
-        Assert.AreEqual(4, events.Count);
+        Assert.AreEqual(4, events.OrderFlow().Count);
         Assert.IsInstanceOf<CreateOrderConfirmed>(events[0]);
         Assert.IsInstanceOf<FillOrderConfirmed>(events[1]);
 
