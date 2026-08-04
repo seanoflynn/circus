@@ -1,8 +1,8 @@
 using Circus.Actions;
+using Circus.Agents;
 using Circus.MarketData;
 using Circus.Sequencing;
 using Circus.Sessions;
-using Circus.Simulator;
 using NUnit.Framework;
 
 namespace Circus.Tests.Sequencing;
@@ -116,7 +116,7 @@ public class InstrumentGroupTests
     [Test]
     public void Replay_Run_Convenience_ProducesSameResultAsManualWiring()
     {
-        var trace = new OrderFlowSimulator(new[] {Gold, Silver}, seed: 42).Generate(200);
+        var trace = AgentTrace.Record(new[] {Gold, Silver}, 200, seed: 42);
 
         // Manual wiring
         var manual = new InstrumentGroup(Day);
