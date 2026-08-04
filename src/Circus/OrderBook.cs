@@ -52,6 +52,11 @@ public class OrderBook : IOrderBook
     // self-match verdicts) that read them.
     private readonly Matcher _matcher = new();
 
+    // Scratch space for Match, reused rather than allocated per call: a book processes one
+    // action at a time and Match never re-enters itself within that, so one buffer per book is
+    // enough. Cleared at the top of every call rather than left to grow unbounded across them.
+    private readonly List<InternalOrder> _pendingImmediateOrCancelStops = new();
+
     // Nothing outside this table names a status - the rest of the book reads the current phase
     // and acts on what it says. Pre-open's auction instance is also what prints on the way out
     // of it, so the opening print is the quote it had been publishing.
@@ -692,18 +697,18 @@ public class OrderBook : IOrderBook
 
         var continuous = phase.Algorithm ??
             throw new InvalidOperationException("a phase that matches continuously needs an algorithm");
-        var pendingImmediateOrCancelStops = new List<InternalOrder>();
+        _pendingImmediateOrCancelStops.Clear();
 
         // Closed over the action's instant rather than passed as a method group, so a sweep
         // judges every price it touches against the same moment the events it emits are stamped
         // with. A restriction reading a clock here instead would drift within a single action.
         foreach (var outcome in _matcher.Run(algorithm ?? continuous, continuous,
                      priceTicks => CheckTradeRestrictionBreach(priceTicks, time)))
-            Apply(outcome, events, time, pendingImmediateOrCancelStops);
+            Apply(outcome, events, time, _pendingImmediateOrCancelStops);
 
         // Deferred until the sweep is done: the loop only exits once nothing crosses anywhere,
         // so "did it fill" cannot be answered any earlier.
-        foreach (var order in pendingImmediateOrCancelStops)
+        foreach (var order in _pendingImmediateOrCancelStops)
         {
             if (order.RemainingQuantity > 0)
                 events.Add(CancelRemainder(order, OrderCancelledReason.ImmediateOrCancelNotFilled, time));
