@@ -238,9 +238,9 @@ public class AuctionMatchingAlgorithmTests
         var sell = book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 10, 100);
 
         // assert - a confirmation each, and no trade
-        Assert.AreEqual(1, buy.Count, "nothing crosses yet, so not even a quote");
+        Assert.AreEqual(1, buy.OrderFlow().Count, "nothing crosses yet, so not even a quote");
         Assert.IsInstanceOf<CreateOrderConfirmed>(buy[0]);
-        Assert.AreEqual(2, sell.Count);
+        Assert.AreEqual(2, sell.OrderFlow().Count);
         Assert.IsInstanceOf<CreateOrderConfirmed>(sell[0]);
 
         // the auction is quoting the whole time, it just isn't acting on it

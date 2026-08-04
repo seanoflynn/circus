@@ -119,14 +119,14 @@ public class MarketLimitOrderTests
         var marketLimitEvents = marketLimitBook.CreateMarketLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Buy, 5);
 
         // assert - the plain Market order sweeps both levels and fully fills
-        Assert.AreEqual(5, marketEvents.Count);
+        Assert.AreEqual(5, marketEvents.OrderFlow().Count);
         var finalAggressor = marketEvents.Trades()[1].Fills[1].Order;
         Assert.AreEqual(OrderStatus.Filled, finalAggressor.Status);
         Assert.AreEqual(5, finalAggressor.FilledQuantity);
         Assert.AreEqual(0, finalAggressor.RemainingQuantity);
 
         // the market-limit order only touches the 500 level and rests the remainder there
-        Assert.AreEqual(3, marketLimitEvents.Count);
+        Assert.AreEqual(3, marketLimitEvents.OrderFlow().Count);
         var matched = marketLimitEvents.Trades()[0];
         Assert.IsNotNull(matched);
         Assert.AreEqual(500, matched.Price);
