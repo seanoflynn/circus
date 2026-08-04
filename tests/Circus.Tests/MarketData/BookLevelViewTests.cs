@@ -47,9 +47,9 @@ public class BookLevelViewTests
 
     private void AssertBookAgreesWithProducer(LevelsDataEvent derived)
     {
-        CollectionAssert.AreEqual(derived.Bids, _book.GetLevels(Side.Buy, Deep),
+        Assert.AreEqual(derived.Bids, _book.GetLevels(Side.Buy, Deep),
             "book-held aggregate disagrees with the levels derived from the event stream (bids)");
-        CollectionAssert.AreEqual(derived.Offers, _book.GetLevels(Side.Sell, Deep),
+        Assert.AreEqual(derived.Offers, _book.GetLevels(Side.Sell, Deep),
             "book-held aggregate disagrees with the levels derived from the event stream (offers)");
     }
 
