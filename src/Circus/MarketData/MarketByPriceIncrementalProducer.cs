@@ -10,18 +10,38 @@ namespace Circus.MarketData;
 // depth from order events has to hold the book the subscriber is missing, which is what the
 // previous LevelDataProducer did - and why it could never resync after a missed event.
 //
-// A dispatch is one action's events, and the book emits at most one LevelsChanged for it, so the
-// loop below normally runs once. It is a loop rather than a lookup because a dispatch spanning
-// instruments would carry one per book, and each has to become its own message.
+// A dispatch is one action's events, and the book emits one LevelsChanged per depth it reports,
+// so the loop below normally runs once and the filter normally matches everything. It is a loop
+// rather than a lookup because a dispatch spanning instruments would carry one per book, and each
+// has to become its own message.
+//
+// Depth is a subscription rather than a truncation. The book is asked to report at this depth and
+// this producer takes those reports; it does not take a deeper report and cut it down, because a
+// shallower window's departures are not present in a deeper window's report at all - see
+// LevelsChanged. A producer whose depth the book does not report publishes nothing, which is the
+// failure InstrumentGroup exists to prevent by building both from one number.
 public class MarketByPriceIncrementalProducer : IIncrementalProducer<MarketByPriceDeltaEvent>
 {
+    private readonly int _depth;
+
+    public MarketByPriceIncrementalProducer(int depth = OrderBook.DefaultPublishedDepth)
+    {
+        if (depth <= 0)
+            throw new ArgumentOutOfRangeException(nameof(depth), depth,
+                "a feed carrying no levels is not a by-price feed");
+
+        _depth = depth;
+    }
+
+    public int Depth => _depth;
+
     public IList<MarketByPriceDeltaEvent> Process(IReadOnlyList<MarketEvent> events)
     {
         List<MarketByPriceDeltaEvent>? output = null;
 
         foreach (var ev in events)
         {
-            if (ev is not LevelsChanged levels)
+            if (ev is not LevelsChanged levels || levels.Depth != _depth)
                 continue;
 
             var changes = new List<MarketByPriceDelta>(levels.Changes.Count);
@@ -32,7 +52,7 @@ public class MarketByPriceIncrementalProducer : IIncrementalProducer<MarketByPri
             }
 
             output ??= new List<MarketByPriceDeltaEvent>();
-            output.Add(new MarketByPriceDeltaEvent(levels.Symbol, levels.Time, changes));
+            output.Add(new MarketByPriceDeltaEvent(levels.Symbol, levels.Time, levels.Depth, changes));
         }
 
         return output ?? (IList<MarketByPriceDeltaEvent>) Array.Empty<MarketByPriceDeltaEvent>();

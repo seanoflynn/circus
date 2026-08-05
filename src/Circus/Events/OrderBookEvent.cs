@@ -141,9 +141,9 @@ public record LimitStateChanged(string Symbol, DateTime Time, Side? Side, decima
 // Removed the rank it last held, and is carried for a consumer that wants it rather than for
 // identifying the level.
 //
-// Removed covers a level leaving the published window as well as leaving the book - the window is
-// fixed at ten deep, and a level pushed past that is no longer published whether or not orders
-// still rest there. It returns as Added if it comes back.
+// Removed covers a level leaving the published window as well as leaving the book - a level
+// pushed past the window's depth is no longer published whether or not orders still rest there.
+// It returns as Added if it comes back.
 public record LevelChange(Side Side, int LevelIndex, decimal Price, int Quantity, int Count,
     LevelChangeAction Action);
 
@@ -163,7 +163,20 @@ public record LevelChange(Side Side, int LevelIndex, decimal Price, int Quantity
 // an action that touches no level - a status change, a rejected order - reports nothing.
 //
 // Changes are ordered best price outward within a side, arrivals and changes before departures.
-public record LevelsChanged(string Symbol, DateTime Time, IReadOnlyList<LevelChange> Changes)
+//
+// Depth is how many levels a side of the window holds, and it is part of what the event says
+// rather than a note about it: the same action produces a different set of changes at five deep
+// than at ten, so a report is only meaningful paired with the window it describes. A book asked
+// for several depths answers with one of these per depth, and a feed takes the one it publishes.
+//
+// It has to work that way, because a shallower report is not a filtered deeper one. Bids at
+// 200/190/180/170/160/150 with a new bid arriving at 195: ten deep, only the arrival is news, and
+// price-keyed reporting deliberately says nothing about the levels that merely moved rank. Five
+// deep, 160 has been pushed out of the window and has to be Removed - a change that appears
+// nowhere in the ten-deep report, at any rank. Truncating by LevelIndex would silently leave a
+// five-deep subscriber holding a level that is no longer published.
+public record LevelsChanged(string Symbol, DateTime Time, int Depth,
+        IReadOnlyList<LevelChange> Changes)
     : MarketEvent(Symbol, Time)
 {
     // Spelled out because a record's generated equality compares a list member by reference, and
@@ -176,12 +189,13 @@ public record LevelsChanged(string Symbol, DateTime Time, IReadOnlyList<LevelCha
         && EqualityContract == other.EqualityContract
         && Symbol == other.Symbol
         && Time == other.Time
+        && Depth == other.Depth
         && Changes.SequenceEqual(other.Changes);
 
-    public override int GetHashCode() => HashCode.Combine(Symbol, Time, Changes.Count);
+    public override int GetHashCode() => HashCode.Combine(Symbol, Time, Depth, Changes.Count);
 
     public override string ToString() =>
-        $"{nameof(LevelsChanged)} {{ Symbol = {Symbol}, Time = {Time:O}, " +
+        $"{nameof(LevelsChanged)} {{ Symbol = {Symbol}, Time = {Time:O}, Depth = {Depth}, " +
         $"Changes = [{string.Join(", ", Changes)}] }}";
 }
 
@@ -194,9 +208,12 @@ public record LevelsChanged(string Symbol, DateTime Time, IReadOnlyList<LevelCha
 // are carried here, so a snapshot feed can republish them and a subscriber can start from
 // something true. That is what CME's snapshot does, carrying instrument status alongside the book.
 //
-// Levels are the published window, ten deep, in displayed size - the same aggregate LevelsChanged
-// reports moves to. Orders are the whole working book, best price outward and in queue order
-// within a price, since an order-by-order product carries the book rather than a window.
+// Levels are the deepest window the book reports, in displayed size - the same aggregate
+// LevelsChanged reports moves to. A feed publishing less takes the top of it, which unlike a
+// delta is a plain truncation: an image says where the book is, so the first five entries of a
+// ten-deep image are exactly the five-deep image. Orders are the whole working book, best price
+// outward and in queue order within a price, since an order-by-order product carries the book
+// rather than a window.
 public record BookSnapshot(string Symbol, DateTime Time, IReadOnlyList<Level> Bids,
         IReadOnlyList<Level> Offers, IReadOnlyList<RestingOrder> Orders, OrderBookStatus Status,
         OrderBookStatusChangeReason StatusReason, DateTime? ResumesAt, Side? LimitState,

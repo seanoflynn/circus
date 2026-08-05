@@ -29,7 +29,14 @@ public record MarketByPriceDelta(Side Side, int LevelIndex, decimal Price, int Q
 // type - not because either needs reassembling on the way through.
 //
 // Changes are ordered best price outward within a side, arrivals and changes before departures.
-public record MarketByPriceDeltaEvent(string Symbol, DateTime Time, IReadOnlyList<MarketByPriceDelta> Changes)
+//
+// Depth is how many levels a side of this feed's window holds - CME's ten for futures, a
+// top-of-book product's one - and a subscriber needs it to know what a departure means: at ten
+// deep a Removed says the level emptied, at one deep it usually says a better price arrived.
+// A venue publishing the same book at two depths publishes two streams of these, because a
+// shallower one is not a filtered deeper one; see LevelsChanged for why.
+public record MarketByPriceDeltaEvent(string Symbol, DateTime Time, int Depth,
+        IReadOnlyList<MarketByPriceDelta> Changes)
     : MarketDataEvent(Symbol, Time)
 {
     // Both spelled out for the reason LevelsChanged spells them out: a record's generated equality
@@ -41,11 +48,12 @@ public record MarketByPriceDeltaEvent(string Symbol, DateTime Time, IReadOnlyLis
         && EqualityContract == other.EqualityContract
         && Symbol == other.Symbol
         && Time == other.Time
+        && Depth == other.Depth
         && Changes.SequenceEqual(other.Changes);
 
-    public override int GetHashCode() => HashCode.Combine(Symbol, Time, Changes.Count);
+    public override int GetHashCode() => HashCode.Combine(Symbol, Time, Depth, Changes.Count);
 
     public override string ToString() =>
         $"{nameof(MarketByPriceDeltaEvent)} {{ Symbol = {Symbol}, Time = {Time:O}, " +
-        $"Changes = [{string.Join(", ", Changes)}] }}";
+        $"Depth = {Depth}, Changes = [{string.Join(", ", Changes)}] }}";
 }
