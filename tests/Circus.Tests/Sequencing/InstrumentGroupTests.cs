@@ -103,10 +103,14 @@ public class InstrumentGroupTests
             group.Submit(new OpenTrading {Symbol = "UNKNOWN", Time = At(9, 0)}));
     }
 
+    // The channel arrives with the first instrument rather than with the group: a group that has
+    // registered nothing publishes nothing, and there is no channel to hand back until something
+    // asks to be carried. MultipleChannelTests pins the refusal on an empty group.
     [Test]
     public void ExposesSequencerAndChannel()
     {
         var group = new InstrumentGroup(Day);
+        group.Add(Gold, OpenThroughout());
 
         Assert.IsNotNull(group.Sequencer);
         Assert.IsNotNull(group.Channel);
