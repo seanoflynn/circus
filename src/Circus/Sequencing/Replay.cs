@@ -58,6 +58,32 @@ public static class Replay
         return messages;
     }
 
+    // The same, for a group publishing more than one channel: every channel is published from
+    // every dispatch, and what each carried comes back keyed by name. The overload above takes the
+    // group's single channel and has nothing to take once there are several, which is the whole
+    // reason this exists - a venue with two channels is the ordinary case now, not an exotic one.
+    //
+    // One dispatch order, several numberings. Each channel counts its own messages, so a
+    // subscriber to one sees a contiguous run whatever the others carried.
+    public static IReadOnlyDictionary<string, IReadOnlyList<ChannelMessage>> RunAll(
+        InstrumentGroup group, IEnumerable<OrderBookAction> trace, DateTime? until = null)
+    {
+        ArgumentNullException.ThrowIfNull(group);
+        ArgumentNullException.ThrowIfNull(trace);
+
+        var names = group.ChannelNames;
+        var collected = names.ToDictionary(name => name, _ => new List<ChannelMessage>());
+
+        Run(group.Sequencer, trace, dispatched =>
+        {
+            foreach (var name in names)
+                collected[name].AddRange(group.ChannelNamed(name).Publish(dispatched.Events));
+        }, until);
+
+        return collected.ToDictionary(
+            entry => entry.Key, entry => (IReadOnlyList<ChannelMessage>) entry.Value);
+    }
+
     private static void Report(IReadOnlyList<Dispatched> dispatched, Action<Dispatched>? onDispatched)
     {
         if (onDispatched == null) return;
