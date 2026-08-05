@@ -32,14 +32,19 @@ public sealed class InstrumentGroup
     public IReadOnlyList<string> Symbols => _symbols;
 
     // Registers an instrument: creates a bare OrderBook and an InstrumentFeed, adds the book and
-    // schedule to the sequencer and the feed to the channel. Depth is not a parameter - every
-    // by-price product is ten deep, fixed in the book that reports the levels.
-    public void Add(Instrument instrument, MarketSchedule schedule)
+    // schedule to the sequencer and the feed to the channel.
+    //
+    // publishedDepth is how deep that book reports its levels - the deepest any product taken off
+    // it will want, since a channel publishing less truncates what it is given and one publishing
+    // more has nothing to truncate from. Ten by default, which is what CME's futures books carry.
+    // A caller wanting a book configured further builds one and uses the overload below.
+    public void Add(Instrument instrument, MarketSchedule schedule,
+        int publishedDepth = OrderBook.DefaultPublishedDepth)
     {
         ArgumentNullException.ThrowIfNull(instrument);
         ArgumentNullException.ThrowIfNull(schedule);
 
-        var book = new OrderBook(instrument);
+        var book = new OrderBook(instrument, publishedDepth);
         _sequencer.Add(book, schedule);
         _channel.Add(new InstrumentFeed(instrument.Symbol));
         _symbols.Add(instrument.Symbol);
