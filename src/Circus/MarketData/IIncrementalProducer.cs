@@ -7,6 +7,11 @@ namespace Circus.MarketData;
 // from the events rather than queried back out of it - which is also what lets market data be
 // rebuilt from a journal of those events, with no books involved at all.
 //
+// Handed MarketEvent and nothing else. The book's other half - what happened to one participant's
+// order, carrying the CompanyId and ClientOrderId that say whose it was - is addressed to that
+// participant and never broadcast, and a producer that cannot see it cannot leak it. That used to
+// be a rule each producer kept and a reflection test checked; it is the signature now.
+//
 // That holds for snapshots too, which is why there is no second interface here for them. A
 // snapshot is a statement of current state, and the temptation is to build one by reading the
 // book - but a snapshot produced that way leaves no trace in the event stream and so cannot be
@@ -29,5 +34,5 @@ namespace Circus.MarketData;
 // channel is what knows its own sequence.
 public interface IIncrementalProducer<T> where T : MarketDataEvent
 {
-    IList<T> Process(IReadOnlyList<OrderBookEvent> events);
+    IList<T> Process(IReadOnlyList<MarketEvent> events);
 }

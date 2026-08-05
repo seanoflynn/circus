@@ -15,7 +15,7 @@ namespace Circus.MarketData;
 // producers rather than one that does everything.
 public class MarketByPriceSnapshotProducer : IIncrementalProducer<LevelsDataEvent>
 {
-    public IList<LevelsDataEvent> Process(IReadOnlyList<OrderBookEvent> events)
+    public IList<LevelsDataEvent> Process(IReadOnlyList<MarketEvent> events)
     {
         List<LevelsDataEvent>? output = null;
 
@@ -37,7 +37,7 @@ public class MarketByPriceSnapshotProducer : IIncrementalProducer<LevelsDataEven
 // is what makes InstrumentStatusDataProducer's accumulator recoverable rather than merely stateful.
 public class InstrumentStatusSnapshotProducer : IIncrementalProducer<InstrumentStatusDataEvent>
 {
-    public IList<InstrumentStatusDataEvent> Process(IReadOnlyList<OrderBookEvent> events)
+    public IList<InstrumentStatusDataEvent> Process(IReadOnlyList<MarketEvent> events)
     {
         List<InstrumentStatusDataEvent>? output = null;
 
@@ -60,7 +60,7 @@ public class InstrumentStatusSnapshotProducer : IIncrementalProducer<InstrumentS
 // by emitting a withdrawal, which is a message a late subscriber never heard.
 public class IndicativePriceSnapshotProducer : IIncrementalProducer<IndicativePriceDataEvent>
 {
-    public IList<IndicativePriceDataEvent> Process(IReadOnlyList<OrderBookEvent> events)
+    public IList<IndicativePriceDataEvent> Process(IReadOnlyList<MarketEvent> events)
     {
         List<IndicativePriceDataEvent>? output = null;
 
@@ -82,7 +82,7 @@ public class IndicativePriceSnapshotProducer : IIncrementalProducer<IndicativePr
 // heaviest message this venue publishes, and the reason a real snapshot feed cycles slowly.
 public class MarketByOrderSnapshotProducer : IIncrementalProducer<OrdersDataEvent>
 {
-    public IList<OrdersDataEvent> Process(IReadOnlyList<OrderBookEvent> events)
+    public IList<OrdersDataEvent> Process(IReadOnlyList<MarketEvent> events)
     {
         List<OrdersDataEvent>? output = null;
 

@@ -30,7 +30,7 @@ public class InstrumentStatusDataProducer : IIncrementalProducer<InstrumentStatu
     private DateTime? _resumesAt;
     private Side? _limitState;
 
-    public IList<InstrumentStatusDataEvent> Process(IReadOnlyList<OrderBookEvent> events)
+    public IList<InstrumentStatusDataEvent> Process(IReadOnlyList<MarketEvent> events)
     {
         List<InstrumentStatusDataEvent>? output = null;
 

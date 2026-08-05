@@ -3,6 +3,7 @@ using Circus.Agents;
 using Circus.MarketData;
 using Circus.Sequencing;
 using Circus.Sessions;
+using Circus.Tests.Helpers;
 using NUnit.Framework;
 
 namespace Circus.Tests.MarketData;

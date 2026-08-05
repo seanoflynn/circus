@@ -240,6 +240,8 @@ public class OrderBook : IOrderBook
         // not one per fill along the way. That is the shape of a real incremental refresh, which
         // carries every level a single matching-engine event moved.
         AppendLevelChanges(events, time);
+        AppendOrderChanges(events, time);
+        AppendTradePrints(events, time);
 
         return events;
     }
@@ -475,6 +477,108 @@ public class OrderBook : IOrderBook
         }
 
         return orders;
+    }
+
+    // The displayed book's own view of what the confirmations above did, read back off them.
+    //
+    // Derived here rather than at each mutation site because the confirmations already carry
+    // exactly what it takes - PreviousExchangeOrderId to tell a requeue from an in-place modify,
+    // PreviousPrice to tell an arrival from a move, PreviousQuantity for what left a level. Those
+    // fields exist for this, and reading them once at the end costs a walk of a list the action
+    // just built rather than a hook in six places.
+    //
+    // Only the count of events read is scanned, so an action that touched no order says nothing.
+    private void AppendOrderChanges(List<OrderBookEvent> events, DateTime time)
+    {
+        List<OrderChange>? changes = null;
+
+        // Snapshot the count first: this appends to the same list it is reading.
+        var count = events.Count;
+        for (var i = 0; i < count; i++)
+        {
+            switch (events[i])
+            {
+                // One per side of a trade, each its own change, paired by the id they share.
+                case FillOrderConfirmed fill:
+                    Add(ref changes, new OrderChange(fill.Order.Side, fill.Order.ExchangeOrderId,
+                        fill.Price, fill.Quantity, OrderChangeAction.Filled, fill.TradeId));
+                    break;
+
+                // A move between levels. Losing time priority mints a fresh ExchangeOrderId, and a
+                // consumer rebuilding the queue needs to see the old id leave and a new one arrive
+                // at the back rather than a price change against an id that kept its place.
+                case UpdateOrderConfirmed {PreviousPrice: { } movedFrom} moved:
+                    if (moved.PreviousExchangeOrderId != moved.Order.ExchangeOrderId)
+                    {
+                        Add(ref changes, new OrderChange(moved.Order.Side, moved.PreviousExchangeOrderId,
+                            movedFrom, moved.PreviousQuantity, OrderChangeAction.Removed));
+                        Add(ref changes, new OrderChange(moved.Order.Side, moved.Order.ExchangeOrderId,
+                            moved.Order.Price!.Value, moved.Order.DisplayedQuantity, OrderChangeAction.Added));
+                    }
+                    else
+                    {
+                        Add(ref changes, new OrderChange(moved.Order.Side, moved.Order.ExchangeOrderId,
+                            moved.Order.Price!.Value, moved.Order.DisplayedQuantity, OrderChangeAction.Modified));
+                    }
+
+                    break;
+
+                // A stop still hidden is not on the displayed book, so it says nothing here.
+                case CreateOrderConfirmed {Order.Status: not OrderStatus.Hidden} create:
+                    Add(ref changes, new OrderChange(create.Order.Side, create.Order.ExchangeOrderId,
+                        create.Order.Price!.Value, create.Order.DisplayedQuantity, OrderChangeAction.Added));
+                    break;
+
+                // No previous price means it was not on the displayed book before - a stop
+                // triggering into it, which is an arrival rather than a move. Still hidden, and it
+                // has not arrived yet.
+                case UpdateOrderConfirmed {PreviousPrice: null, Order.Status: OrderStatus.Hidden}:
+                    break;
+
+                case UpdateOrderConfirmed {PreviousPrice: null} update:
+                    Add(ref changes, new OrderChange(update.Order.Side, update.Order.ExchangeOrderId,
+                        update.Order.Price!.Value, update.Order.DisplayedQuantity, OrderChangeAction.Added));
+                    break;
+
+                case CancelOrderConfirmed {PreviousPrice: { } cancelledAt} cancel:
+                    Add(ref changes, new OrderChange(cancel.Order.Side, cancel.Order.ExchangeOrderId,
+                        cancelledAt, cancel.PreviousQuantity, OrderChangeAction.Removed));
+                    break;
+
+                case ExpireOrderConfirmed {PreviousPrice: { } expiredAt} expire:
+                    Add(ref changes, new OrderChange(expire.Order.Side, expire.Order.ExchangeOrderId,
+                        expiredAt, expire.PreviousQuantity, OrderChangeAction.Removed));
+                    break;
+            }
+        }
+
+        if (changes != null)
+            events.Add(new OrdersChanged(_instrument.Symbol, time, changes));
+    }
+
+    private static void Add(ref List<OrderChange>? changes, OrderChange change) =>
+        (changes ??= new List<OrderChange>()).Add(change);
+
+    // One print per trade, from the pair of fills that share its id. The fills arrive adjacent, so
+    // remembering the last id seen is enough to take the first of each pair and skip the second.
+    private void AppendTradePrints(List<OrderBookEvent> events, DateTime time)
+    {
+        List<OrderBookEvent>? prints = null;
+        string? lastTradeId = null;
+
+        var count = events.Count;
+        for (var i = 0; i < count; i++)
+        {
+            if (events[i] is not FillOrderConfirmed fill || fill.TradeId == lastTradeId)
+                continue;
+
+            lastTradeId = fill.TradeId;
+            (prints ??= new List<OrderBookEvent>()).Add(
+                new TradePrinted(_instrument.Symbol, time, fill.TradeId, fill.Price, fill.Quantity));
+        }
+
+        if (prints != null)
+            events.AddRange(prints);
     }
 
     private void CaptureWindow(List<(long Tick, int Quantity, int Count)> into, Side side) =>

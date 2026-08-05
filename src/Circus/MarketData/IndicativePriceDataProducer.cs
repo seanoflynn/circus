@@ -11,7 +11,7 @@ namespace Circus.MarketData;
 // subscriber must publish as such rather than leaving the last price standing.
 public class IndicativePriceDataProducer : IIncrementalProducer<IndicativePriceDataEvent>
 {
-    public IList<IndicativePriceDataEvent> Process(IReadOnlyList<OrderBookEvent> events)
+    public IList<IndicativePriceDataEvent> Process(IReadOnlyList<MarketEvent> events)
     {
         List<IndicativePriceDataEvent>? output = null;
 
