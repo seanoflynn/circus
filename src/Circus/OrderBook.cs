@@ -63,19 +63,26 @@ public class OrderBook : IOrderBook
     // enough. Cleared at the top of every call rather than left to grow unbounded across them.
     private readonly List<InternalOrder> _pendingImmediateOrCancelStops = new();
 
-    // How deep the published book runs. A property of the feed rather than of matching, but a
-    // fixed one - every by-price product here is ten deep, as CME's futures books are - which is
-    // what lets the book say which levels changed rather than leaving a consumer to work out
-    // whether a change fell inside the window it happens to be publishing.
-    private const int PublishedDepth = 10;
+    // Ten, because that is what CME's futures books publish and what a by-price product here has
+    // always carried. A default rather than a rule - see below.
+    public const int DefaultPublishedDepth = 10;
+
+    // How deep this book reports its levels. A capability, not a subscription: the book says how
+    // far it is willing to look, and a channel publishing less takes the top of what it is given.
+    // A venue whose deepest product is twenty sets this to twenty and lets its five-deep channel
+    // truncate; setting it to five would leave that channel with nothing to truncate from.
+    //
+    // Deliberately not "which channels want what". The book knows how deep to look and nothing
+    // about who is reading, which is what keeps it a function of its actions and one number.
+    private readonly int _publishedDepth;
 
     // The published window as it stood before the action and as it stands after, diffed to
     // produce LevelsChanged. Reused per book for the reason the buffer above is: one action at a
     // time, so four lists outlive every call rather than being allocated within it.
-    private readonly List<(long Tick, int Quantity, int Count)> _bidsBefore = new(PublishedDepth);
-    private readonly List<(long Tick, int Quantity, int Count)> _offersBefore = new(PublishedDepth);
-    private readonly List<(long Tick, int Quantity, int Count)> _bidsAfter = new(PublishedDepth);
-    private readonly List<(long Tick, int Quantity, int Count)> _offersAfter = new(PublishedDepth);
+    private readonly List<(long Tick, int Quantity, int Count)> _bidsBefore;
+    private readonly List<(long Tick, int Quantity, int Count)> _offersBefore;
+    private readonly List<(long Tick, int Quantity, int Count)> _bidsAfter;
+    private readonly List<(long Tick, int Quantity, int Count)> _offersAfter;
 
     // Nothing outside this table names a status - the rest of the book reads the current phase
     // and acts on what it says. Pre-open's auction instance is also what prints on the way out
@@ -150,8 +157,8 @@ public class OrderBook : IOrderBook
 
     private const int MaxClientOrderIdLength = 20;
 
-    public OrderBook(Instrument instrument)
-        : this(instrument, Adapt(instrument.PriceRestrictions))
+    public OrderBook(Instrument instrument, int publishedDepth = DefaultPublishedDepth)
+        : this(instrument, Adapt(instrument.PriceRestrictions), publishedDepth)
     {
     }
 
@@ -180,11 +187,22 @@ public class OrderBook : IOrderBook
     // Restrictions supplied outright rather than derived from the instrument. Internal because it
     // is a seam, not an API: it exists so combinations an Instrument cannot yet describe - two
     // trade-scoped restrictions disagreeing about severity, say - can still be exercised.
-    internal OrderBook(Instrument instrument, IReadOnlyList<IPriceRestriction> priceRestrictions)
+    internal OrderBook(Instrument instrument, IReadOnlyList<IPriceRestriction> priceRestrictions,
+        int publishedDepth = DefaultPublishedDepth)
     {
+        if (publishedDepth <= 0)
+            throw new ArgumentOutOfRangeException(nameof(publishedDepth), publishedDepth,
+                "a book that reports no levels publishes no depth at all");
+
         _instrument = instrument;
         _priceRestrictions = priceRestrictions;
         _phases = BuildPhases(instrument.MatchingAlgorithm);
+        _publishedDepth = publishedDepth;
+
+        _bidsBefore = new List<(long, int, int)>(publishedDepth);
+        _offersBefore = new List<(long, int, int)>(publishedDepth);
+        _bidsAfter = new List<(long, int, int)>(publishedDepth);
+        _offersAfter = new List<(long, int, int)>(publishedDepth);
     }
 
     public string Symbol => _instrument.Symbol;
@@ -450,7 +468,7 @@ public class OrderBook : IOrderBook
     // The same goes for order-by-order, which gets a snapshot of its own once it has one to give.
     private BookSnapshot Snapshot(DateTime time) =>
         new(_instrument.Symbol, time,
-            GetLevels(Side.Buy, PublishedDepth), GetLevels(Side.Sell, PublishedDepth),
+            GetLevels(Side.Buy, _publishedDepth), GetLevels(Side.Sell, _publishedDepth),
             GetRestingOrders(),
             _status, _statusReason, _resumeAt, _limitState,
             _indicativeQuote is { } quote ? ToDecimal(quote.PriceTicks) : null,
@@ -582,7 +600,7 @@ public class OrderBook : IOrderBook
     }
 
     private void CaptureWindow(List<(long Tick, int Quantity, int Count)> into, Side side) =>
-        _matcher.Working[side].CopyLevelsFromBest(PublishedDepth, into);
+        _matcher.Working[side].CopyLevelsFromBest(_publishedDepth, into);
 
     // One event carrying every level the action moved, or none at all if it moved none - an
     // action that touches no level, a status change or a rejected order, says nothing here.
