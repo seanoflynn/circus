@@ -15,7 +15,7 @@ namespace Circus.MarketData;
 // instruments would carry one per book, and each has to become its own message.
 public class MarketByPriceIncrementalProducer : IIncrementalProducer<MarketByPriceDeltaEvent>
 {
-    public IList<MarketByPriceDeltaEvent> Process(IReadOnlyList<OrderBookEvent> events)
+    public IList<MarketByPriceDeltaEvent> Process(IReadOnlyList<MarketEvent> events)
     {
         List<MarketByPriceDeltaEvent>? output = null;
 

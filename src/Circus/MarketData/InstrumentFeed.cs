@@ -44,8 +44,9 @@ public sealed class InstrumentFeed
     // by time: every event in a single dispatch shares an instant, so there is no time order
     // among them to preserve. Across calls it is the order the venue dispatched them in, which is
     // the ordering that actually carries meaning.
-    public IReadOnlyList<MarketDataEvent> Process(IReadOnlyList<OrderBookEvent> events)
+    public IReadOnlyList<MarketDataEvent> Process(IReadOnlyList<OrderBookEvent> bookEvents)
     {
+        var events = PublicHalf(bookEvents);
         if (events.Count == 0)
             return Array.Empty<MarketDataEvent>();
 
@@ -66,8 +67,9 @@ public sealed class InstrumentFeed
     //
     // A dispatch that is not a snapshot tick produces nothing here, so the common path costs three
     // scans that find nothing rather than a branch the caller has to know to take.
-    public IReadOnlyList<MarketDataEvent> Snapshot(IReadOnlyList<OrderBookEvent> events)
+    public IReadOnlyList<MarketDataEvent> Snapshot(IReadOnlyList<OrderBookEvent> bookEvents)
     {
+        var events = PublicHalf(bookEvents);
         if (events.Count == 0)
             return Array.Empty<MarketDataEvent>();
 
@@ -79,6 +81,23 @@ public sealed class InstrumentFeed
         Collect(ref output, _indicativeSnapshot.Process(events));
 
         return output ?? (IReadOnlyList<MarketDataEvent>) Array.Empty<MarketDataEvent>();
+    }
+
+    // The boundary where a book's output becomes a venue's. What a participant is told about its
+    // own order stops here: producers are typed to MarketEvent, so this is the only place the two
+    // halves are told apart, and it is a filter rather than a redaction because the public events
+    // are their own events rather than copies with fields removed.
+    private static IReadOnlyList<MarketEvent> PublicHalf(IReadOnlyList<OrderBookEvent> bookEvents)
+    {
+        List<MarketEvent>? publicEvents = null;
+
+        for (var i = 0; i < bookEvents.Count; i++)
+        {
+            if (bookEvents[i] is MarketEvent marketEvent)
+                (publicEvents ??= new List<MarketEvent>(bookEvents.Count)).Add(marketEvent);
+        }
+
+        return publicEvents ?? (IReadOnlyList<MarketEvent>) Array.Empty<MarketEvent>();
     }
 
     private static void Collect<T>(ref List<MarketDataEvent>? output, IList<T> produced)

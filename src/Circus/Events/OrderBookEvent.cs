@@ -4,6 +4,20 @@ namespace Circus.Events;
 
 public record OrderBookEvent(string Symbol, DateTime Time);
 
+// Everything a venue may broadcast, and the half of the book's output that carries no client
+// identity. A market data producer is handed these and only these, so a CompanyId reaching a
+// public feed is a compile error rather than something a reflection test has to go looking for.
+//
+// The other half is OrderEvent below: what happened to one participant's order, addressed to that
+// participant. Real venues keep the two apart at the protocol level - CME answers order entry on
+// iLink and publishes market data on MDP, Eurex uses ETI and EMDI/EOBI - and the distinction here
+// is the same one, drawn in the type system rather than across a wire.
+//
+// Both travel in one stream out of Process. That is deliberate: their interleaving is meaningful,
+// since when a participant learns of its own fill relative to when the market learns of the print
+// is exactly the sort of thing a venue simulator exists to answer.
+public abstract record MarketEvent(string Symbol, DateTime Time) : OrderBookEvent(Symbol, Time);
+
 // Reason defaults to Requested, which is what every externally driven transition is.
 //
 // ResumesAt is when a timed interruption is due to end, and is null for everything else - which
@@ -11,8 +25,12 @@ public record OrderBookEvent(string Symbol, DateTime Time);
 // transition, since an explicit one supersedes whatever was pending.
 public record StatusChanged(string Symbol, DateTime Time, OrderBookStatus Status,
         OrderBookStatusChangeReason Reason = OrderBookStatusChangeReason.Requested, DateTime? ResumesAt = null)
-    : OrderBookEvent(Symbol, Time);
+    : MarketEvent(Symbol, Time);
 
+// Addressed to one participant, and never broadcast: CompanyId and ClientOrderId identify who
+// sent the order, which is the participant's business and nobody else's. Everything private the
+// book emits descends from this, so "not a MarketEvent" and "carries client identity" are the
+// same statement.
 public record OrderEvent(string Symbol, DateTime Time, string CompanyId, string ClientOrderId,
         string? ExchangeOrderId)
     : OrderBookEvent(Symbol, Time);
@@ -98,7 +116,7 @@ public record CancelOrderRejected(string Symbol, DateTime Time, string CompanyId
 // stopped crossing, or the phase quoting it has ended. A phase that trades continuously has
 // no such price and so publishes none.
 public record IndicativePriceChanged(string Symbol, DateTime Time, decimal? Price, int Quantity)
-    : OrderBookEvent(Symbol, Time);
+    : MarketEvent(Symbol, Time);
 
 // The market has reached a daily price limit and cannot trade through it, or has come back
 // inside one. Side is which way it is stuck: Buy for limit up, where buyers cannot push higher,
@@ -109,7 +127,7 @@ public record IndicativePriceChanged(string Symbol, DateTime Time, decimal? Pric
 // is the whole difference between a limit and a circuit breaker, so it gets an event of its own
 // rather than a status that would claim otherwise. Emitted only on a change.
 public record LimitStateChanged(string Symbol, DateTime Time, Side? Side, decimal? Price)
-    : OrderBookEvent(Symbol, Time);
+    : MarketEvent(Symbol, Time);
 // One aggregated price level of the working book, as carried inside a LevelsChanged.
 //
 // Quantity is displayed size, never remaining: an iceberg's hidden reserve is not on the book.
@@ -146,7 +164,7 @@ public record LevelChange(Side Side, int LevelIndex, decimal Price, int Quantity
 //
 // Changes are ordered best price outward within a side, arrivals and changes before departures.
 public record LevelsChanged(string Symbol, DateTime Time, IReadOnlyList<LevelChange> Changes)
-    : OrderBookEvent(Symbol, Time)
+    : MarketEvent(Symbol, Time)
 {
     // Spelled out because a record's generated equality compares a list member by reference, and
     // two runs of the same trace build different list instances. DeterminismTests asserts that a
@@ -183,7 +201,7 @@ public record BookSnapshot(string Symbol, DateTime Time, IReadOnlyList<Level> Bi
         IReadOnlyList<Level> Offers, IReadOnlyList<RestingOrder> Orders, OrderBookStatus Status,
         OrderBookStatusChangeReason StatusReason, DateTime? ResumesAt, Side? LimitState,
         decimal? IndicativePrice, int IndicativeQuantity)
-    : OrderBookEvent(Symbol, Time)
+    : MarketEvent(Symbol, Time)
 {
     // Spelled out for the reason LevelsChanged spells them out: a record's generated equality
     // compares a list member by reference, and DeterminismTests asserts a replay reproduces every
@@ -210,3 +228,47 @@ public record BookSnapshot(string Symbol, DateTime Time, IReadOnlyList<Level> Bi
         $"{nameof(BookSnapshot)} {{ Symbol = {Symbol}, Time = {Time:O}, Status = {Status}, " +
         $"Bids = [{string.Join(", ", Bids)}], Offers = [{string.Join(", ", Offers)}] }}";
 }
+
+// One change to one displayed order, as carried inside an OrdersChanged.
+//
+// TradeId is set only on Filled, and pairs the two sides of one trade.
+public record OrderChange(Side Side, string ExchangeOrderId, decimal Price, int Quantity,
+    OrderChangeAction Action, string? TradeId = null);
+
+// Every change to the displayed order book one action made - the order-by-order counterpart of
+// LevelsChanged, and the public view of what the private order confirmations above did.
+//
+// Not a redaction of those confirmations, which is why it is its own event rather than a filter
+// over them. The two do not correspond one to one: a stop order created still hidden produces a
+// confirmation and nothing here; an update that lost time priority produces one confirmation and
+// two changes here, the old id leaving and a new one arriving at the back of the queue. Working
+// out which of those happened needs to know what the book did to its own queue, which is why it
+// is the book that says so.
+//
+// Quantity is displayed size for Added and Modified, what left for Removed, and what traded for
+// Filled. An iceberg's hidden reserve is never here.
+public record OrdersChanged(string Symbol, DateTime Time, IReadOnlyList<OrderChange> Changes)
+    : MarketEvent(Symbol, Time)
+{
+    public virtual bool Equals(OrdersChanged? other) =>
+        other is not null
+        && EqualityContract == other.EqualityContract
+        && Symbol == other.Symbol
+        && Time == other.Time
+        && Changes.SequenceEqual(other.Changes);
+
+    public override int GetHashCode() => HashCode.Combine(Symbol, Time, Changes.Count);
+
+    public override string ToString() =>
+        $"{nameof(OrdersChanged)} {{ Symbol = {Symbol}, Time = {Time:O}, " +
+        $"Changes = [{string.Join(", ", Changes)}] }}";
+}
+
+// The public print: one per trade, whatever it took to fill. The private half is the pair of
+// FillOrderConfirmed events sharing this TradeId, one per participant.
+//
+// Emitted by the book rather than derived by a producer from those fills, because a producer only
+// sees what a venue broadcasts and a fill is not that - it belongs to the participant whose order
+// filled. The pairing the derivation relied on is still here, in the id.
+public record TradePrinted(string Symbol, DateTime Time, string TradeId, decimal Price, int Quantity)
+    : MarketEvent(Symbol, Time);

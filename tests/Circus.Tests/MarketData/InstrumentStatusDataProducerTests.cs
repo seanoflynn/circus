@@ -2,6 +2,7 @@ using Circus.Actions;
 using Circus.Events;
 using Circus.MarketData;
 using Circus.Time;
+using Circus.Tests.Helpers;
 using NUnit.Framework;
 
 namespace Circus.Tests.MarketData;
