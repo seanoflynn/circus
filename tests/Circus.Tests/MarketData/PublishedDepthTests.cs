@@ -34,7 +34,7 @@ public class PublishedDepthTests
     }
 
     private static IReadOnlyList<LevelChange> LastReport(OrderBook book) =>
-        book.CreateLimitOrder("CX", "OX", new OrderValidity.Day(), Side.Buy, 1, 205,
+        book.CreateLimitOrder("CX", "OX", new OrderValidity.Day(), Side.Buy, 1, 210,
                 time: Start.AddMinutes(1))
             .OfType<LevelsChanged>().Single().Changes;
 
@@ -49,7 +49,7 @@ public class PublishedDepthTests
 
         Assert.AreEqual(2, changes.Count);
         Assert.AreEqual(LevelChangeAction.Added, changes[0].Action);
-        Assert.AreEqual(205, changes[0].Price);
+        Assert.AreEqual(210, changes[0].Price);
         Assert.AreEqual(LevelChangeAction.Removed, changes[1].Action);
         Assert.AreEqual(110, changes[1].Price, "the tenth level, pushed past a ten-deep window");
     }
@@ -63,7 +63,7 @@ public class PublishedDepthTests
         var changes = LastReport(book);
 
         Assert.AreEqual(LevelChangeAction.Added, changes[0].Action);
-        Assert.AreEqual(205, changes[0].Price);
+        Assert.AreEqual(210, changes[0].Price);
         Assert.AreEqual(LevelChangeAction.Removed, changes[1].Action);
         Assert.AreEqual(200 - (depth - 1) * 10, changes[1].Price,
             "whatever sat at the bottom of the window is what falls out of it");
@@ -80,7 +80,7 @@ public class PublishedDepthTests
         Assert.AreEqual(1, changes.Count,
             "nothing left a window deeper than the book, so only the arrival is news");
         Assert.AreEqual(LevelChangeAction.Added, changes[0].Action);
-        Assert.AreEqual(205, changes[0].Price);
+        Assert.AreEqual(210, changes[0].Price);
     }
 
     [Test]
