@@ -92,16 +92,17 @@ public class EurexShapedVenueTests
         // The opening auction, which is the first thing either interface has a trade to report.
         var print = published[GoldByPrice].Select(m => m.Data).OfType<TradeDataEvent>().First();
 
+        // By the print's own id, across interfaces, with nothing else to go on. Matching on time
+        // and price would find the same two here and the wrong ones the moment a sweep prints
+        // twice at one price in one action.
         var fills = published[GoldByOrder].Select(m => m.Data).OfType<MarketByOrderDeltaEvent>()
-            .Where(d => d.Time == print.Time)
             .SelectMany(d => d.Changes)
-            .Where(c => c.Action == MarketByOrderDeltaAction.Filled)
+            .Where(c => c.TradeId == print.TradeId)
             .ToList();
 
         Assert.AreEqual(2, fills.Count, "one per side of the trade");
         Assert.AreEqual(new[] {Side.Buy, Side.Sell}, fills.Select(f => f.Side).OrderBy(s => s).ToArray());
-        Assert.AreEqual(1, fills.Select(f => f.TradeId).Distinct().Count(),
-            "paired by a shared id - without it two fills at one price could be two trades");
+        Assert.IsTrue(fills.All(f => f.Action == MarketByOrderDeltaAction.Filled));
         Assert.AreEqual(print.Price, fills[0].Price);
         Assert.AreEqual(print.Quantity, fills[0].Quantity);
 
