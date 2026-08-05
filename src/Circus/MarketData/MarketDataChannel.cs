@@ -30,6 +30,18 @@ public sealed class MarketDataChannel
     private long _sequence;
     private long _snapshotSequence;
 
+    public MarketDataChannel(string name = DefaultName)
+    {
+        Name = name ?? throw new ArgumentNullException(nameof(name));
+    }
+
+    // What a venue with more than one of these calls it. CME names its channels by product group,
+    // Eurex by interface; either way a subscriber picks one by name, so having one is what lets a
+    // venue's shape be written down rather than assembled by position.
+    public const string DefaultName = "default";
+
+    public string Name { get; }
+
     // What a subscriber has seen so far, so a caller resuming one can say where it got to.
     public long Sequence => _sequence;
 
@@ -39,6 +51,12 @@ public sealed class MarketDataChannel
     // thing numbering is for.
     public long SnapshotSequence => _snapshotSequence;
 
+    // What this channel carries, in the order it was given them. A channel is a subset of the
+    // venue, so knowing which subset is part of describing it.
+    public IReadOnlyList<string> Symbols => _symbols;
+
+    private readonly List<string> _symbols = new();
+
     public void Add(InstrumentFeed feed)
     {
         ArgumentNullException.ThrowIfNull(feed);
@@ -46,6 +64,8 @@ public sealed class MarketDataChannel
         if (!_feeds.TryAdd(feed.Symbol, feed))
             throw new ArgumentException(
                 $"a feed is already registered for {feed.Symbol}", nameof(feed));
+
+        _symbols.Add(feed.Symbol);
     }
 
     // Turns one dispatch's events into the messages this channel publishes for them.
