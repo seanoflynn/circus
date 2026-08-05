@@ -12,6 +12,7 @@ internal static class Program
     {
         ("order-book", OrderBookExample.Run),
         ("market-data", MarketDataExample.Run),
+        ("venue-shapes", VenueShapesExample.Run),
         ("replay", ReplayExample.Run),
         ("live-venue", LiveVenueExample.Run),
         ("agent-swarm", AgentSwarmExample.Run)

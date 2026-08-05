@@ -17,6 +17,17 @@ book. Market data producers turn events into what a subscriber sees - depth, ord
 trades, indicative quotes, instrument status - so the same code that publishes a live feed
 rebuilds one from a recorded trace.
 
+A book's events split in two. The public half is what a venue broadcasts and carries no client
+identity; the private half is what a participant is told about its own orders. A channel sees
+only the first.
+
+What a channel publishes is configuration rather than code. Each one declares which instruments
+it carries, which products about them, how deep its by-price products run, and how often it
+restates itself, so a group can wear CME's shape - one channel per product group carrying
+everything - or Eurex's, with the same book on an order-by-order interface and a netted depth one.
+Each channel numbers its own messages, and each publishes an incremental stream alongside a
+snapshot stream a subscriber uses to join mid-session or recover from a gap.
+
 Where time comes from is the only thing that differs between running and replaying.
 `LiveDriver` stamps arriving actions from a clock; `Replay` takes the instants already on a
 recorded trace. Both feed a `Sequencer`, one queue in front of every book, whose dispatch order
@@ -70,10 +81,15 @@ Sessions
 
 Market data
 - [x] Trades
-- [x] Price/qty/count for x levels
-- [x] All order updates
+- [x] Market by price (price/qty/count per level, price-keyed so each change applies on its own)
+- [x] Market by order (every resting order, with fills paired by trade id)
 - [x] Indicative open
 - [x] Instrument status (trading state, why, when it resumes, limit up/down)
+- [x] Public/private split (a feed never sees a client's own confirms)
+- [x] Snapshot stream per channel, for joining mid-session and recovering from a gap
+- [x] Channels configured per group: products, depth and snapshot cadence each
+- [ ] End-of-event markers
+- [ ] Instrument definition messages
 
 Safety features
 - [x] Banding
