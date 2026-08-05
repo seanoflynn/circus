@@ -9,14 +9,16 @@ namespace Circus.MarketData;
 // pure functions of the events they are handed, since the book now reports which price levels
 // moved rather than leaving a producer to work it out by shadowing the book.
 //
-// No depth to configure. Every by-price product here is ten deep, fixed in the book that reports
-// the levels, as CME's futures books are. Two depth streams merged into one channel would be
-// indistinguishable anyway, so a venue publishing a five-deep and a ten-deep product does it as
-// two feeds rather than one carrying both.
+// Which products it carries is configured, because a venue is not one shape. CME channels carry
+// by-price and by-order together with trades and status; Eurex splits by-order onto EOBI and
+// by-price onto EMDI, publishing state on both; an ITCH-shaped venue carries by-order alone. All
+// of them are this class with different flags, which is the point of the flags existing.
 //
-// A venue separating market-by-price from market-by-order would compose its own bundle rather
-// than use this: both are here, which is the useful default for a simulator and more than a real
-// depth feed carries.
+// Everything by default: a caller who has not thought about channels sees the whole venue, which
+// is more than any real depth feed carries and the useful answer for a simulator.
+//
+// How deep the by-price products run is not here. That is the book's, since the book is what
+// reports the levels, and a feed publishes as much of what it is given as it wants.
 public sealed class InstrumentFeed
 {
     private readonly MarketByPriceIncrementalProducer _levels = new();
@@ -33,12 +35,26 @@ public sealed class InstrumentFeed
     private readonly IndicativePriceSnapshotProducer _indicativeSnapshot = new();
     private readonly MarketByOrderSnapshotProducer _orderByOrderSnapshot = new();
 
-    public InstrumentFeed(string symbol)
+    private readonly FeedProducts _products;
+
+    public InstrumentFeed(string symbol, FeedProducts products = FeedProducts.All)
     {
+        if (products == FeedProducts.None)
+            throw new ArgumentException(
+                "a feed carrying no products publishes nothing, which is a channel that should " +
+                "not have been created rather than one that is quiet", nameof(products));
+
         Symbol = symbol ?? throw new ArgumentNullException(nameof(symbol));
+        _products = products;
     }
 
     public string Symbol { get; }
+
+    // What this feed carries. A channel is a subset of the venue in two directions - which
+    // instruments, and which products about them - and this is the second.
+    public FeedProducts Products => _products;
+
+    private bool Carries(FeedProducts product) => (_products & product) != 0;
 
     // Ordering within one call is by producer, in the fixed order below, rather than interleaved
     // by time: every event in a single dispatch shares an instant, so there is no time order
@@ -52,11 +68,11 @@ public sealed class InstrumentFeed
 
         List<MarketDataEvent>? output = null;
 
-        Collect(ref output, _status.Process(events));
-        Collect(ref output, _trades.Process(events));
-        Collect(ref output, _levels.Process(events));
-        Collect(ref output, _orderByOrder.Process(events));
-        Collect(ref output, _indicative.Process(events));
+        if (Carries(FeedProducts.Status)) Collect(ref output, _status.Process(events));
+        if (Carries(FeedProducts.Trades)) Collect(ref output, _trades.Process(events));
+        if (Carries(FeedProducts.ByPrice)) Collect(ref output, _levels.Process(events));
+        if (Carries(FeedProducts.ByOrder)) Collect(ref output, _orderByOrder.Process(events));
+        if (Carries(FeedProducts.Indicative)) Collect(ref output, _indicative.Process(events));
 
         return output ?? (IReadOnlyList<MarketDataEvent>) Array.Empty<MarketDataEvent>();
     }
@@ -75,10 +91,10 @@ public sealed class InstrumentFeed
 
         List<MarketDataEvent>? output = null;
 
-        Collect(ref output, _statusSnapshot.Process(events));
-        Collect(ref output, _levelsSnapshot.Process(events));
-        Collect(ref output, _orderByOrderSnapshot.Process(events));
-        Collect(ref output, _indicativeSnapshot.Process(events));
+        if (Carries(FeedProducts.Status)) Collect(ref output, _statusSnapshot.Process(events));
+        if (Carries(FeedProducts.ByPrice)) Collect(ref output, _levelsSnapshot.Process(events));
+        if (Carries(FeedProducts.ByOrder)) Collect(ref output, _orderByOrderSnapshot.Process(events));
+        if (Carries(FeedProducts.Indicative)) Collect(ref output, _indicativeSnapshot.Process(events));
 
         return output ?? (IReadOnlyList<MarketDataEvent>) Array.Empty<MarketDataEvent>();
     }

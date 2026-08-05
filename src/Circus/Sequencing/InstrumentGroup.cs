@@ -38,27 +38,31 @@ public sealed class InstrumentGroup
     // it will want, since a channel publishing less truncates what it is given and one publishing
     // more has nothing to truncate from. Ten by default, which is what CME's futures books carry.
     // A caller wanting a book configured further builds one and uses the overload below.
+    // products is what the channel publishes about it. Everything by default, which is more than
+    // a real feed carries and the useful answer until a caller has a venue shape in mind.
     public void Add(Instrument instrument, MarketSchedule schedule,
-        int publishedDepth = OrderBook.DefaultPublishedDepth)
+        int publishedDepth = OrderBook.DefaultPublishedDepth,
+        FeedProducts products = FeedProducts.All)
     {
         ArgumentNullException.ThrowIfNull(instrument);
         ArgumentNullException.ThrowIfNull(schedule);
 
         var book = new OrderBook(instrument, publishedDepth);
         _sequencer.Add(book, schedule);
-        _channel.Add(new InstrumentFeed(instrument.Symbol));
+        _channel.Add(new InstrumentFeed(instrument.Symbol, products));
         _symbols.Add(instrument.Symbol);
     }
 
     // Registers a pre-built book (e.g. with custom price restrictions) alongside its schedule and
     // an instrument feed for it.
-    public void Add(IOrderBook book, MarketSchedule schedule)
+    public void Add(IOrderBook book, MarketSchedule schedule,
+        FeedProducts products = FeedProducts.All)
     {
         ArgumentNullException.ThrowIfNull(book);
         ArgumentNullException.ThrowIfNull(schedule);
 
         _sequencer.Add(book, schedule);
-        _channel.Add(new InstrumentFeed(book.Symbol));
+        _channel.Add(new InstrumentFeed(book.Symbol, products));
         _symbols.Add(book.Symbol);
     }
 
