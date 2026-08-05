@@ -13,8 +13,26 @@ namespace Circus.MarketData;
 // One class per product rather than one producing all three, because a channel carrying only
 // depth should be able to leave the rest out - the same reason InstrumentFeed is a bundle of
 // producers rather than one that does everything.
+//
+// The one place a feed shallower than its book truncates rather than subscribing. An image says
+// where the book is, so the first five entries of a ten-deep image are the five-deep image and
+// nothing is lost by cutting. A delta is the opposite - see LevelsChanged - which is why the
+// incremental half takes reports made at its depth instead.
 public class MarketByPriceSnapshotProducer : IIncrementalProducer<LevelsDataEvent>
 {
+    private readonly int _depth;
+
+    public MarketByPriceSnapshotProducer(int depth = OrderBook.DefaultPublishedDepth)
+    {
+        if (depth <= 0)
+            throw new ArgumentOutOfRangeException(nameof(depth), depth,
+                "a feed carrying no levels is not a by-price feed");
+
+        _depth = depth;
+    }
+
+    public int Depth => _depth;
+
     public IList<LevelsDataEvent> Process(IReadOnlyList<MarketEvent> events)
     {
         List<LevelsDataEvent>? output = null;
@@ -25,10 +43,25 @@ public class MarketByPriceSnapshotProducer : IIncrementalProducer<LevelsDataEven
                 continue;
 
             output ??= new List<LevelsDataEvent>();
-            output.Add(new LevelsDataEvent(snapshot.Symbol, snapshot.Time, snapshot.Bids, snapshot.Offers));
+            output.Add(new LevelsDataEvent(snapshot.Symbol, snapshot.Time, _depth,
+                Truncate(snapshot.Bids), Truncate(snapshot.Offers)));
         }
 
         return output ?? (IList<LevelsDataEvent>) Array.Empty<LevelsDataEvent>();
+    }
+
+    // The book's list unchanged when it is already within the window, so the common case - a feed
+    // as deep as the book that feeds it - copies nothing.
+    private IReadOnlyList<Level> Truncate(IReadOnlyList<Level> levels)
+    {
+        if (levels.Count <= _depth)
+            return levels;
+
+        var window = new List<Level>(_depth);
+        for (var i = 0; i < _depth; i++)
+            window.Add(levels[i]);
+
+        return window;
     }
 }
 

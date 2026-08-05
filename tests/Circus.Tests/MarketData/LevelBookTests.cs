@@ -18,7 +18,7 @@ public class LevelBookTests
         Message(new MarketByPriceDelta(side, levelIndex, price, quantity, count, action));
 
     private static MarketByPriceDeltaEvent Message(params MarketByPriceDelta[] changes) =>
-        new("GCZ6", Now, changes);
+        new("GCZ6", Now, OrderBook.DefaultPublishedDepth, changes);
 
     [Test]
     public void ANewBook_IsEmpty()
