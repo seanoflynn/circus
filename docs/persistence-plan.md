@@ -56,7 +56,7 @@ while (_queue.TryPeek(out _, out var next) && next.Time <= time)
     // Journalled before the book sees it, and only client flow: a schedule transition is a
     // function of the schedule, an interruption tick a function of an event a replay re-emits,
     // and recording either would mean a recovery that regenerates them dispatches them twice.
-    if (next.Kind == DispatchKind.ClientFlow)
+    if (_journal is not null && next.Kind == DispatchKind.ClientFlow)
         _journal.Append(new ActionDispatched(_sequence, action));
 
     var events = book.Process(action);
@@ -73,7 +73,7 @@ _now = time;
 // Group commit. One flush per AdvanceTo rather than per action, and the caller publishes what
 // this returned - so a flush here is a flush before anything caused by these actions is visible
 // anywhere. That is the durability rule, and this is the only line that enforces it.
-if (dispatched.Count > 0) _journal.Flush();
+if (_journal is not null && dispatched.Count > 0) _journal.Flush();
 
 return dispatched;
 ```
@@ -169,8 +169,15 @@ public interface IJournalReader
 }
 ```
 
-`Journal.None` is the default on `InstrumentGroup`, so every existing caller and every test keeps
-working untouched and pays a null-free non-virtual call per dispatch.
+The reader lands in step 2 rather than step 1, with the recovery that gives `Read` a meaning: what
+it should do with a config entry falling after that sequence is a recovery question, and answering
+it without one in front of you means writing the interface twice.
+
+No journal is the default on `InstrumentGroup`, so every existing caller and every test keeps
+working untouched. The field is nullable and checked rather than filled with a do-nothing
+implementation: this is the dispatch loop, the check is constant-false for an unjournalled venue and
+so perfectly predicted, and an interface call that does nothing is not free. See
+`persistence-step-1.md`, which settles this and the rest of the step's detail.
 
 ### A journal never records its own replay
 
@@ -404,11 +411,12 @@ benchmark grows a journalled variant so the cost is a number rather than an opin
 
 Each step compiles and leaves the suite green.
 
-1. **The seam and the in-memory journal.** `IJournal`, the entry records, `InMemoryJournal`,
-   `Journal.None`; wired into `Sequencer.AdvanceTo` and `InstrumentGroup`. Nothing reads a journal
-   yet. Tests pin that client flow is recorded in dispatch order and derived actions are not.
-2. **Cold recovery.** `Recovery.Restore` over config plus actions, no snapshots, with the
-   verifying recovery mode. This is the step that proves the README's claim.
+1. **The seam and the in-memory journal.** `IJournal`, the entry records, `InMemoryJournal`; wired
+   into `Sequencer.AdvanceTo` and `InstrumentGroup`. Nothing reads a journal yet. Tests pin that
+   client flow is recorded in dispatch order and derived actions are not. Planned in detail in
+   `persistence-step-1.md`.
+2. **Cold recovery.** `IJournalReader`, `Recovery.Restore` over config plus actions, no snapshots,
+   with the verifying recovery mode. This is the step that proves the README's claim.
 3. **Capture and restore.** `VenueSnapshot`, `BookSnapshot`, per-restriction capture, `ISnapshotStore`,
    `InMemorySnapshotStore`, `CheckpointTaken`, `venue.Checkpoint()`. Warm recovery.
 4. **`Circus.Persistence`.** File journal first, SQLite second, Parquet export third.
