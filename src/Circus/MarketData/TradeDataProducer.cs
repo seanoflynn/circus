@@ -9,6 +9,11 @@ namespace Circus.MarketData;
 // participant whose order filled and carries their CompanyId - so deriving a broadcast message
 // from it meant a producer reading something no subscriber is entitled to. The book publishes
 // TradePrinted for the same pair now, and the pairing lives where the trade happened.
+//
+// The trade's id comes across with it. It is the only field of a fill that is not about who filled
+// - the two sides of a trade share it, and so do the order events the by-order feed publishes for
+// them - so carrying it broadcasts nothing private and is what lets a subscriber holding both
+// products join a print to the fills that made it.
 public class TradeDataProducer : IIncrementalProducer<TradeDataEvent>
 {
     public IList<TradeDataEvent> Process(IReadOnlyList<MarketEvent> events)
@@ -21,7 +26,8 @@ public class TradeDataProducer : IIncrementalProducer<TradeDataEvent>
                 continue;
 
             output ??= new List<TradeDataEvent>();
-            output.Add(new TradeDataEvent(trade.Symbol, trade.Time, trade.Price, trade.Quantity));
+            output.Add(new TradeDataEvent(trade.Symbol, trade.Time, trade.TradeId, trade.Price,
+                trade.Quantity));
         }
 
         return output ?? (IList<TradeDataEvent>) Array.Empty<TradeDataEvent>();
