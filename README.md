@@ -77,6 +77,7 @@ Sessions
 - [x] Time provider
 - [x] Sessions
 - [x] Multiple sessions per day
+- [ ] Overnight sessions (spanning midnight)
 - [ ] Market statistics
 
 Market data
