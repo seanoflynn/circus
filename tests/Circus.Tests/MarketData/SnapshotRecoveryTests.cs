@@ -8,9 +8,9 @@ using NUnit.Framework;
 
 namespace Circus.Tests.MarketData;
 
-// What the snapshot feed is for. Every producer here holds either nothing or a composite it cannot
-// rebuild, so the only answer to a subscriber that joined late or missed a message is a feed that
-// periodically restates the truth. These assert it actually works, rather than that the messages
+// What the snapshot feed is for. No product holds anything between messages, so a subscriber that
+// joined late or missed one cannot be caught up by replaying history it never saw - the only answer
+// is a feed that periodically restates the truth. These assert it actually works, rather than that the messages
 // have the right shape - which is the easy half.
 //
 // Driven off a recorded agent run rather than a hand-built sequence: recovery has to hold against

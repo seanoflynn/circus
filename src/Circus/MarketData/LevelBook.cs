@@ -3,7 +3,7 @@ namespace Circus.MarketData;
 // Aggregated depth as a subscriber holds it, rebuilt from the incremental feed.
 //
 // This is where by-price aggregation belongs now: on the consumer side, kept by whoever wants a
-// ladder, rather than inside a producer that had to shadow the book to publish one. A venue's
+// ladder, rather than inside a feed that had to shadow the book to publish one. A venue's
 // feed handler does exactly this, and a participant that only wants the touch can keep one of
 // these instead of a book.
 //

@@ -22,8 +22,8 @@ internal static class OrderFlowEvents
         events.Where(e => e is not (LevelsChanged or OrdersChanged or TradePrinted or BookSnapshot))
             .ToList();
 
-    // The half of a book's output a venue may broadcast, for a test driving a producer straight
-    // off a book rather than through a feed.
+    // The half of a book's output a venue may broadcast, for a test that wants to assert on it
+    // directly rather than on the messages a feed makes of it.
     public static IReadOnlyList<MarketEvent> Market(this IEnumerable<OrderBookEvent> events) =>
         events.OfType<MarketEvent>().ToList();
 }

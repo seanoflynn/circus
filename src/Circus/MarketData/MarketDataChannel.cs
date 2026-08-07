@@ -111,7 +111,7 @@ public sealed class MarketDataChannel
     // One dispatch is one book's events today, so the common path is a single group and the whole
     // list is passed straight through. Grouped rather than assumed anyway, because an action that
     // implied a fill in another book would arrive here as events spanning instruments, and each
-    // book's producers must be handed their own book's events and only those.
+    // book's feed must be handed its own book's events and only those.
     private static IEnumerable<(string Symbol, IReadOnlyList<OrderBookEvent> Events)> GroupBySymbol(
         IReadOnlyList<OrderBookEvent> events)
     {
