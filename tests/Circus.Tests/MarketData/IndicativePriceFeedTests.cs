@@ -7,7 +7,7 @@ using NUnit.Framework;
 
 namespace Circus.Tests.MarketData;
 
-public class IndicativePriceDataProducerTests
+public class IndicativePriceFeedTests
 {
     private static readonly Instrument Gold = new("GCZ6", 10, 10);
 
@@ -24,18 +24,18 @@ public class IndicativePriceDataProducerTests
         Book = new TimestampingOrderBook(Gold, Clock);
     }
 
-    private static IList<IndicativePriceDataEvent> Publish(IndicativePriceDataProducer producer,
+    private static IList<IndicativePriceDataEvent> Publish(InstrumentFeed feed,
         IReadOnlyList<OrderBookEvent> bookEvents) =>
-        producer.Process(bookEvents);
+        feed.Publish<IndicativePriceDataEvent>(bookEvents);
 
     [Test]
     public void CrossedPreOpenBook_PublishesTheQuote()
     {
-        var producer = new IndicativePriceDataProducer();
-        Publish(producer, Book.UpdateStatus(OrderBookStatus.PreOpen));
-        Publish(producer, Book.CreateLimitOrder("Company1", "Order1", new OrderValidity.Day(), Side.Buy, 5, 100));
+        var feed = ProductFeed.Carrying(FeedProducts.Indicative);
+        Publish(feed, Book.UpdateStatus(OrderBookStatus.PreOpen));
+        Publish(feed, Book.CreateLimitOrder("Company1", "Order1", new OrderValidity.Day(), Side.Buy, 5, 100));
 
-        var events = Publish(producer,
+        var events = Publish(feed,
             Book.CreateLimitOrder("Company2", "Order2", new OrderValidity.Day(), Side.Sell, 3, 100));
 
         Assert.AreEqual(1, events.Count);
@@ -47,10 +47,10 @@ public class IndicativePriceDataProducerTests
     [Test]
     public void UncrossedBook_PublishesNothing()
     {
-        var producer = new IndicativePriceDataProducer();
-        Publish(producer, Book.UpdateStatus(OrderBookStatus.PreOpen));
+        var feed = ProductFeed.Carrying(FeedProducts.Indicative);
+        Publish(feed, Book.UpdateStatus(OrderBookStatus.PreOpen));
 
-        var events = Publish(producer,
+        var events = Publish(feed,
             Book.CreateLimitOrder("Company1", "Order1", new OrderValidity.Day(), Side.Buy, 5, 100));
 
         Assert.IsEmpty(events);
@@ -59,11 +59,11 @@ public class IndicativePriceDataProducerTests
     [Test]
     public void ContinuousTrading_PublishesNothing()
     {
-        var producer = new IndicativePriceDataProducer();
-        Publish(producer, Book.UpdateStatus(OrderBookStatus.Open));
-        Publish(producer, Book.CreateLimitOrder("Company1", "Order1", new OrderValidity.Day(), Side.Buy, 5, 100));
+        var feed = ProductFeed.Carrying(FeedProducts.Indicative);
+        Publish(feed, Book.UpdateStatus(OrderBookStatus.Open));
+        Publish(feed, Book.CreateLimitOrder("Company1", "Order1", new OrderValidity.Day(), Side.Buy, 5, 100));
 
-        var events = Publish(producer,
+        var events = Publish(feed,
             Book.CreateLimitOrder("Company2", "Order2", new OrderValidity.Day(), Side.Sell, 3, 100));
 
         Assert.IsEmpty(events, "price-time has no single price it would print at");
@@ -72,13 +72,13 @@ public class IndicativePriceDataProducerTests
     [Test]
     public void AuctionPrints_WithdrawsTheQuote()
     {
-        var producer = new IndicativePriceDataProducer();
-        Publish(producer, Book.UpdateStatus(OrderBookStatus.PreOpen));
-        Publish(producer, Book.CreateLimitOrder("Company1", "Order1", new OrderValidity.Day(), Side.Buy, 5, 100));
-        Publish(producer, Book.CreateLimitOrder("Company2", "Order2", new OrderValidity.Day(), Side.Sell, 5, 100));
+        var feed = ProductFeed.Carrying(FeedProducts.Indicative);
+        Publish(feed, Book.UpdateStatus(OrderBookStatus.PreOpen));
+        Publish(feed, Book.CreateLimitOrder("Company1", "Order1", new OrderValidity.Day(), Side.Buy, 5, 100));
+        Publish(feed, Book.CreateLimitOrder("Company2", "Order2", new OrderValidity.Day(), Side.Sell, 5, 100));
 
         Clock.SetCurrentTime(Now2);
-        var events = Publish(producer, Book.UpdateStatus(OrderBookStatus.Open));
+        var events = Publish(feed, Book.UpdateStatus(OrderBookStatus.Open));
 
         Assert.AreEqual(1, events.Count);
         Assert.AreEqual(Now2, events[0].Time);

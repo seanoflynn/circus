@@ -22,12 +22,12 @@ public class InstrumentStatusFeedTests
     public void SetUp()
     {
         Clock = new ManualClock(Now1);
-        Feed = new InstrumentFeed("GCZ6", FeedProducts.Status);
+        Feed = ProductFeed.Carrying(FeedProducts.Status);
     }
 
     // A status-only feed publishes nothing else, so everything it returns is one of these.
     private IList<InstrumentStatusDataEvent> Publish(IOrderBook book, IReadOnlyList<OrderBookEvent> bookEvents) =>
-        Feed.Process(bookEvents).Cast<InstrumentStatusDataEvent>().ToList();
+        Feed.Publish<InstrumentStatusDataEvent>(bookEvents);
 
     private IOrderBook PlainBook() =>
         new TimestampingOrderBook(new Instrument("GCZ6", 10, 10), Clock);
@@ -85,7 +85,7 @@ public class InstrumentStatusFeedTests
             book.CreateLimitOrder("Company2", "Order2", new OrderValidity.Day(), Side.Buy, 5, 200));
 
         // assert - the moment it is due back is the thing a halt notification is for, and it
-        // could not be published at all before this producer existed
+        // could not be published at all before this product existed
         Assert.AreEqual(1, events.Count);
         Assert.AreEqual(OrderBookStatus.Paused, events[0].Status);
         Assert.AreEqual(OrderBookStatusChangeReason.PriceRestriction, events[0].Reason);

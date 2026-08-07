@@ -37,14 +37,14 @@ public class BookLevelViewTests
     private const int PublishedDepth = 10;
 
     private OrderBook _book = null!;
-    private MarketByPriceIncrementalProducer _producer = null!;
+    private InstrumentFeed _feed = null!;
     private LevelBook _subscriber = null!;
 
     [SetUp]
     public void SetUp()
     {
         _book = new OrderBook(Gold);
-        _producer = new MarketByPriceIncrementalProducer();
+        _feed = ProductFeed.Carrying(FeedProducts.ByPrice);
         _subscriber = new LevelBook();
     }
 
@@ -52,7 +52,7 @@ public class BookLevelViewTests
     // missed messages, which is exactly what it cannot recover from until snapshots exist.
     private void Drive(IReadOnlyList<OrderBookEvent> events)
     {
-        foreach (var delta in _producer.Process(events))
+        foreach (var delta in _feed.Publish<MarketByPriceDeltaEvent>(events))
             _subscriber.Apply(delta);
     }
 
