@@ -5,9 +5,11 @@ namespace Circus.MarketData;
 // Everything a venue publishes about one instrument, assembled in one place. A book's events go
 // in, the messages a subscriber would receive come out.
 //
-// One bundle per instrument. Only the status producer still accumulates anything - the rest are
-// pure functions of the events they are handed, since the book now reports which price levels
-// moved rather than leaving a producer to work it out by shadowing the book.
+// One bundle per instrument, and nothing in it remembers the book. Every product is a pure
+// function of the events it is handed, since the book reports what moved - which price levels,
+// which orders, and what state the instrument is in - rather than leaving a producer to work it
+// out by shadowing the book. The only thing counted here is the snapshot cadence, which is this
+// feed's own business rather than something the book knows about.
 //
 // Which products it carries is configured, because a venue is not one shape. CME channels carry
 // by-price and by-order together with trades and status; Eurex splits by-order onto EOBI and
@@ -34,7 +36,6 @@ public sealed class InstrumentFeed
     private readonly MarketByOrderIncrementalProducer _orderByOrder = new();
     private readonly TradeDataProducer _trades = new();
     private readonly IndicativePriceDataProducer _indicative = new();
-    private readonly InstrumentStatusDataProducer _status = new();
 
     // The other half of what a venue publishes, on its own stream: where the book is, rather than
     // what changed about it. Each republishes the same message type its incremental counterpart
@@ -105,7 +106,7 @@ public sealed class InstrumentFeed
 
         List<MarketDataEvent>? output = null;
 
-        if (Carries(FeedProducts.Status)) Collect(ref output, _status.Process(events));
+        if (Carries(FeedProducts.Status)) Collect(ref output, StatusOf(events));
         if (Carries(FeedProducts.Trades)) Collect(ref output, _trades.Process(events));
         if (Carries(FeedProducts.ByPrice)) Collect(ref output, _levels.Process(events));
         if (Carries(FeedProducts.ByOrder)) Collect(ref output, _orderByOrder.Process(events));
@@ -145,6 +146,51 @@ public sealed class InstrumentFeed
         if (Carries(FeedProducts.Indicative)) Collect(ref output, _indicativeSnapshot.Process(events));
 
         return output ?? (IReadOnlyList<MarketDataEvent>) Array.Empty<MarketDataEvent>();
+    }
+
+    // What state the instrument is in, as one thing - CME's Security Status message, Eurex's
+    // instrument state. The book publishes the parts separately because they are separate: a
+    // status change and a limit lock are different events, and a limit-locked market is open. A
+    // subscriber wanting to render "what is happening to this instrument" wants them together,
+    // and assembling them is what this does.
+    //
+    // Assembling used to mean remembering. Each event carried one part of the composite and a
+    // producer held the rest between messages, which made this the last thing here that could
+    // drift from the book and the only one a missed message left permanently wrong. Both events
+    // carry the whole of it now - the book was already holding all four fields, and BookSnapshot
+    // was already publishing them as one composite - so this is a projection like every other
+    // product, and a gap costs a subscriber the update rather than the truth.
+    //
+    // Which of the two events it came from is not preserved, and should not be: what a status
+    // product says is where the instrument is, and both events answer that completely. That they
+    // stay separate types upstream is what lets a consumer who cares about only one of them say
+    // so - see LimitStateChanged.
+    private static IList<InstrumentStatusDataEvent> StatusOf(IReadOnlyList<MarketEvent> events)
+    {
+        List<InstrumentStatusDataEvent>? output = null;
+
+        foreach (var ev in events)
+        {
+            InstrumentStatusDataEvent? data = ev switch
+            {
+                StatusChanged status => new InstrumentStatusDataEvent(status.Symbol, status.Time,
+                    status.Status, status.Reason, status.ResumesAt, status.LimitState),
+
+                // Side is which way a limit has the market stuck; the rest is the status it stays
+                // in while stuck, which this event carries precisely so that it need not be held.
+                LimitStateChanged limit => new InstrumentStatusDataEvent(limit.Symbol, limit.Time,
+                    limit.Status, limit.Reason, limit.ResumesAt, limit.Side),
+
+                _ => null
+            };
+
+            // One per contributing event, carrying that event's own time rather than a time chosen
+            // for a batch. Each is a complete picture, so a consumer never needs two.
+            if (data != null)
+                (output ??= new List<InstrumentStatusDataEvent>()).Add(data);
+        }
+
+        return output ?? (IList<InstrumentStatusDataEvent>) Array.Empty<InstrumentStatusDataEvent>();
     }
 
     // The boundary where a book's output becomes a venue's. What a participant is told about its
