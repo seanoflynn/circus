@@ -55,7 +55,7 @@ public class MarketByOrderFeedTests
         Assert.AreEqual(Side.Buy, deltas[0].Side);
         Assert.AreEqual(100, deltas[0].Price);
         Assert.AreEqual(3, deltas[0].Quantity);
-        Assert.AreEqual(MarketByOrderDeltaAction.Added, deltas[0].Action);
+        Assert.AreEqual(OrderChangeAction.Added, deltas[0].Action);
     }
 
     [Test]
@@ -71,7 +71,7 @@ public class MarketByOrderFeedTests
 
         Assert.AreEqual(1, deltas.Count);
         Assert.AreEqual(5, deltas[0].Quantity, "only the displayed peak, never the hidden reserve");
-        Assert.AreEqual(MarketByOrderDeltaAction.Added, deltas[0].Action);
+        Assert.AreEqual(OrderChangeAction.Added, deltas[0].Action);
     }
 
     [Test]
@@ -89,17 +89,17 @@ public class MarketByOrderFeedTests
         var deltas = feed.Publish<MarketByOrderDeltaEvent>(bookEvents).Single().Changes;
 
         // one Filled delta per leg of the match (the iceberg resting, and the aggressor)
-        var filled = deltas.Where(d => d.Action == MarketByOrderDeltaAction.Filled).ToList();
+        var filled = deltas.Where(d => d.Action == OrderChangeAction.Filled).ToList();
         Assert.AreEqual(2, filled.Count);
         Assert.IsTrue(filled.Any(d => d.ExchangeOrderId == created.Order.ExchangeOrderId),
             "the iceberg's fill happened against its pre-replenish id");
 
-        var removed = deltas.Single(d => d.Action == MarketByOrderDeltaAction.Removed);
+        var removed = deltas.Single(d => d.Action == OrderChangeAction.Removed);
         Assert.AreEqual(created.Order.ExchangeOrderId, removed.ExchangeOrderId);
 
         // Side.Sell, not Side.Buy - the aggressor itself also produces its own Added delta
         // (its CreateOrderConfirmed), distinct from the iceberg's replenish arrival
-        var added = deltas.Single(d => d.Action == MarketByOrderDeltaAction.Added && d.Side == Side.Sell);
+        var added = deltas.Single(d => d.Action == OrderChangeAction.Added && d.Side == Side.Sell);
         Assert.AreNotEqual(created.Order.ExchangeOrderId, added.ExchangeOrderId);
         Assert.AreEqual(5, added.Quantity, "replenished back to the full peak");
     }
@@ -118,11 +118,11 @@ public class MarketByOrderFeedTests
         Assert.AreEqual(2, deltas.Count);
         Assert.AreEqual(created.Order.ExchangeOrderId, deltas[0].ExchangeOrderId);
         Assert.AreEqual(100, deltas[0].Price);
-        Assert.AreEqual(MarketByOrderDeltaAction.Removed, deltas[0].Action);
+        Assert.AreEqual(OrderChangeAction.Removed, deltas[0].Action);
 
         Assert.AreNotEqual(created.Order.ExchangeOrderId, deltas[1].ExchangeOrderId);
         Assert.AreEqual(110, deltas[1].Price);
-        Assert.AreEqual(MarketByOrderDeltaAction.Added, deltas[1].Action);
+        Assert.AreEqual(OrderChangeAction.Added, deltas[1].Action);
     }
 
     [Test]
@@ -139,7 +139,7 @@ public class MarketByOrderFeedTests
         Assert.AreEqual(1, deltas.Count);
         Assert.AreEqual(created.Order.ExchangeOrderId, deltas[0].ExchangeOrderId);
         Assert.AreEqual(3, deltas[0].Quantity);
-        Assert.AreEqual(MarketByOrderDeltaAction.Modified, deltas[0].Action);
+        Assert.AreEqual(OrderChangeAction.Modified, deltas[0].Action);
     }
 
     [Test]
@@ -155,7 +155,7 @@ public class MarketByOrderFeedTests
         Assert.AreEqual(1, deltas.Count);
         Assert.AreEqual(100, deltas[0].Price);
         Assert.AreEqual(3, deltas[0].Quantity);
-        Assert.AreEqual(MarketByOrderDeltaAction.Removed, deltas[0].Action);
+        Assert.AreEqual(OrderChangeAction.Removed, deltas[0].Action);
     }
 
     [Test]
@@ -168,7 +168,7 @@ public class MarketByOrderFeedTests
         var bookEvents = Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 3, 100);
         var deltas = feed.Publish<MarketByOrderDeltaEvent>(bookEvents).Single().Changes;
 
-        var filled = deltas.Where(d => d.Action == MarketByOrderDeltaAction.Filled).ToList();
+        var filled = deltas.Where(d => d.Action == OrderChangeAction.Filled).ToList();
         Assert.AreEqual(2, filled.Count, "expected one Filled delta per leg of the match");
         Assert.IsTrue(filled.All(d => d.Quantity == 3), "fill quantity is the traded amount, not the resting order's total or remaining size");
     }
@@ -219,9 +219,9 @@ public class MarketByOrderFeedTests
         var bookEvents = Book.CreateLimitOrder(CompanyId6, OrderId6, new OrderValidity.Day(), Side.Buy, 2, 510);
         var deltas = feed.Publish<MarketByOrderDeltaEvent>(bookEvents).Single().Changes;
 
-        var activation = deltas.SingleOrDefault(d => d.Price == 530 && d.Action != MarketByOrderDeltaAction.Filled);
+        var activation = deltas.SingleOrDefault(d => d.Price == 530 && d.Action != OrderChangeAction.Filled);
         Assert.IsNotNull(activation, "expected the triggered order's arrival into the working book");
-        Assert.AreEqual(MarketByOrderDeltaAction.Added, activation.Action,
+        Assert.AreEqual(OrderChangeAction.Added, activation.Action,
             "it has no prior working-book presence, so it's an arrival, not a move");
     }
 }

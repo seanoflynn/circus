@@ -1,3 +1,4 @@
+using Circus.Events;
 using Circus.MarketData;
 using Circus.Sequencing;
 using Circus.Tests.Helpers;
@@ -165,7 +166,7 @@ public class VenueShapeComparisonTests
             Assert.IsTrue(sidesOfTrade.TryGetValue((print.Symbol, print.TradeId), out var sides),
                 $"{print.Symbol} trade {print.TradeId} printed with no order events naming it");
             Assert.AreEqual(new[] {Side.Buy, Side.Sell}, sides!.Select(s => s.Side).OrderBy(s => s).ToArray());
-            Assert.IsTrue(sides.All(s => s.Action == MarketByOrderDeltaAction.Filled));
+            Assert.IsTrue(sides.All(s => s.Action == OrderChangeAction.Filled));
             Assert.IsTrue(sides.All(s => s.Price == print.Price && s.Quantity == print.Quantity),
                 "the two sides of a trade are the trade, at its price and its size");
         }

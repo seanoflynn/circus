@@ -47,7 +47,7 @@ public class MarketByPriceFeedTests
 
         var changes = messages[0].Changes;
         Assert.AreEqual(1, changes.Count);
-        Assert.AreEqual(MarketByPriceDeltaAction.Added, changes[0].Action);
+        Assert.AreEqual(LevelChangeAction.Added, changes[0].Action);
         Assert.AreEqual(Side.Buy, changes[0].Side);
         Assert.AreEqual(100, changes[0].Price);
         Assert.AreEqual(3, changes[0].Quantity);
@@ -67,7 +67,7 @@ public class MarketByPriceFeedTests
             .Single().Changes;
 
         Assert.AreEqual(1, changes.Count, "one level moved");
-        Assert.AreEqual(MarketByPriceDeltaAction.Modified, changes[0].Action);
+        Assert.AreEqual(LevelChangeAction.Modified, changes[0].Action);
         Assert.AreEqual(7, changes[0].Quantity);
         Assert.AreEqual(2, changes[0].Count);
     }
@@ -83,7 +83,7 @@ public class MarketByPriceFeedTests
             .Single().Changes;
 
         Assert.AreEqual(1, changes.Count);
-        Assert.AreEqual(MarketByPriceDeltaAction.Removed, changes[0].Action);
+        Assert.AreEqual(LevelChangeAction.Removed, changes[0].Action);
         Assert.AreEqual(100, changes[0].Price, "the price identifies which level left");
         Assert.AreEqual(0, changes[0].Quantity);
         Assert.AreEqual(0, changes[0].Count);
@@ -104,7 +104,7 @@ public class MarketByPriceFeedTests
 
         Assert.AreEqual(1, changes.Count, "only the new level is news; the one below it is unchanged");
         Assert.AreEqual(110, changes[0].Price);
-        Assert.AreEqual(MarketByPriceDeltaAction.Added, changes[0].Action);
+        Assert.AreEqual(LevelChangeAction.Added, changes[0].Action);
     }
 
     // One action, several levels, one message: an aggressor sweeping the book is a single update
@@ -125,7 +125,7 @@ public class MarketByPriceFeedTests
 
         var offers = messages[0].Changes.Where(d => d.Side == Side.Sell).ToList();
         Assert.AreEqual(2, offers.Count, "one entry per level swept, not one per fill");
-        Assert.IsTrue(offers.All(d => d.Action == MarketByPriceDeltaAction.Removed));
+        Assert.IsTrue(offers.All(d => d.Action == LevelChangeAction.Removed));
         Assert.AreEqual(new[] {100m, 110m}, offers.Select(d => d.Price).OrderBy(p => p).ToArray());
         Assert.IsEmpty(messages[0].Changes.Where(d => d.Side == Side.Buy),
             "the aggressor filled and never rested");
