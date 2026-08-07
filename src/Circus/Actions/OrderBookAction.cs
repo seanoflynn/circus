@@ -15,12 +15,25 @@ public abstract record OrderBookAction
     public DateTime Time { get; init; }
 }
 
-public sealed record PreOpenTrading : OrderBookAction
+// The day the venue says it is trading over this boundary. Null leaves the book to date itself
+// from the instant the action is stamped, which is what a same-day schedule means anyway and what
+// a caller driving a book by hand gets without saying anything.
+//
+// A session that runs past midnight is why this exists. Its business belongs to one trading day
+// throughout, and for the part of it before midnight that day is not the date on the clock - so
+// an order good till a date, which is a statement about trading days, cannot be measured against
+// the clock either. Whoever owns the schedule knows the answer; the book does not.
+public abstract record SessionAction : OrderBookAction
+{
+    public DateOnly? TradeDate { get; init; }
+}
+
+public sealed record PreOpenTrading : SessionAction
 {
     public decimal? ReferencePrice { get; init; }
 }
 
-public sealed record OpenTrading : OrderBookAction
+public sealed record OpenTrading : SessionAction
 {
     public decimal? ReferencePrice { get; init; }
 }
@@ -28,7 +41,7 @@ public sealed record OpenTrading : OrderBookAction
 // A trading day can hold several sessions, and only the last close of the day retires that
 // day's Day/GoodTilDate orders - an intra-day close (a lunch break, say) leaves them resting.
 // Defaults to true so a single-session day needs to say nothing.
-public sealed record CloseTrading : OrderBookAction
+public sealed record CloseTrading : SessionAction
 {
     public bool EndsTradingDay { get; init; } = true;
 }

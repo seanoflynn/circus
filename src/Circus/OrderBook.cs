@@ -159,6 +159,15 @@ public class OrderBook : IOrderBook
     // Keyed by InternalId, not ExchangeOrderId - the latter changes across an order's life.
     private readonly Dictionary<long, InternalOrder> _orders = new();
 
+    // The day the venue last said it was trading, carried on the session actions that move the
+    // book between phases. Null until something says, which is the state a book driven by hand
+    // stays in - and TradingDayOn then dates it from the clock, exactly as it always did.
+    //
+    // Held rather than read off each action because the question is asked by order flow too: a
+    // GTD order arriving mid-session is good till a trading day, and the action creating it
+    // carries no schedule.
+    private DateOnly? _tradeDate;
+
     // every (companyId, clientOrderId) pair ever assigned by a client, permanently reserved -
     // used for per-client uniqueness checks, ownership enforcement, and Update/Cancel lookups
     private readonly Dictionary<(string CompanyId, string ClientOrderId), InternalOrder> _clientOrderIndex = new();
@@ -333,9 +342,9 @@ public class OrderBook : IOrderBook
             UpdateOrder update => UpdateOrder(update.CompanyId, update.ClientOrderId,
                 update.PreviousClientOrderId, update.NewTotalQuantity, update.Price, update.TriggerPrice, time),
             CancelOrder cancel => CancelOrder(cancel.CompanyId, cancel.ClientOrderId, cancel.PreviousClientOrderId, time),
-            PreOpenTrading s => UpdateStatus(OrderBookStatus.PreOpen, s.ReferencePrice, true, OrderBookStatusChangeReason.Requested, time),
-            OpenTrading s => UpdateStatus(OrderBookStatus.Open, s.ReferencePrice, true, OrderBookStatusChangeReason.Requested, time),
-            CloseTrading c => UpdateStatus(OrderBookStatus.Closed, null, c.EndsTradingDay, OrderBookStatusChangeReason.Requested, time),
+            PreOpenTrading s => UpdateStatus(OrderBookStatus.PreOpen, s.ReferencePrice, true, OrderBookStatusChangeReason.Requested, time, s.TradeDate),
+            OpenTrading s => UpdateStatus(OrderBookStatus.Open, s.ReferencePrice, true, OrderBookStatusChangeReason.Requested, time, s.TradeDate),
+            CloseTrading c => UpdateStatus(OrderBookStatus.Closed, null, c.EndsTradingDay, OrderBookStatusChangeReason.Requested, time, c.TradeDate),
             PauseTrading => UpdateStatus(OrderBookStatus.Paused, null, true, OrderBookStatusChangeReason.Requested, time),
             HaltTrading => UpdateStatus(OrderBookStatus.Halted, null, true, OrderBookStatusChangeReason.Requested, time),
 
@@ -467,7 +476,7 @@ public class OrderBook : IOrderBook
             !_matcher.HasSufficientLiquidity(side, priceTicks!.Value, gateMinQty, selfMatchPreventionId,
                 selfMatchPreventionInstruction))
             return RejectCreate(companyId, clientOrderId, OrderRejectedReason.InsufficientLiquidityForMinQuantity, time);
-        if (validity is OrderValidity.GoodTilDate { Date: var goodTilDate } && goodTilDate < DateOnly.FromDateTime(time))
+        if (validity is OrderValidity.GoodTilDate { Date: var goodTilDate } && goodTilDate < TradingDayOn(time))
             return RejectCreate(companyId, clientOrderId, OrderRejectedReason.InvalidExpireDate, time);
 
         _nextSequenceNumber++;
@@ -1366,8 +1375,15 @@ public class OrderBook : IOrderBook
     // last of them ends it. The phase table stays the authority on whether a phase expires day
     // orders at all - this only says whether this particular close is that day's last.
     private List<OrderBookEvent> UpdateStatus(OrderBookStatus status, decimal? referencePrice = null,
-        bool endsTradingDay = true, OrderBookStatusChangeReason reason = OrderBookStatusChangeReason.Requested, DateTime time = default)
+        bool endsTradingDay = true, OrderBookStatusChangeReason reason = OrderBookStatusChangeReason.Requested,
+        DateTime time = default, DateOnly? tradeDate = null)
     {
+        // Before anything reads it, and on every session action that carries one rather than only
+        // on the one that starts a session: a book driven straight to a close - or to an open,
+        // without a pre-open ahead of it - is still owed the day it is closing for. A transition
+        // that says nothing leaves the book dated where it was.
+        if (tradeDate.HasValue) _tradeDate = tradeDate;
+
         if (referencePrice.HasValue && TryConvertToTicks(referencePrice, out var referenceTicks))
         {
             foreach (var phase in _phases.Values)
@@ -1401,14 +1417,19 @@ public class OrderBook : IOrderBook
 
         if (arriving.StartsSession)
         {
-            // Seeded from the date so an id carries the day it was issued, but only ever
-            // forwards: a second session on the same date computes a seed the counter has
+            // Seeded from the trading day so an id carries the day it was issued, but only ever
+            // forwards: a second session on the same day computes a seed the counter has
             // already passed and so continues from where it was. Restarting it would re-issue
             // ids that orders surviving the previous session (GTC, or GTD not yet due) still
             // hold, and _orders is keyed on exactly that. Math.Max is also what keeps a replay
             // whose clock moves backwards from colliding - a run of ids that no longer encodes
-            // its date beats one that repeats itself.
-            var seed = ((time.Year * 10000) + (time.Month * 100) + time.Day) * 10000000000L;
+            // its day beats one that repeats itself.
+            //
+            // The trading day rather than the clock's date, so an overnight session's ids carry
+            // the day they trade for from the evening onwards rather than changing over at
+            // midnight halfway through.
+            var day = TradingDayOn(time);
+            var seed = ((day.Year * 10000) + (day.Month * 100) + day.Day) * 10000000000L;
             _nextSequenceNumber = Math.Max(_nextSequenceNumber, seed);
 
             // Trade ids carry the day and never run backwards for the same reasons, though a
@@ -1438,9 +1459,14 @@ public class OrderBook : IOrderBook
         return events;
     }
 
+    // The trading day as of `time`: what the schedule last said, or the date on the clock when
+    // nothing has. The two agree for every schedule that stays within its day, which is why a
+    // book nobody tells behaves as it always did.
+    private DateOnly TradingDayOn(DateTime time) => _tradeDate ?? DateOnly.FromDateTime(time);
+
     private IEnumerable<OrderBookEvent> ExpireOrders(DateTime time)
     {
-        var today = DateOnly.FromDateTime(time);
+        var today = TradingDayOn(time);
         var orders = _orders.Values.Where(o =>
             o.Validity is OrderValidity.Day ||
             (o.Validity is OrderValidity.GoodTilDate { Date: var date } && date <= today))
