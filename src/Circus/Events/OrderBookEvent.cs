@@ -5,7 +5,7 @@ namespace Circus.Events;
 public record OrderBookEvent(string Symbol, DateTime Time);
 
 // Everything a venue may broadcast, and the half of the book's output that carries no client
-// identity. A market data producer is handed these and only these, so a CompanyId reaching a
+// identity. A market data feed is handed these and only these, so a CompanyId reaching a
 // public feed is a compile error rather than something a reflection test has to go looking for.
 //
 // The other half is OrderEvent below: what happened to one participant's order, addressed to that
@@ -82,7 +82,7 @@ public record ExpireOrderConfirmed(string Symbol, DateTime Time, string CompanyI
 // belongs to one participant and carries their CompanyId, so a feed for one of them is a filter
 // over these; a wrapper holding both sides could only be filtered by rewriting it, and handing
 // one participant the other's Order was a leak waiting to be shipped. The public print a venue
-// broadcasts is derived from these instead - see TradeDataProducer - which keeps the private and
+// broadcasts is derived from these instead - see InstrumentFeed - which keeps the private and
 // public views of a trade apart the way a real venue's execution reports and trade feed are.
 //
 // TradeId identifies the trade within this instrument, not beyond it, exactly as
@@ -302,8 +302,8 @@ public record OrdersChanged(string Symbol, DateTime Time, IReadOnlyList<OrderCha
 // The public print: one per trade, whatever it took to fill. The private half is the pair of
 // FillOrderConfirmed events sharing this TradeId, one per participant.
 //
-// Emitted by the book rather than derived by a producer from those fills, because a producer only
-// sees what a venue broadcasts and a fill is not that - it belongs to the participant whose order
+// Emitted by the book rather than derived by a feed from those fills, because a feed only sees
+// what a venue broadcasts and a fill is not that - it belongs to the participant whose order
 // filled. The pairing the derivation relied on is still here, in the id.
 public record TradePrinted(string Symbol, DateTime Time, string TradeId, decimal Price, int Quantity)
     : MarketEvent(Symbol, Time);

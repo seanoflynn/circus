@@ -759,7 +759,7 @@ public class OrderBook : IOrderBook
     // The ladders already carry the totals, maintained as orders rest, fill and leave, so this
     // reads them rather than computing them. The iceberg cases come out right without
     // special-casing: an auction print can trade straight through a peak into the reserve,
-    // leaving the order displaying a fresh peak and firing no requeue event, which a producer
+    // leaving the order displaying a fresh peak and firing no requeue event, which a feed
     // deriving depth has to reconstruct from the change in displayed size across the fill. That
     // is why FillOrderConfirmed carries PreviousDisplayedQuantity at all. Reading the level,
     // there is nothing to reconstruct.

@@ -31,7 +31,7 @@ public class PublicPrivateSplitTests
         events.OfType<OrdersChanged>().SelectMany(o => o.Changes).ToList();
 
     // The guarantee, stated over every published type rather than the one that happened to have a
-    // test. A producer cannot leak client identity because it never sees any; this closes the other
+    // test. A feed cannot leak client identity because it never sees any; this closes the other
     // half, that no broadcast type declares a place to put it.
     [Test]
     public void NoBroadcastEvent_DeclaresClientIdentity()
