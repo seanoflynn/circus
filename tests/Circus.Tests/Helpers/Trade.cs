@@ -7,7 +7,7 @@ namespace Circus.Tests.Helpers;
 //
 // The book emits fills rather than trades, because a fill belongs to one participant and a
 // trade does not - which is why there is no longer an event carrying both sides. A test
-// asserting "one trade printed at 100 for 5" is doing what TradeDataProducer does, and does it
+// asserting "one trade printed at 100 for 5" is doing what the trade feed does, and does it
 // through this rather than through the same grouping written out at every site.
 //
 // FlatteningTests covers the shape this hides - two top-level fills, one shared id - so that
