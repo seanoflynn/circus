@@ -1216,7 +1216,7 @@ public class OrderBook : IOrderBook
                 _resumeAt = breach.ResumeAfter.HasValue ? time + breach.ResumeAfter.Value : null;
                 _statusReason = OrderBookStatusChangeReason.PriceRestriction;
                 events.Add(new StatusChanged(_instrument.Symbol, time, _status, _statusReason,
-                    _resumeAt));
+                    _resumeAt, _limitState));
                 break;
 
             case StopsTriggered(var orders):
@@ -1243,7 +1243,8 @@ public class OrderBook : IOrderBook
             return;
 
         _limitState = side;
-        events.Add(new LimitStateChanged(_instrument.Symbol, time, side, ToDecimal(blockedTicks)));
+        events.Add(new LimitStateChanged(_instrument.Symbol, time, side, ToDecimal(blockedTicks),
+            _status, _statusReason, _resumeAt));
     }
 
     // A print means the market is trading again, wherever it is trading. Releasing on any trade
@@ -1255,7 +1256,8 @@ public class OrderBook : IOrderBook
             return;
 
         _limitState = null;
-        events.Add(new LimitStateChanged(_instrument.Symbol, time, null, null));
+        events.Add(new LimitStateChanged(_instrument.Symbol, time, null, null,
+            _status, _statusReason, _resumeAt));
     }
 
     private void ApplyTrade(InternalOrder resting, InternalOrder aggressor, long priceTicks, int quantity,
@@ -1404,7 +1406,7 @@ public class OrderBook : IOrderBook
             _resumeAt = extension.Value.ResumeAfter.HasValue ? time + extension.Value.ResumeAfter.Value : null;
             _statusReason = OrderBookStatusChangeReason.PriceRestriction;
             return new List<OrderBookEvent>
-                {new StatusChanged(_instrument.Symbol, time, _status, _statusReason, _resumeAt)};
+                {new StatusChanged(_instrument.Symbol, time, _status, _statusReason, _resumeAt, _limitState)};
         }
 
         // Any transition supersedes a pending one, so a session closing over a running pause
@@ -1442,7 +1444,8 @@ public class OrderBook : IOrderBook
         // _resumeAt was cleared above, so this reports nothing pending - which is what an
         // explicit transition means, having just superseded whatever was.
         _statusReason = reason;
-        var events = new List<OrderBookEvent> {new StatusChanged(_instrument.Symbol, time, _status, reason, _resumeAt)};
+        var events = new List<OrderBookEvent>
+            {new StatusChanged(_instrument.Symbol, time, _status, reason, _resumeAt, _limitState)};
 
         // A quoting phase has been accumulating orders for a print, and leaving it is where
         // that print happens - so a second auction phase would need nothing changed here.

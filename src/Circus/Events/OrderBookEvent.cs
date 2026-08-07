@@ -23,8 +23,16 @@ public abstract record MarketEvent(string Symbol, DateTime Time) : OrderBookEven
 // ResumesAt is when a timed interruption is due to end, and is null for everything else - which
 // includes an interruption configured to last until told otherwise, and every ordinary
 // transition, since an explicit one supersedes whatever was pending.
+//
+// LimitState is which way a daily limit has the market stuck as this transition happens, and is
+// not a claim that the limit moved - LimitStateChanged below says that. It is carried for the
+// reason UpdateOrderConfirmed carries its Previous fields: so that a consumer wanting the
+// instrument's whole state does not have to remember the half this event is not about. The book
+// already holds it, and BookSnapshot already publishes the same composite, so restating it here
+// costs a field and saves every subscriber an accumulator that can drift and cannot resync.
 public record StatusChanged(string Symbol, DateTime Time, OrderBookStatus Status,
-        OrderBookStatusChangeReason Reason = OrderBookStatusChangeReason.Requested, DateTime? ResumesAt = null)
+        OrderBookStatusChangeReason Reason = OrderBookStatusChangeReason.Requested, DateTime? ResumesAt = null,
+        Side? LimitState = null)
     : MarketEvent(Symbol, Time);
 
 // Addressed to one participant, and never broadcast: CompanyId and ClientOrderId identify who
@@ -126,7 +134,17 @@ public record IndicativePriceChanged(string Symbol, DateTime Time, decimal? Pric
 // Not a status change - a limit-locked market is open, quoting, and trading at the limit. That
 // is the whole difference between a limit and a circuit breaker, so it gets an event of its own
 // rather than a status that would claim otherwise. Emitted only on a change.
-public record LimitStateChanged(string Symbol, DateTime Time, Side? Side, decimal? Price)
+//
+// Status, Reason and ResumesAt are what the instrument's status is while this happens, and say
+// nothing about it having moved - it did not, which is the paragraph above. They are here for the
+// same reason StatusChanged carries LimitState: either event is then a complete picture of the
+// instrument's state, so a consumer assembling that picture holds nothing between messages and a
+// gap costs it the update rather than the truth. That the two stay separate types is what keeps
+// "the status moved" and "the limit moved" tellable apart by a consumer that cares about one and
+// not the other - which is the distinction the paragraph above exists to protect, and merging
+// them into one event would have given up.
+public record LimitStateChanged(string Symbol, DateTime Time, Side? Side, decimal? Price,
+        OrderBookStatus Status, OrderBookStatusChangeReason Reason, DateTime? ResumesAt)
     : MarketEvent(Symbol, Time);
 // One aggregated price level of the working book, as carried inside a LevelsChanged.
 //
