@@ -199,16 +199,19 @@ public class MarketScheduleTests
         }
 
         // assert - the whole day in order, then the roll into the next one
+        var today = DateOnly.FromDateTime(Day);
+        var tomorrow = DateOnly.FromDateTime(NextDay);
+
         Assert.AreEqual(
             new[]
             {
-                new ScheduledTransition(Day.Add(Morning.PreOpen), OrderBookStatus.PreOpen),
-                new ScheduledTransition(Day.Add(Morning.Open), OrderBookStatus.Open),
-                new ScheduledTransition(Day.Add(Morning.Close), OrderBookStatus.Closed, false),
-                new ScheduledTransition(Day.Add(Afternoon.PreOpen), OrderBookStatus.PreOpen),
-                new ScheduledTransition(Day.Add(Afternoon.Open), OrderBookStatus.Open),
-                new ScheduledTransition(Day.Add(Afternoon.Close), OrderBookStatus.Closed),
-                new ScheduledTransition(NextDay.Add(Morning.PreOpen), OrderBookStatus.PreOpen)
+                new ScheduledTransition(Day.Add(Morning.PreOpen), OrderBookStatus.PreOpen, today),
+                new ScheduledTransition(Day.Add(Morning.Open), OrderBookStatus.Open, today),
+                new ScheduledTransition(Day.Add(Morning.Close), OrderBookStatus.Closed, today, false),
+                new ScheduledTransition(Day.Add(Afternoon.PreOpen), OrderBookStatus.PreOpen, today),
+                new ScheduledTransition(Day.Add(Afternoon.Open), OrderBookStatus.Open, today),
+                new ScheduledTransition(Day.Add(Afternoon.Close), OrderBookStatus.Closed, today),
+                new ScheduledTransition(NextDay.Add(Morning.PreOpen), OrderBookStatus.PreOpen, tomorrow)
             },
             walk);
     }
@@ -228,28 +231,6 @@ public class MarketScheduleTests
 
         // assert
         Assert.AreEqual(first, again);
-    }
-
-    [Test]
-    public void NextAfter_CloseTouchingTheNextPreOpen_StepsOverThePreOpen()
-    {
-        // arrange - a session beginning the moment the previous one closes puts two boundaries on
-        // one instant, and a query keyed on time alone cannot return both
-        var touching = new TradingSession(new TimeSpan(11, 0, 0), new TimeSpan(11, 30, 0),
-            new TimeSpan(16, 0, 0));
-        var schedule = new MarketSchedule(new[] {Morning, touching});
-
-        // act
-        var close = NextAfter(schedule, Day.Add(new TimeSpan(10, 0, 0)));
-        var afterTheClose = NextAfter(schedule, close.Time);
-
-        // assert - the close is reached, and asking on from it lands on the open rather than the
-        // pre-open sharing that instant. A limitation of asking by time, pinned here so whatever
-        // consumes this next has to decide about it rather than discover it
-        Assert.AreEqual(OrderBookStatus.Closed, close.Status);
-        Assert.AreEqual(Day.Add(Morning.Close), close.Time);
-        Assert.AreEqual(OrderBookStatus.Open, afterTheClose.Status);
-        Assert.AreEqual(Day.Add(touching.Open), afterTheClose.Time);
     }
 
     [Test]
@@ -302,13 +283,175 @@ public class MarketScheduleTests
     }
 
     [Test]
-    public void Constructor_TouchingSessions_Success()
+    public void Constructor_TouchingSessions_ArgumentException()
     {
-        // arrange - a session may begin the moment the previous one closes
+        // arrange - a session beginning the moment the previous one closes puts two boundaries on
+        // one instant, and a query keyed on time alone cannot return both: the close would be
+        // answered and asking on from it would step over the pre-open, opening a session that
+        // never pre-opened
         var touching = new TradingSession(new TimeSpan(11, 0, 0), new TimeSpan(11, 30, 0),
             new TimeSpan(16, 0, 0));
 
         // assert
-        new MarketSchedule(new[] {Morning, touching});
+        Assert.Catch<ArgumentException>(
+            () => new MarketSchedule(new[] {Morning, touching})
+        );
+    }
+
+    [Test]
+    public void Constructor_OpenOnThePreOpen_ArgumentException()
+    {
+        // assert - the same instant shared by two of one session's own boundaries, and skipped
+        // for the same reason
+        Assert.Catch<ArgumentException>(
+            () => new MarketSchedule(PreOpen, PreOpen, Close)
+        );
+    }
+
+    [Test]
+    public void Constructor_CloseOnTheOpen_ArgumentException()
+    {
+        // assert
+        Assert.Catch<ArgumentException>(
+            () => new MarketSchedule(PreOpen, Open, Open)
+        );
+    }
+
+    [Test]
+    public void Constructor_DaySpanningTwentyFourHours_ArgumentException()
+    {
+        // assert - the day's last close landing on tomorrow's first pre-open, which is the wrap
+        // around version of two sessions touching
+        Assert.Catch<ArgumentException>(
+            () => new MarketSchedule(new TimeSpan(17, 0, 0), new TimeSpan(17, 30, 0), new TimeSpan(41, 0, 0))
+        );
+    }
+
+    [Test]
+    public void Constructor_FirstPreOpenPastItsOwnDay_ArgumentException()
+    {
+        // assert - an anchor that names no particular day
+        Assert.Catch<ArgumentException>(
+            () => new MarketSchedule(new TimeSpan(25, 0, 0), new TimeSpan(25, 30, 0), new TimeSpan(30, 0, 0))
+        );
+    }
+
+    // Globex's shape: pre-open in the late afternoon, open an evening, close the following
+    // afternoon. The whole session is one trading day and it is the day it closes on, so its
+    // evening half is dated a day ahead of the clock.
+    private static readonly TradingSession Overnight =
+        new(new TimeSpan(16, 45, 0), new TimeSpan(17, 0, 0), new TimeSpan(40, 0, 0), TradeDateOffset: 1);
+
+    private static MarketSchedule OvernightSession() => new(new[] {Overnight});
+
+    [Test]
+    public void NextAfter_DuringTheMorning_ClosesThisAfternoon()
+    {
+        // act - a venue this shape is in a session for all but 45 minutes of the day, and the
+        // session it is in at breakfast is the one that opened last night
+        var next = NextAfter(OvernightSession(), Day.Add(new TimeSpan(9, 0, 0)));
+
+        // assert
+        Assert.AreEqual(OrderBookStatus.Closed, next.Status);
+        Assert.AreEqual(Day.Add(new TimeSpan(16, 0, 0)), next.Time);
+        Assert.AreEqual(DateOnly.FromDateTime(Day), next.TradeDate,
+            "last night's session trades for today");
+    }
+
+    [Test]
+    public void NextAfter_DuringTheEvening_ClosesTomorrowAfternoon()
+    {
+        // act
+        var next = NextAfter(OvernightSession(), Day.Add(new TimeSpan(20, 0, 0)));
+
+        // assert - the close is on the next calendar day, which no same-day schedule can say
+        Assert.AreEqual(OrderBookStatus.Closed, next.Status);
+        Assert.AreEqual(NextDay.Add(new TimeSpan(16, 0, 0)), next.Time);
+        Assert.IsTrue(next.EndsTradingDay);
+    }
+
+    [Test]
+    public void NextAfter_AfterMidnight_StillInLastNightsSession()
+    {
+        // act - the case a schedule anchored on the asking date cannot answer: nothing opened
+        // today, and what is running began yesterday
+        var next = NextAfter(OvernightSession(), NextDay.Add(new TimeSpan(2, 0, 0)));
+
+        // assert
+        Assert.AreEqual(OrderBookStatus.Closed, next.Status);
+        Assert.AreEqual(NextDay.Add(new TimeSpan(16, 0, 0)), next.Time);
+        Assert.AreEqual(DateOnly.FromDateTime(NextDay), next.TradeDate,
+            "past midnight the clock has caught up with the trading day, which never moved");
+    }
+
+    [Test]
+    public void NextAfter_BetweenTheCloseAndTheNextPreOpen_PreOpensTonight()
+    {
+        // act - the maintenance window, the only part of the day this venue is not in a session
+        var next = NextAfter(OvernightSession(), NextDay.Add(new TimeSpan(16, 30, 0)));
+
+        // assert
+        Assert.AreEqual(OrderBookStatus.PreOpen, next.Status);
+        Assert.AreEqual(NextDay.Add(Overnight.PreOpen), next.Time);
+    }
+
+    [Test]
+    public void NextAfter_OvernightWalkedForward_VisitsEveryBoundaryInOrder()
+    {
+        // arrange
+        var schedule = OvernightSession();
+        var walk = new List<ScheduledTransition>();
+
+        // From inside the maintenance window, the only instant of the day this venue is between
+        // sessions rather than in one.
+        var time = Day.Add(new TimeSpan(16, 30, 0));
+
+        // act
+        for (var i = 0; i < 4; i++)
+        {
+            var next = NextAfter(schedule, time);
+            walk.Add(next);
+            time = next.Time;
+        }
+
+        // assert - one session per calendar day, each dated a day ahead of the day it opens on,
+        // and the close of one landing between the pre-open and open of nothing at all
+        var dayAfter = NextDay.AddDays(1);
+        Assert.AreEqual(
+            new[]
+            {
+                new ScheduledTransition(Day.Add(Overnight.PreOpen), OrderBookStatus.PreOpen,
+                    DateOnly.FromDateTime(NextDay)),
+                new ScheduledTransition(Day.Add(Overnight.Open), OrderBookStatus.Open,
+                    DateOnly.FromDateTime(NextDay)),
+                new ScheduledTransition(NextDay.Add(new TimeSpan(16, 0, 0)), OrderBookStatus.Closed,
+                    DateOnly.FromDateTime(NextDay)),
+                new ScheduledTransition(NextDay.Add(Overnight.PreOpen), OrderBookStatus.PreOpen,
+                    DateOnly.FromDateTime(dayAfter))
+            },
+            walk);
+    }
+
+    [Test]
+    public void NextAfter_DaySessionThenAnEveningOne_DatesEachToItsOwnTradingDay()
+    {
+        // arrange - a cash session trading for today, and an evening one that is tomorrow's
+        // business already, which is what makes the trade date a property of the session rather
+        // than of the calendar
+        var cash = new TradingSession(new TimeSpan(8, 0, 0), new TimeSpan(8, 30, 0), new TimeSpan(16, 0, 0));
+        var evening = new TradingSession(new TimeSpan(17, 0, 0), new TimeSpan(17, 30, 0),
+            new TimeSpan(21, 0, 0), TradeDateOffset: 1);
+        var schedule = new MarketSchedule(new[] {cash, evening});
+
+        // act
+        var cashClose = NextAfter(schedule, Day.Add(new TimeSpan(12, 0, 0)));
+        var eveningClose = NextAfter(schedule, Day.Add(new TimeSpan(18, 0, 0)));
+
+        // assert - and only the evening close ends a trading day, the cash close being a session
+        // with another still to come
+        Assert.AreEqual(DateOnly.FromDateTime(Day), cashClose.TradeDate);
+        Assert.IsFalse(cashClose.EndsTradingDay);
+        Assert.AreEqual(DateOnly.FromDateTime(NextDay), eveningClose.TradeDate);
+        Assert.IsTrue(eveningClose.EndsTradingDay);
     }
 }

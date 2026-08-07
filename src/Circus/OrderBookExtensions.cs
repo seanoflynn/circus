@@ -102,20 +102,23 @@ public static class OrderBookExtensions
             PreviousClientOrderId = previousClientOrderId
         });
 
+    // tradeDate left out dates the book from the instant, which is what a schedule that stays
+    // within its day means anyway - a caller driving a book by hand only needs it for a session
+    // that runs past midnight.
     public static IReadOnlyList<OrderBookEvent> PreOpenTrading(this IOrderBook book,
-        decimal? referencePrice = null, DateTime time = default) =>
+        decimal? referencePrice = null, DateTime time = default, DateOnly? tradeDate = null) =>
         book.Process(new PreOpenTrading
-            { Symbol = book.Symbol, Time = time, ReferencePrice = referencePrice });
+            { Symbol = book.Symbol, Time = time, ReferencePrice = referencePrice, TradeDate = tradeDate });
 
     public static IReadOnlyList<OrderBookEvent> OpenTrading(this IOrderBook book,
-        decimal? referencePrice = null, DateTime time = default) =>
+        decimal? referencePrice = null, DateTime time = default, DateOnly? tradeDate = null) =>
         book.Process(new OpenTrading
-            { Symbol = book.Symbol, Time = time, ReferencePrice = referencePrice });
+            { Symbol = book.Symbol, Time = time, ReferencePrice = referencePrice, TradeDate = tradeDate });
 
     public static IReadOnlyList<OrderBookEvent> CloseTrading(this IOrderBook book, bool endsTradingDay = true,
-        DateTime time = default) =>
+        DateTime time = default, DateOnly? tradeDate = null) =>
         book.Process(new CloseTrading
-            { Symbol = book.Symbol, Time = time, EndsTradingDay = endsTradingDay });
+            { Symbol = book.Symbol, Time = time, EndsTradingDay = endsTradingDay, TradeDate = tradeDate });
 
     public static IReadOnlyList<OrderBookEvent> PauseTrading(this IOrderBook book, DateTime time = default) =>
         book.Process(new PauseTrading { Symbol = book.Symbol, Time = time });

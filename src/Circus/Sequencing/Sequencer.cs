@@ -220,11 +220,18 @@ public sealed class Sequencer
     private static OrderBookAction ToAction(string symbol, ScheduledTransition transition) =>
         transition.Status switch
         {
-            OrderBookStatus.PreOpen => new PreOpenTrading {Symbol = symbol, Time = transition.Time},
-            OrderBookStatus.Open => new OpenTrading {Symbol = symbol, Time = transition.Time},
+            OrderBookStatus.PreOpen => new PreOpenTrading
+            {
+                Symbol = symbol, Time = transition.Time, TradeDate = transition.TradeDate
+            },
+            OrderBookStatus.Open => new OpenTrading
+            {
+                Symbol = symbol, Time = transition.Time, TradeDate = transition.TradeDate
+            },
             OrderBookStatus.Closed => new CloseTrading
             {
-                Symbol = symbol, Time = transition.Time, EndsTradingDay = transition.EndsTradingDay
+                Symbol = symbol, Time = transition.Time, TradeDate = transition.TradeDate,
+                EndsTradingDay = transition.EndsTradingDay
             },
             _ => throw new ArgumentOutOfRangeException(nameof(transition), transition.Status,
                 "a schedule moves a book between pre-open, open and closed, and nowhere else")
