@@ -1,4 +1,5 @@
 using Circus.Actions;
+using Circus.Events;
 using Circus.MarketData;
 using Circus.Sequencing;
 using Circus.Sessions;
@@ -83,12 +84,12 @@ public class ChannelDepthTests
 
         var published = BuildAndTopTheBook(group);
 
-        Assert.AreEqual(new[] {(MarketByPriceDeltaAction.Added, 210m)},
+        Assert.AreEqual(new[] {(LevelChangeAction.Added, 210m)},
             LastDelta(published["deep"]).Changes.Select(c => (c.Action, c.Price)).ToArray(),
             "ten deep, the levels beneath the new best only moved rank, which is not news");
 
         Assert.AreEqual(
-            new[] {(MarketByPriceDeltaAction.Added, 210m), (MarketByPriceDeltaAction.Removed, 200m)},
+            new[] {(LevelChangeAction.Added, 210m), (LevelChangeAction.Removed, 200m)},
             LastDelta(published["tob"]).Changes.Select(c => (c.Action, c.Price)).ToArray(),
             "one deep, 200 is no longer published and the channel has to say so");
     }
@@ -152,7 +153,7 @@ public class ChannelDepthTests
         var published = BuildAndTopTheBook(group);
 
         Assert.AreEqual(
-            new[] {(MarketByPriceDeltaAction.Added, 210m), (MarketByPriceDeltaAction.Removed, 200m)},
+            new[] {(LevelChangeAction.Added, 210m), (LevelChangeAction.Removed, 200m)},
             LastDelta(published["tob"]).Changes.Select(c => (c.Action, c.Price)).ToArray());
     }
 

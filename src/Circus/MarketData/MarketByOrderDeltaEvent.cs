@@ -1,3 +1,5 @@
+using Circus.Events;
+
 namespace Circus.MarketData;
 
 // One change to one order in the working book, as carried inside a by-order message.
@@ -12,8 +14,11 @@ namespace Circus.MarketData;
 // side, sharing an id - the same pairing FillOrderConfirmed carries privately. Without it a
 // consumer sees two Filled entries at one price and cannot tell one trade between two orders from
 // two separate trades, since nothing else distinguishes them.
+// Action is the book's own OrderChangeAction, for the reason MarketByPriceDelta carries
+// LevelChangeAction: the four things that can happen to a displayed order do not differ between
+// saying them and hearing them.
 public record MarketByOrderDelta(Side Side, string ExchangeOrderId, decimal Price, int Quantity,
-    MarketByOrderDeltaAction Action, string? TradeId = null);
+    OrderChangeAction Action, string? TradeId = null);
 
 // Every order-level change one action made - CME's Market by Order, Eurex's EOBI. A consumer
 // replays these onto its own mirrored book.

@@ -1,3 +1,5 @@
+using Circus.Events;
+
 namespace Circus.MarketData;
 
 // One change to one aggregated price level, as carried inside a by-price message.
@@ -10,8 +12,13 @@ namespace Circus.MarketData;
 // which means a consumer that mislays one has every level beneath it wrong. LevelIndex is the
 // rank the level holds, or on Removed the rank it last held, and is carried for a consumer that
 // wants it rather than for identifying the level.
+// Action is the book's own LevelChangeAction rather than a published enum of its own. The message
+// stays a separate type - see below - but the three things that can happen to a level do not
+// differ between saying it and hearing it, and a private enum whose members were copied across one
+// for one bought nothing but a switch to write them out in. If the two ever do need to differ,
+// this is where a mapping goes back.
 public record MarketByPriceDelta(Side Side, int LevelIndex, decimal Price, int Quantity, int Count,
-    MarketByPriceDeltaAction Action);
+    LevelChangeAction Action);
 
 // Every price level one action moved, in one message - CME's Market by Price, Eurex's EMDI. The
 // incremental half of the by-price feed; the periodic full image is the snapshot half.
@@ -26,7 +33,9 @@ public record MarketByPriceDelta(Side Side, int LevelIndex, decimal Price, int Q
 // The book reports the same set as one LevelsChanged, and this is its published form. The two
 // stay separate types because what a book says about itself and what a subscriber is told are
 // different vocabularies - the same reason FillOrderConfirmed and TradeDataEvent are not one
-// type - not because either needs reassembling on the way through.
+// type - not because either needs reassembling on the way through. What that buys is room for
+// the two to differ, and they already do: Depth is a fact about the feed carrying the message and
+// means nothing to the book, which reports at every depth anyone asked for.
 //
 // Changes are ordered best price outward within a side, arrivals and changes before departures.
 //

@@ -261,7 +261,7 @@ public sealed class InstrumentFeed
         foreach (var change in levels.Changes)
         {
             changes.Add(new MarketByPriceDelta(change.Side, change.LevelIndex, change.Price,
-                change.Quantity, change.Count, ToAction(change.Action)));
+                change.Quantity, change.Count, change.Action));
         }
 
         return new MarketByPriceDeltaEvent(levels.Symbol, levels.Time, levels.Depth, changes);
@@ -286,7 +286,7 @@ public sealed class InstrumentFeed
         foreach (var change in orders.Changes)
         {
             changes.Add(new MarketByOrderDelta(change.Side, change.ExchangeOrderId, change.Price,
-                change.Quantity, ToAction(change.Action), change.TradeId));
+                change.Quantity, change.Action, change.TradeId));
         }
 
         return new MarketByOrderDeltaEvent(orders.Symbol, orders.Time, changes);
@@ -344,27 +344,6 @@ public sealed class InstrumentFeed
 
         return window;
     }
-
-    // The two pairs of enums are deliberately separate rather than one shared between the book's
-    // events and the messages a venue publishes: what a book says about itself and what a
-    // subscriber is told are different vocabularies, and a change to one should not be forced on
-    // the other. That they presently have the same members is what makes these look like nothing.
-    private static MarketByPriceDeltaAction ToAction(LevelChangeAction action) => action switch
-    {
-        LevelChangeAction.Added => MarketByPriceDeltaAction.Added,
-        LevelChangeAction.Modified => MarketByPriceDeltaAction.Modified,
-        LevelChangeAction.Removed => MarketByPriceDeltaAction.Removed,
-        _ => throw new ArgumentOutOfRangeException(nameof(action), action, null)
-    };
-
-    private static MarketByOrderDeltaAction ToAction(OrderChangeAction action) => action switch
-    {
-        OrderChangeAction.Added => MarketByOrderDeltaAction.Added,
-        OrderChangeAction.Modified => MarketByOrderDeltaAction.Modified,
-        OrderChangeAction.Removed => MarketByOrderDeltaAction.Removed,
-        OrderChangeAction.Filled => MarketByOrderDeltaAction.Filled,
-        _ => throw new ArgumentOutOfRangeException(nameof(action), action, null)
-    };
 
     // The boundary where a book's output becomes a venue's. What a participant is told about its
     // own order stops here: the projections above are typed to MarketEvent, so this is the only

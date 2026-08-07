@@ -1,4 +1,5 @@
 using Circus.Actions;
+using Circus.Events;
 using Circus.MarketData;
 using Circus.Tests.Helpers;
 using NUnit.Framework;
@@ -108,7 +109,7 @@ public class MarketByOrderSnapshotTests
                 _book.CreateLimitOrder("C2", "O2", new OrderValidity.Day(), Side.Sell, 3, 100, time: Now3))
             .Single().Changes;
 
-        var fills = changes.Where(c => c.Action == MarketByOrderDeltaAction.Filled).ToList();
+        var fills = changes.Where(c => c.Action == OrderChangeAction.Filled).ToList();
         Assert.AreEqual(2, fills.Count, "one trade, one entry per side");
         Assert.IsNotNull(fills[0].TradeId);
         Assert.AreEqual(fills[0].TradeId, fills[1].TradeId, "the two sides of one trade share an id");
@@ -127,7 +128,7 @@ public class MarketByOrderSnapshotTests
                 _book.CreateLimitOrder("C3", "O3", new OrderValidity.Day(), Side.Buy, 5, 110, time: Now3))
             .Single().Changes;
 
-        var tradeIds = changes.Where(c => c.Action == MarketByOrderDeltaAction.Filled)
+        var tradeIds = changes.Where(c => c.Action == OrderChangeAction.Filled)
             .Select(c => c.TradeId).ToList();
 
         Assert.AreEqual(4, tradeIds.Count, "two trades, two sides each");

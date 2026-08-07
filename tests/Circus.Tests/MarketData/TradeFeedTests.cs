@@ -107,7 +107,7 @@ public class TradeFeedTests
             .ToList();
 
         Assert.AreEqual(2, filled.Count, "the two sides of the print, found by its id alone");
-        Assert.IsTrue(filled.All(change => change.Action == MarketByOrderDeltaAction.Filled));
+        Assert.IsTrue(filled.All(change => change.Action == OrderChangeAction.Filled));
         Assert.AreEqual(new[] {Side.Buy, Side.Sell}, filled.Select(c => c.Side).OrderBy(s => s).ToArray());
     }
 
