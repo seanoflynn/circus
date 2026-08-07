@@ -67,30 +67,11 @@ public class OrderBook : IOrderBook
     // always carried. A default rather than a rule - see below.
     public const int DefaultPublishedDepth = 10;
 
-    // The depths this book reports its levels at, ascending and distinct. One number is the usual
-    // case; several are for a venue publishing the same instrument's depth in more than one shape,
-    // which is common enough to be named - CME runs a top-of-book channel alongside its ten-deep
-    // one, and Databento sells mbp-1 and mbp-10 off the same book.
-    //
-    // Several rather than one deep report the feeds truncate, because a delta does not truncate:
-    // see LevelsChanged. Each depth gets its own diff of the same before and after windows, which
-    // costs a scan of a bounded window and nothing else - the ladders are not walked again.
-    //
-    // Still not "which channels want what". The book is told how far to look and knows nothing
-    // about who is reading, which is what keeps it a function of its actions and its depths.
-    private int[] _publishedDepths;
-
-    // The deepest of them, which is the window actually captured: every shallower report is a
-    // prefix of it.
-    private int _maxPublishedDepth;
-
-    // The published window as it stood before the action and as it stands after, diffed to
-    // produce LevelsChanged. Reused per book for the reason the buffer above is: one action at a
-    // time, so four lists outlive every call rather than being allocated within it.
-    private readonly List<(long Tick, int Quantity, int Count)> _bidsBefore;
-    private readonly List<(long Tick, int Quantity, int Count)> _offersBefore;
-    private readonly List<(long Tick, int Quantity, int Count)> _bidsAfter;
-    private readonly List<(long Tick, int Quantity, int Count)> _offersAfter;
+    // What this action did to the displayed book - the levels that moved, the orders that moved,
+    // and what printed - which is a different question from how the book matched, and so is
+    // answered outside it. Told how deep to look and handed the ladders either side of an action;
+    // it holds nothing of the book between calls.
+    private readonly DisplayedBookReport _report;
 
     // Nothing outside this table names a status - the rest of the book reads the current phase
     // and acts on what it says. Pre-open's auction instance is also what prints on the way out
@@ -220,51 +201,23 @@ public class OrderBook : IOrderBook
     internal OrderBook(Instrument instrument, IReadOnlyList<IPriceRestriction> priceRestrictions,
         IReadOnlyList<int> publishedDepths)
     {
-        ArgumentNullException.ThrowIfNull(publishedDepths);
-
-        if (publishedDepths.Count == 0)
-            throw new ArgumentException(
-                "a book reporting at no depth publishes no by-price data at all", nameof(publishedDepths));
-
-        foreach (var depth in publishedDepths)
-        {
-            if (depth <= 0)
-                throw new ArgumentOutOfRangeException(nameof(publishedDepths), depth,
-                    "a book that reports no levels publishes no depth at all");
-        }
-
         _instrument = instrument;
         _priceRestrictions = priceRestrictions;
         _phases = BuildPhases(instrument.MatchingAlgorithm);
-        _publishedDepths = publishedDepths.Distinct().OrderBy(d => d).ToArray();
-        _maxPublishedDepth = _publishedDepths[^1];
 
-        _bidsBefore = new List<(long, int, int)>(_maxPublishedDepth);
-        _offersBefore = new List<(long, int, int)>(_maxPublishedDepth);
-        _bidsAfter = new List<(long, int, int)>(_maxPublishedDepth);
-        _offersAfter = new List<(long, int, int)>(_maxPublishedDepth);
+        // Validates publishedDepths, which is why it is built before anything reads them.
+        _report = new DisplayedBookReport(instrument.Symbol, instrument.TickSize, publishedDepths);
     }
 
     // What this book reports its levels at, ascending and distinct.
-    public IReadOnlyList<int> PublishedDepths => _publishedDepths;
+    public IReadOnlyList<int> PublishedDepths => _report.Depths;
 
     // Adds a depth to report at. For a channel declared after the book was built: the alternative
     // is a book that publishes nothing to it, which is the one failure mode worth spending an API
     // on. Idempotent, and safe between actions - the windows are captured at the top of every
     // Process, so a depth added here is diffed from the next action onwards and never from a
     // window it was not part of.
-    internal void AlsoReport(int depth)
-    {
-        if (depth <= 0)
-            throw new ArgumentOutOfRangeException(nameof(depth), depth,
-                "a book that reports no levels publishes no depth at all");
-
-        if (Array.IndexOf(_publishedDepths, depth) >= 0)
-            return;
-
-        _publishedDepths = _publishedDepths.Append(depth).OrderBy(d => d).ToArray();
-        _maxPublishedDepth = _publishedDepths[^1];
-    }
+    internal void AlsoReport(int depth) => _report.AlsoReport(depth);
 
     public string Symbol => _instrument.Symbol;
     public OrderBookStatus Status => _status;
@@ -296,8 +249,7 @@ public class OrderBook : IOrderBook
         // Captured before anything runs, including the resumption below - a resumption can carry
         // an auction print with it, and the levels that moved doing so are as much a part of what
         // this action did as the ones the action itself moved.
-        CaptureWindow(_bidsBefore, Side.Buy);
-        CaptureWindow(_offersBefore, Side.Sell);
+        _report.CaptureBefore(_matcher.Working[Side.Buy], _matcher.Working[Side.Sell]);
 
         // Before the action rather than after: an order arriving once the interruption has
         // elapsed should meet a resumed book, not the paused one it would otherwise land in.
@@ -313,14 +265,10 @@ public class OrderBook : IOrderBook
         if (quoteChange != null)
             events.Add(quoteChange);
 
-        // After everything that describes what happened, because these describe what it left
-        // behind - and reporting the net effect of the whole action rather than each state it
-        // passed through: an aggressor sweeping three levels leaves one report per level touched,
-        // not one per fill along the way. That is the shape of a real incremental refresh, which
-        // carries every level a single matching-engine event moved.
-        AppendLevelChanges(events, time);
-        AppendOrderChanges(events, time);
-        AppendTradePrints(events, time);
+        // Last, because these describe what the action left behind rather than what it did, and
+        // they are read off the events above - so everything that has anything to say must have
+        // said it by now. What they report and why is DisplayedBookReport's business.
+        _report.Append(events, time, _matcher.Working[Side.Buy], _matcher.Working[Side.Sell]);
 
         return events;
     }
@@ -529,7 +477,7 @@ public class OrderBook : IOrderBook
     // The same goes for order-by-order, which gets a snapshot of its own once it has one to give.
     private BookSnapshot Snapshot(DateTime time) =>
         new(_instrument.Symbol, time,
-            GetLevels(Side.Buy, _maxPublishedDepth), GetLevels(Side.Sell, _maxPublishedDepth),
+            GetLevels(Side.Buy, _report.MaxDepth), GetLevels(Side.Sell, _report.MaxDepth),
             GetRestingOrders(),
             _status, _statusReason, _resumeAt, _limitState,
             _indicativeQuote is { } quote ? ToDecimal(quote.PriceTicks) : null,
@@ -558,191 +506,6 @@ public class OrderBook : IOrderBook
         return orders;
     }
 
-    // The displayed book's own view of what the confirmations above did, read back off them.
-    //
-    // Derived here rather than at each mutation site because the confirmations already carry
-    // exactly what it takes - PreviousExchangeOrderId to tell a requeue from an in-place modify,
-    // PreviousPrice to tell an arrival from a move, PreviousQuantity for what left a level. Those
-    // fields exist for this, and reading them once at the end costs a walk of a list the action
-    // just built rather than a hook in six places.
-    //
-    // Only the count of events read is scanned, so an action that touched no order says nothing.
-    private void AppendOrderChanges(List<OrderBookEvent> events, DateTime time)
-    {
-        List<OrderChange>? changes = null;
-
-        // Snapshot the count first: this appends to the same list it is reading.
-        var count = events.Count;
-        for (var i = 0; i < count; i++)
-        {
-            switch (events[i])
-            {
-                // One per side of a trade, each its own change, paired by the id they share.
-                case FillOrderConfirmed fill:
-                    Add(ref changes, new OrderChange(fill.Order.Side, fill.Order.ExchangeOrderId,
-                        fill.Price, fill.Quantity, OrderChangeAction.Filled, fill.TradeId));
-                    break;
-
-                // A move between levels. Losing time priority mints a fresh ExchangeOrderId, and a
-                // consumer rebuilding the queue needs to see the old id leave and a new one arrive
-                // at the back rather than a price change against an id that kept its place.
-                case UpdateOrderConfirmed {PreviousPrice: { } movedFrom} moved:
-                    if (moved.PreviousExchangeOrderId != moved.Order.ExchangeOrderId)
-                    {
-                        Add(ref changes, new OrderChange(moved.Order.Side, moved.PreviousExchangeOrderId,
-                            movedFrom, moved.PreviousQuantity, OrderChangeAction.Removed));
-                        Add(ref changes, new OrderChange(moved.Order.Side, moved.Order.ExchangeOrderId,
-                            moved.Order.Price!.Value, moved.Order.DisplayedQuantity, OrderChangeAction.Added));
-                    }
-                    else
-                    {
-                        Add(ref changes, new OrderChange(moved.Order.Side, moved.Order.ExchangeOrderId,
-                            moved.Order.Price!.Value, moved.Order.DisplayedQuantity, OrderChangeAction.Modified));
-                    }
-
-                    break;
-
-                // A stop still hidden is not on the displayed book, so it says nothing here.
-                case CreateOrderConfirmed {Order.Status: not OrderStatus.Hidden} create:
-                    Add(ref changes, new OrderChange(create.Order.Side, create.Order.ExchangeOrderId,
-                        create.Order.Price!.Value, create.Order.DisplayedQuantity, OrderChangeAction.Added));
-                    break;
-
-                // No previous price means it was not on the displayed book before - a stop
-                // triggering into it, which is an arrival rather than a move. Still hidden, and it
-                // has not arrived yet.
-                case UpdateOrderConfirmed {PreviousPrice: null, Order.Status: OrderStatus.Hidden}:
-                    break;
-
-                case UpdateOrderConfirmed {PreviousPrice: null} update:
-                    Add(ref changes, new OrderChange(update.Order.Side, update.Order.ExchangeOrderId,
-                        update.Order.Price!.Value, update.Order.DisplayedQuantity, OrderChangeAction.Added));
-                    break;
-
-                case CancelOrderConfirmed {PreviousPrice: { } cancelledAt} cancel:
-                    Add(ref changes, new OrderChange(cancel.Order.Side, cancel.Order.ExchangeOrderId,
-                        cancelledAt, cancel.PreviousQuantity, OrderChangeAction.Removed));
-                    break;
-
-                case ExpireOrderConfirmed {PreviousPrice: { } expiredAt} expire:
-                    Add(ref changes, new OrderChange(expire.Order.Side, expire.Order.ExchangeOrderId,
-                        expiredAt, expire.PreviousQuantity, OrderChangeAction.Removed));
-                    break;
-            }
-        }
-
-        if (changes != null)
-            events.Add(new OrdersChanged(_instrument.Symbol, time, changes));
-    }
-
-    private static void Add(ref List<OrderChange>? changes, OrderChange change) =>
-        (changes ??= new List<OrderChange>()).Add(change);
-
-    // One print per trade, from the pair of fills that share its id. The fills arrive adjacent, so
-    // remembering the last id seen is enough to take the first of each pair and skip the second.
-    private void AppendTradePrints(List<OrderBookEvent> events, DateTime time)
-    {
-        List<OrderBookEvent>? prints = null;
-        string? lastTradeId = null;
-
-        var count = events.Count;
-        for (var i = 0; i < count; i++)
-        {
-            if (events[i] is not FillOrderConfirmed fill || fill.TradeId == lastTradeId)
-                continue;
-
-            lastTradeId = fill.TradeId;
-            (prints ??= new List<OrderBookEvent>()).Add(
-                new TradePrinted(_instrument.Symbol, time, fill.TradeId, fill.Price, fill.Quantity));
-        }
-
-        if (prints != null)
-            events.AddRange(prints);
-    }
-
-    private void CaptureWindow(List<(long Tick, int Quantity, int Count)> into, Side side) =>
-        _matcher.Working[side].CopyLevelsFromBest(_maxPublishedDepth, into);
-
-    // One event per reported depth, each carrying every level the action moved within that window,
-    // and none at all for a depth it moved nothing in - an action that touches no level, a status
-    // change or a rejected order, says nothing here.
-    //
-    // The windows are captured once at the deepest and diffed once per depth, since a shallower
-    // window is a prefix of a deeper one. Diffing rather than truncating the deepest report is the
-    // whole point: see LevelsChanged for the case that makes truncation wrong.
-    private void AppendLevelChanges(List<OrderBookEvent> events, DateTime time)
-    {
-        CaptureWindow(_bidsAfter, Side.Buy);
-        CaptureWindow(_offersAfter, Side.Sell);
-
-        // Shallowest first, so a book reporting several does so in a fixed order rather than the
-        // order it was configured in.
-        foreach (var depth in _publishedDepths)
-        {
-            List<LevelChange>? changes = null;
-            CollectLevelChanges(ref changes, Side.Buy, _bidsBefore, _bidsAfter, depth);
-            CollectLevelChanges(ref changes, Side.Sell, _offersBefore, _offersAfter, depth);
-
-            if (changes != null)
-                events.Add(new LevelsChanged(_instrument.Symbol, time, depth, changes));
-        }
-    }
-
-    // Diffed by price rather than by position - see LevelChange for why - which also means a
-    // level that only moved rank contributes nothing, since its price, size and count are all
-    // unchanged. Ten a side at most in the usual case, so the nested scans below are bounded at a
-    // hundred comparisons and need no index to beat that.
-    //
-    // depth is where this window ends. The lists are the deepest window, so a shallower report
-    // reads a prefix of them at both ends - a level below the cut is outside the window and is
-    // neither reported nor available to match against, which is exactly what makes a level pushed
-    // past the cut a departure rather than nothing at all.
-    private void CollectLevelChanges(ref List<LevelChange>? changes, Side side,
-        List<(long Tick, int Quantity, int Count)> before, List<(long Tick, int Quantity, int Count)> after,
-        int depth)
-    {
-        var beforeCount = Math.Min(before.Count, depth);
-        var afterCount = Math.Min(after.Count, depth);
-
-        // Arrivals and changes first, best price outward, so a consumer applying them in order
-        // builds the near side of the book before the far side.
-        for (var i = 0; i < afterCount; i++)
-        {
-            var (tick, quantity, count) = after[i];
-            var previous = IndexOfTick(before, beforeCount, tick);
-
-            if (previous < 0)
-            {
-                (changes ??= new List<LevelChange>()).Add(new LevelChange(side, i + 1, ToDecimal(tick),
-                    quantity, count, LevelChangeAction.Added));
-            }
-            else if (before[previous].Quantity != quantity || before[previous].Count != count)
-            {
-                (changes ??= new List<LevelChange>()).Add(new LevelChange(side, i + 1, ToDecimal(tick),
-                    quantity, count, LevelChangeAction.Modified));
-            }
-        }
-
-        // Then departures, carrying the rank each last held and nothing left at it.
-        for (var i = 0; i < beforeCount; i++)
-        {
-            var tick = before[i].Tick;
-            if (IndexOfTick(after, afterCount, tick) < 0)
-                (changes ??= new List<LevelChange>()).Add(new LevelChange(side, i + 1, ToDecimal(tick),
-                    0, 0, LevelChangeAction.Removed));
-        }
-    }
-
-    private static int IndexOfTick(List<(long Tick, int Quantity, int Count)> levels, int count, long tick)
-    {
-        for (var i = 0; i < count; i++)
-        {
-            if (levels[i].Tick == tick)
-                return i;
-        }
-
-        return -1;
-    }
 
     // Internal on purpose, and not on IOrderBook. Process is the whole public API of a book:
     // everything a consumer knows arrives as an event, so a market data feed can be rebuilt from
