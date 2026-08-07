@@ -99,7 +99,7 @@ public class OvernightSessionTests
         // falls on Monday and is the same day's, so the trade date never moves within a session
         var session = dispatched.Select(d => d.Action).OfType<SessionAction>().ToList();
         Assert.AreEqual(3, session.Count);
-        CollectionAssert.AreEqual(new DateOnly?[] {MondayDate, MondayDate, MondayDate},
+        Assert.AreEqual(new DateOnly?[] {MondayDate, MondayDate, MondayDate},
             session.Select(a => a.TradeDate).ToList());
         Assert.AreEqual(Sunday, session[0].Time.Date);
         Assert.AreEqual(Monday, session[2].Time.Date);
