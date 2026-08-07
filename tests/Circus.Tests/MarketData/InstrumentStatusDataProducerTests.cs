@@ -183,10 +183,15 @@ public class InstrumentStatusDataProducerTests
         // assert
         Assert.AreEqual(OrderBookStatus.Paused, opened.Single().Status);
 
-        // act - a limit event arriving on its own carries the remembered status with it, which
-        // is what holding state is for
+        // act - a limit event arriving on its own still yields the whole composite. It carries the
+        // status itself now rather than the producer remembering it, so this says the same thing
+        // about what a subscriber is told and no longer says anything about where it was held.
         var events = Producer.Process(
-            new OrderBookEvent[] {new LimitStateChanged(book.Symbol, Now1, Side.Sell, 90)});
+            new OrderBookEvent[]
+            {
+                new LimitStateChanged(book.Symbol, Now1, Side.Sell, 90, OrderBookStatus.Paused,
+                    OrderBookStatusChangeReason.Requested, null)
+            });
 
         // assert
         Assert.AreEqual(OrderBookStatus.Paused, events.Single().Status);
