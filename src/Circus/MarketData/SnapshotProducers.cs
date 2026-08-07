@@ -66,8 +66,9 @@ public class MarketByPriceSnapshotProducer : IIncrementalProducer<LevelsDataEven
 }
 
 // The composite a joiner cannot rebuild: a status change and a limit lock arrive as separate
-// events at separate times, so a subscriber that heard neither has no way to assemble them. This
-// is what makes InstrumentStatusDataProducer's accumulator recoverable rather than merely stateful.
+// events at separate times, so a subscriber that heard neither has no way to assemble them. The
+// incremental half carries the whole composite on either event, which serves anyone who heard one
+// of them; this serves someone who heard nothing at all, and is the only thing that can.
 public class InstrumentStatusSnapshotProducer : IIncrementalProducer<InstrumentStatusDataEvent>
 {
     public IList<InstrumentStatusDataEvent> Process(IReadOnlyList<MarketEvent> events)

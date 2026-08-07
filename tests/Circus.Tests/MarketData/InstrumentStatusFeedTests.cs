@@ -7,23 +7,27 @@ using NUnit.Framework;
 
 namespace Circus.Tests.MarketData;
 
-public class InstrumentStatusDataProducerTests
+// What a channel carrying only FeedProducts.Status publishes, driven through a real feed rather
+// than a producer of its own: assembling the instrument's state is a projection now, and the feed
+// is where it happens.
+public class InstrumentStatusFeedTests
 {
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
     private static readonly TimeSpan PauseFor = TimeSpan.FromMinutes(2);
 
     private ManualClock Clock;
-    private InstrumentStatusDataProducer Producer;
+    private InstrumentFeed Feed;
 
     [SetUp]
     public void SetUp()
     {
         Clock = new ManualClock(Now1);
-        Producer = new InstrumentStatusDataProducer();
+        Feed = new InstrumentFeed("GCZ6", FeedProducts.Status);
     }
 
+    // A status-only feed publishes nothing else, so everything it returns is one of these.
     private IList<InstrumentStatusDataEvent> Publish(IOrderBook book, IReadOnlyList<OrderBookEvent> bookEvents) =>
-        Producer.Process(bookEvents);
+        Feed.Process(bookEvents).Cast<InstrumentStatusDataEvent>().ToList();
 
     private IOrderBook PlainBook() =>
         new TimestampingOrderBook(new Instrument("GCZ6", 10, 10), Clock);
@@ -174,27 +178,23 @@ public class InstrumentStatusDataProducerTests
     }
 
     [Test]
-    public void StatusCarriesForwardAcrossALimitChange()
+    public void ALimitChangeAlone_PublishesTheWholeComposite()
     {
-        // arrange - a status the limit event must not disturb
-        var book = PlainBook();
-        var opened = Publish(book, book.UpdateStatus(OrderBookStatus.Paused));
-
-        // assert
-        Assert.AreEqual(OrderBookStatus.Paused, opened.Single().Status);
-
-        // act - a limit event arriving on its own still yields the whole composite. It carries the
-        // status itself now rather than the producer remembering it, so this says the same thing
-        // about what a subscriber is told and no longer says anything about where it was held.
-        var events = Producer.Process(
+        // act - a limit event reaching a feed that has heard nothing before it. Assembling the
+        // composite used to need a status event to have arrived first, because the status half was
+        // remembered rather than carried; that this answers from a standing start is the whole of
+        // what changed, and is what makes a missed message cost an update rather than the truth.
+        var events = Feed.Process(
             new OrderBookEvent[]
             {
-                new LimitStateChanged(book.Symbol, Now1, Side.Sell, 90, OrderBookStatus.Paused,
+                new LimitStateChanged(Feed.Symbol, Now1, Side.Sell, 90, OrderBookStatus.Paused,
                     OrderBookStatusChangeReason.Requested, null)
             });
 
         // assert
-        Assert.AreEqual(OrderBookStatus.Paused, events.Single().Status);
-        Assert.AreEqual(Side.Sell, events.Single().LimitState);
+        var status = events.Cast<InstrumentStatusDataEvent>().Single();
+        Assert.AreEqual(OrderBookStatus.Paused, status.Status);
+        Assert.AreEqual(Side.Sell, status.LimitState);
+        Assert.AreEqual(Now1, status.Time);
     }
 }

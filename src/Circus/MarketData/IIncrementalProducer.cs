@@ -19,10 +19,15 @@ namespace Circus.MarketData;
 // an action like any other, and the book answers with an event carrying the image; the producer
 // that publishes it is an ordinary implementation of this interface reading an ordinary event.
 //
-// Most implementations hold no state. Those that do - InstrumentStatusDataProducer accumulates a
-// composite no single event carries, and the by-price producer tracks the window it last
-// published - cannot rebuild it after a missed event, and are not expected to. That is what the
-// snapshot feed is for, and it is how the real feeds solve the same problem: CME and Eurex both
+// None of them holds state across events any more. Two used to: the by-price producer kept a
+// shadow of the book before the ladders began reporting their own aggregates, and the status
+// product assembled a composite by remembering the parts before both events began carrying the
+// whole of it. In each case a missed event left the producer permanently wrong rather than
+// briefly behind, which is the failure mode worth designing out. The book reports what moved, so
+// a producer has nothing to remember and so nothing to lose.
+//
+// A subscriber can still miss one, and that is what the snapshot feed is for. It is how the real
+// feeds solve the same problem: CME and Eurex both
 // publish incremental changes on one stream and periodic full state on another, so a subscriber
 // joining mid-session or recovering from a detected gap starts from something true rather than
 // replaying a session it never saw.
