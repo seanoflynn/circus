@@ -16,10 +16,12 @@ namespace Circus.Sequencing;
 // several answers. CME runs a channel per product group carrying by-price and by-order together;
 // Eurex publishes the same instrument on EOBI and on EMDI with different products on each. A
 // channel here differs from its siblings in what it carries, not in the order it sees things:
-// which instruments, which products about them, how deep its by-price products run, and how often
-// it restates itself. All four are declared on the channel, and the books are built to match -
-// which they have to be for depth, since a shallow delta stream has to be diffed at its own
-// window rather than cut down from a deep one.
+// which instruments, which products about them, and how often it restates itself. All three are
+// declared on the channel.
+//
+// How deep its by-price products run is not among them. Every book publishes one window, and a
+// subscriber wanting fewer levels than that holds it and shows what it likes - see
+// OrderBook.PublishedDepth for why a shallower stream cannot be handed to it instead.
 //
 // Declare the channels, then add instruments; an instrument goes on every channel unless it names
 // some, because in both venues the channels of a group carry the same instruments and differ in
@@ -35,19 +37,13 @@ public sealed class InstrumentGroup
     // from. Held rather than derived, because a channel declared before any instrument has to be
     // able to describe itself, and one declared after has to build the same feed for a symbol that
     // is already here.
-    private sealed record ChannelConfig(MarketDataChannel Channel, FeedProducts Products, int Depth,
-        int SnapshotEvery);
+    private sealed record ChannelConfig(MarketDataChannel Channel, FeedProducts Products, int SnapshotEvery);
 
     // Insertion-ordered, so a caller iterating them gets the order it declared them in rather than
     // a dictionary's.
     private readonly Dictionary<string, ChannelConfig> _channels = new();
     private readonly List<string> _channelOrder = new();
     private readonly List<string> _symbols = new();
-
-    // The books this group built, so a channel declared later can ask them to start reporting at
-    // its depth. Only the ones built here: a book handed in ready-made reports what its owner told
-    // it to, and this is not the place to change that.
-    private readonly Dictionary<string, OrderBook> _ownBooks = new();
 
     // snapshotInterval is how often each book is asked to restate itself. Set it to the finest
     // cadence any channel here wants; a channel wanting a slower one counts ticks and skips, which
@@ -87,29 +83,16 @@ public sealed class InstrumentGroup
     // Declares a channel and what it publishes. Every instrument already registered joins it, so
     // the order channels and instruments are declared in does not change what comes out.
     //
-    // depth is how far its by-price products run. The channel's books are told to report at it -
-    // the ones this group built, at least - because a shallower delta stream is not a filtered
-    // deeper one and has to be diffed at its own window. Ten by default, which is what CME's
-    // futures books carry; one is a top-of-book product, and a channel carrying no by-price
-    // product ignores it.
-    //
     // snapshotEvery is how many of the group's snapshot ticks pass between this channel's images.
     // One restates on every tick. It is a count rather than an interval so that the channels of a
     // group stay in step: the group ticks at the finest cadence any of them wants, and a channel
     // wanting a slower one skips ticks rather than keeping a schedule of its own.
-    public void AddChannel(string name, FeedProducts products = FeedProducts.All,
-        int depth = OrderBook.DefaultPublishedDepth, int snapshotEvery = 1)
+    public void AddChannel(string name, FeedProducts products = FeedProducts.All, int snapshotEvery = 1)
     {
         ArgumentNullException.ThrowIfNull(name);
 
         if (_channels.ContainsKey(name))
             throw new ArgumentException($"a channel named {name} is already in this group", nameof(name));
-
-        // Here rather than left to the first feed built from it, so a channel declared before any
-        // instrument is refused where it was written rather than when something is added to it.
-        if (depth <= 0)
-            throw new ArgumentOutOfRangeException(nameof(depth), depth,
-                "a channel carrying no levels is not a by-price channel");
 
         if (snapshotEvery <= 0)
             throw new ArgumentOutOfRangeException(nameof(snapshotEvery), snapshotEvery,
@@ -117,31 +100,20 @@ public sealed class InstrumentGroup
                 "snapshot interval unset instead, which says so");
 
         var channel = new MarketDataChannel(name);
-        var config = new ChannelConfig(channel, products, depth, snapshotEvery);
+        var config = new ChannelConfig(channel, products, snapshotEvery);
         _channels[name] = config;
         _channelOrder.Add(name);
 
         foreach (var symbol in _symbols)
-        {
-            // Before the feed, so the feed it joins is one the book will actually report to.
-            if (Carries(config, FeedProducts.ByPrice) && _ownBooks.TryGetValue(symbol, out var book))
-                book.AlsoReport(depth);
-
             channel.Add(FeedFor(symbol, config));
-        }
     }
 
     // Registers an instrument: creates a bare OrderBook and an InstrumentFeed, adds the book and
     // schedule to the sequencer and the feed to the channel.
     //
-    // How deep the book reports is not a parameter here any more, because it is not a property of
-    // the instrument: it is what its by-price channels publish, and the book is built to report at
-    // each of those depths. A group whose only channel is ten deep gets a ten-deep book; one
-    // running a top-of-book channel beside it gets a book reporting at one and at ten, since a
-    // one-deep delta stream has to be diffed at one deep rather than cut down from ten.
-    //
-    // A caller wanting a book configured further - custom price restrictions, its own depths -
-    // builds one and uses the overload below.
+    // A caller wanting a book configured further - custom price restrictions, say - builds one and
+    // uses the overload below. Nothing about depth needs arranging between the two: every book
+    // publishes the same window.
     public void Add(Instrument instrument, MarketSchedule schedule,
         IReadOnlyList<string>? channels = null)
     {
@@ -151,18 +123,14 @@ public sealed class InstrumentGroup
         RequireChannelsExist(channels);
         EnsureSomeChannel(channels);
 
-        var book = new OrderBook(instrument, DepthsFor(channels));
-        _sequencer.Add(book, schedule);
-        _ownBooks[instrument.Symbol] = book;
+        _sequencer.Add(new OrderBook(instrument), schedule);
         Publish(instrument.Symbol, channels);
     }
 
     // Registers a pre-built book (e.g. with custom price restrictions) alongside its schedule and
-    // an instrument feed for it.
-    //
-    // Its depths are its owner's. A channel here publishes by-price data for it only where the two
-    // agree, so a book built at ten and a channel declared at five leave that channel's by-price
-    // products empty for this instrument - build the book with the depths its channels publish.
+    // an instrument feed for it. Nothing here has to agree with anything about the book beyond its
+    // symbol, which is the point of a fixed window: a book built anywhere publishes what every
+    // channel reads.
     public void Add(IOrderBook book, MarketSchedule schedule, IReadOnlyList<string>? channels = null)
     {
         ArgumentNullException.ThrowIfNull(book);
@@ -174,39 +142,10 @@ public sealed class InstrumentGroup
         Publish(book.Symbol, channels);
     }
 
-    // The depths the by-price channels carrying this instrument publish at. Channels carrying no
-    // by-price product contribute nothing, so an order-by-order channel does not make the book
-    // diff a window nobody reads; if none of them do, the book still reports at the default, which
-    // costs one bounded diff and keeps a book's behaviour independent of who happens to subscribe.
-    private int[] DepthsFor(IReadOnlyList<string>? channels)
-    {
-        var depths = (channels ?? _channelOrder)
-            .Select(name => _channels[name])
-            .Where(config => Carries(config, FeedProducts.ByPrice))
-            .Select(config => config.Depth)
-            .Distinct()
-            .ToArray();
-
-        return depths.Length > 0 ? depths : new[] {OrderBook.DefaultPublishedDepth};
-    }
-
-    // The depths the book this group built for a symbol reports at, or nothing for a book handed
-    // in ready-made. Internal because it is the one part of the wiring between a channel's
-    // declared depth and its book's reports that is otherwise invisible: get it wrong and the
-    // symptom is by-price data quietly not arriving, which is what this lets a test rule out.
-    internal IReadOnlyList<int> PublishedDepthsFor(string symbol) =>
-        _ownBooks.TryGetValue(symbol, out var book)
-            ? book.PublishedDepths
-            : Array.Empty<int>();
-
-    private static bool Carries(ChannelConfig config, FeedProducts product) =>
-        (config.Products & product) != 0;
-
     private static InstrumentFeed FeedFor(string symbol, ChannelConfig config) =>
-        new(symbol, config.Products, config.Depth, config.SnapshotEvery);
+        new(symbol, config.Products, config.SnapshotEvery);
 
-    // The default channel, created before the book is, so the book can be built to report at the
-    // depth that channel publishes. Only when the caller named none - see Publish.
+    // The default channel, for a caller who named none - see Publish.
     private void EnsureSomeChannel(IReadOnlyList<string>? channels)
     {
         if (channels == null && _channels.Count == 0)

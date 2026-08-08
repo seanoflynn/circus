@@ -31,7 +31,7 @@ public class VenueShapeComparisonTests
     {
         var group = new InstrumentGroup(VenueSession.Day, snapshotInterval);
 
-        group.AddChannel(CmeChannel, FeedProducts.All, depth: VenueSession.Depth);
+        group.AddChannel(CmeChannel, FeedProducts.All);
         group.Add(VenueSession.Gold, VenueSession.Schedule);
         group.Add(VenueSession.Silver, VenueSession.Schedule);
 
@@ -45,8 +45,7 @@ public class VenueShapeComparisonTests
 
         group.AddChannel(EurexByOrder, FeedProducts.ByOrder | FeedProducts.Status);
         group.AddChannel(EurexByPrice,
-            FeedProducts.ByPrice | FeedProducts.Trades | FeedProducts.Status | FeedProducts.Indicative,
-            depth: VenueSession.Depth);
+            FeedProducts.ByPrice | FeedProducts.Trades | FeedProducts.Status | FeedProducts.Indicative);
         group.Add(VenueSession.Gold, VenueSession.Schedule, new[] {EurexByOrder, EurexByPrice});
         group.Add(VenueSession.Silver, VenueSession.Schedule, new[] {EurexByOrder, EurexByPrice});
 

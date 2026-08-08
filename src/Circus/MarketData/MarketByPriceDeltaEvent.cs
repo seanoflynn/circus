@@ -12,6 +12,7 @@ namespace Circus.MarketData;
 // which means a consumer that mislays one has every level beneath it wrong. LevelIndex is the
 // rank the level holds, or on Removed the rank it last held, and is carried for a consumer that
 // wants it rather than for identifying the level.
+//
 // Action is the book's own LevelChangeAction rather than a published enum of its own. The message
 // stays a separate type - see below - but the three things that can happen to a level do not
 // differ between saying it and hearing it, and a private enum whose members were copied across one
@@ -33,17 +34,16 @@ public record MarketByPriceDelta(Side Side, int LevelIndex, decimal Price, int Q
 // The book reports the same set as one LevelsChanged, and this is its published form. The two
 // stay separate types because what a book says about itself and what a subscriber is told are
 // different vocabularies - the same reason FillOrderConfirmed and TradeDataEvent are not one
-// type - not because either needs reassembling on the way through. What that buys is room for
-// the two to differ, and they already do: Depth is a fact about the feed carrying the message and
-// means nothing to the book, which reports at every depth anyone asked for.
+// type - not because either needs reassembling on the way through. What that buys is room for the
+// two to differ, which they have not needed yet and may.
 //
 // Changes are ordered best price outward within a side, arrivals and changes before departures.
 //
-// Depth is how many levels a side of this feed's window holds - CME's ten for futures, a
-// top-of-book product's one - and a subscriber needs it to know what a departure means: at ten
-// deep a Removed says the level emptied, at one deep it usually says a better price arrived.
-// A venue publishing the same book at two depths publishes two streams of these, because a
-// shallower one is not a filtered deeper one; see LevelsChanged for why.
+// Depth is how many levels a side of this feed's window holds, and a subscriber needs it to know
+// what a departure at the last rank means: the level may have emptied, or a better price may have
+// pushed it out. Always OrderBook.PublishedDepth - every channel here publishes the same window,
+// and a subscriber wanting fewer levels shows fewer of the ones it holds. See LevelsChanged for
+// why it cannot be handed a shallower stream instead.
 public record MarketByPriceDeltaEvent(string Symbol, DateTime Time, int Depth,
         IReadOnlyList<MarketByPriceDelta> Changes)
     : MarketDataEvent(Symbol, Time)

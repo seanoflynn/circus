@@ -183,16 +183,21 @@ public record LevelChange(Side Side, int LevelIndex, decimal Price, int Quantity
 // Changes are ordered best price outward within a side, arrivals and changes before departures.
 //
 // Depth is how many levels a side of the window holds, and it is part of what the event says
-// rather than a note about it: the same action produces a different set of changes at five deep
-// than at ten, so a report is only meaningful paired with the window it describes. A book asked
-// for several depths answers with one of these per depth, and a feed takes the one it publishes.
+// rather than a note about it: a report is only meaningful paired with the window it describes,
+// and a consumer needs it to read a departure at the last rank - at ten deep a Removed there may
+// mean the level was pushed out rather than emptied. It is always OrderBook.PublishedDepth.
 //
-// It has to work that way, because a shallower report is not a filtered deeper one. Bids at
+// Fixed rather than configured, because a shallower report is not a filtered deeper one. Bids at
 // 200/190/180/170/160/150 with a new bid arriving at 195: ten deep, only the arrival is news, and
 // price-keyed reporting deliberately says nothing about the levels that merely moved rank. Five
 // deep, 160 has been pushed out of the window and has to be Removed - a change that appears
 // nowhere in the ten-deep report, at any rank. Truncating by LevelIndex would silently leave a
 // five-deep subscriber holding a level that is no longer published.
+//
+// So a venue here publishes one window and a subscriber wanting fewer levels shows fewer of the
+// ones it holds. Deriving a shallower stream inside this library would mean diffing at that
+// window, which needs the book the subscriber is missing - the shadow book the by-price product
+// exists to have removed. LevelWindowDiffTests asserts the case above from both ends.
 public record LevelsChanged(string Symbol, DateTime Time, int Depth,
         IReadOnlyList<LevelChange> Changes)
     : MarketEvent(Symbol, Time)

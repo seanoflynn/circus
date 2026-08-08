@@ -15,9 +15,8 @@ namespace Circus.Tests.Helpers;
 // test wanting several asks the feed for them without this.
 internal static class ProductFeed
 {
-    public static InstrumentFeed Carrying(FeedProducts product,
-        int depth = OrderBook.DefaultPublishedDepth, string symbol = "GCZ6") =>
-        new(symbol, product, depth);
+    public static InstrumentFeed Carrying(FeedProducts product, string symbol = "GCZ6") =>
+        new(symbol, product);
 
     public static IList<T> Publish<T>(this InstrumentFeed feed, IReadOnlyList<OrderBookEvent> bookEvents)
         where T : MarketDataEvent =>

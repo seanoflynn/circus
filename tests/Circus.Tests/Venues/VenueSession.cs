@@ -29,10 +29,11 @@ internal static class VenueSession
     // and a shape whose channels restate at different rates has something to differ over.
     public static readonly DateTime Until = Day.AddHours(2);
 
-    // How deep the by-price products here run. Ten is what CME's futures books carry and what
-    // Eurex's netted depth feed publishes, so both shapes want the same number and the difference
-    // between them is elsewhere.
-    public const int Depth = 10;
+    // How deep the by-price products here run, which is not a choice either shape makes: every
+    // channel publishes the venue's one window. Ten is what CME's futures books carry and what
+    // Eurex's netted depth feed publishes anyway, so the difference between the two shapes was
+    // always elsewhere.
+    public const int Depth = OrderBook.PublishedDepth;
 
     public static IReadOnlyList<OrderBookAction> Trace()
     {
