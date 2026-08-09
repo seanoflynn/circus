@@ -37,7 +37,7 @@ public static class VenueShapesExample
     {
         var group = new InstrumentGroup(Day, SnapshotInterval);
 
-        group.AddChannel("310", FeedProducts.All, depth: 10);
+        group.AddChannel("310", FeedProducts.All);
         group.Add(Gold, Schedule);
         group.Add(Silver, Schedule);
 
@@ -52,8 +52,7 @@ public static class VenueShapesExample
         // published here and cycles once every six ticks rather than on all of them.
         group.AddChannel("EOBI", FeedProducts.ByOrder | FeedProducts.Status, snapshotEvery: 6);
         group.AddChannel("EMDI",
-            FeedProducts.ByPrice | FeedProducts.Trades | FeedProducts.Status | FeedProducts.Indicative,
-            depth: 10);
+            FeedProducts.ByPrice | FeedProducts.Trades | FeedProducts.Status | FeedProducts.Indicative);
 
         group.Add(Gold, Schedule);
         group.Add(Silver, Schedule);

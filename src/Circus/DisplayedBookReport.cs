@@ -22,23 +22,6 @@ internal sealed class DisplayedBookReport
     private readonly string _symbol;
     private readonly decimal _tickSize;
 
-    // The depths levels are reported at, ascending and distinct. One number is the usual case;
-    // several are for a venue publishing the same instrument's depth in more than one shape, which
-    // is common enough to be named - CME runs a top-of-book channel alongside its ten-deep one, and
-    // Databento sells mbp-1 and mbp-10 off the same book.
-    //
-    // Several rather than one deep report the feeds truncate, because a delta does not truncate:
-    // see LevelsChanged. Each depth gets its own diff of the same before and after windows, which
-    // costs a scan of a bounded window and nothing else - the ladders are not walked again.
-    //
-    // Still not "which channels want what". This is told how far to look and knows nothing about
-    // who is reading, which is what keeps a book's output a function of its actions and its depths.
-    private int[] _depths;
-
-    // The deepest of them, which is the window actually captured: every shallower report is a
-    // prefix of it.
-    private int _maxDepth;
-
     // The published window as it stood before the action and as it stands after, diffed to produce
     // LevelsChanged. Held rather than allocated per call for the reason the book holds its own
     // buffers: one action at a time, so four lists outlive every call.
@@ -47,53 +30,15 @@ internal sealed class DisplayedBookReport
     private readonly List<(long Tick, int Quantity, int Count)> _bidsAfter;
     private readonly List<(long Tick, int Quantity, int Count)> _offersAfter;
 
-    public DisplayedBookReport(string symbol, decimal tickSize, IReadOnlyList<int> publishedDepths)
+    public DisplayedBookReport(string symbol, decimal tickSize)
     {
-        ArgumentNullException.ThrowIfNull(publishedDepths);
-
-        if (publishedDepths.Count == 0)
-            throw new ArgumentException(
-                "a book reporting at no depth publishes no by-price data at all", nameof(publishedDepths));
-
-        foreach (var depth in publishedDepths)
-        {
-            if (depth <= 0)
-                throw new ArgumentOutOfRangeException(nameof(publishedDepths), depth,
-                    "a book that reports no levels publishes no depth at all");
-        }
-
         _symbol = symbol;
         _tickSize = tickSize;
-        _depths = publishedDepths.Distinct().OrderBy(d => d).ToArray();
-        _maxDepth = _depths[^1];
 
-        _bidsBefore = new List<(long, int, int)>(_maxDepth);
-        _offersBefore = new List<(long, int, int)>(_maxDepth);
-        _bidsAfter = new List<(long, int, int)>(_maxDepth);
-        _offersAfter = new List<(long, int, int)>(_maxDepth);
-    }
-
-    // What this reports its levels at, ascending and distinct.
-    public IReadOnlyList<int> Depths => _depths;
-
-    // The deepest window it reports, which is what a snapshot carries: an image truncates cleanly,
-    // so the deepest one answers every feed reading it.
-    public int MaxDepth => _maxDepth;
-
-    // Adds a depth to report at, for a channel declared after the book was built. Idempotent, and
-    // safe between actions - the windows are captured at the top of every action, so a depth added
-    // here is diffed from the next one onwards and never from a window it was not part of.
-    public void AlsoReport(int depth)
-    {
-        if (depth <= 0)
-            throw new ArgumentOutOfRangeException(nameof(depth), depth,
-                "a book that reports no levels publishes no depth at all");
-
-        if (Array.IndexOf(_depths, depth) >= 0)
-            return;
-
-        _depths = _depths.Append(depth).OrderBy(d => d).ToArray();
-        _maxDepth = _depths[^1];
+        _bidsBefore = new List<(long, int, int)>(OrderBook.PublishedDepth);
+        _offersBefore = new List<(long, int, int)>(OrderBook.PublishedDepth);
+        _bidsAfter = new List<(long, int, int)>(OrderBook.PublishedDepth);
+        _offersAfter = new List<(long, int, int)>(OrderBook.PublishedDepth);
     }
 
     // The window as it stands now, to be diffed against the one Append captures. When to call it
@@ -101,8 +46,8 @@ internal sealed class DisplayedBookReport
     // can reach, a resumption included.
     public void CaptureBefore(IReadOnlyPriceLadder bids, IReadOnlyPriceLadder offers)
     {
-        bids.CopyLevelsFromBest(_maxDepth, _bidsBefore);
-        offers.CopyLevelsFromBest(_maxDepth, _offersBefore);
+        bids.CopyLevelsFromBest(OrderBook.PublishedDepth, _bidsBefore);
+        offers.CopyLevelsFromBest(OrderBook.PublishedDepth, _offersBefore);
     }
 
     // Appends every report the action earned, in the order a consumer wants them: what the levels
@@ -120,30 +65,26 @@ internal sealed class DisplayedBookReport
         AppendTradePrints(events, time);
     }
 
-    // One event per reported depth, each carrying every level the action moved within that window,
-    // and none at all for a depth it moved nothing in - an action that touches no level, a status
-    // change or a rejected order, says nothing here.
+    // One event carrying every level the action moved within the published window, and none at all
+    // for an action that moved nothing in it - a status change or a rejected order says nothing
+    // here.
     //
-    // The windows are captured once at the deepest and diffed once per depth, since a shallower
-    // window is a prefix of a deeper one. Diffing rather than truncating the deepest report is the
-    // whole point: see LevelsChanged for the case that makes truncation wrong.
+    // One window, always OrderBook.PublishedDepth deep. A venue wanting to show a subscriber fewer
+    // levels than that filters what it holds; it cannot be given a shallower delta stream, because
+    // a delta does not truncate - see LevelsChanged for the case that makes that wrong, and
+    // LevelWindowDiffTests for it asserted.
     private void AppendLevelChanges(List<OrderBookEvent> events, DateTime time,
         IReadOnlyPriceLadder bids, IReadOnlyPriceLadder offers)
     {
-        bids.CopyLevelsFromBest(_maxDepth, _bidsAfter);
-        offers.CopyLevelsFromBest(_maxDepth, _offersAfter);
+        bids.CopyLevelsFromBest(OrderBook.PublishedDepth, _bidsAfter);
+        offers.CopyLevelsFromBest(OrderBook.PublishedDepth, _offersAfter);
 
-        // Shallowest first, so a book reporting several does so in a fixed order rather than the
-        // order it was configured in.
-        foreach (var depth in _depths)
-        {
-            List<LevelChange>? changes = null;
-            CollectLevelChanges(ref changes, Side.Buy, _bidsBefore, _bidsAfter, depth, _tickSize);
-            CollectLevelChanges(ref changes, Side.Sell, _offersBefore, _offersAfter, depth, _tickSize);
+        List<LevelChange>? changes = null;
+        CollectLevelChanges(ref changes, Side.Buy, _bidsBefore, _bidsAfter, OrderBook.PublishedDepth, _tickSize);
+        CollectLevelChanges(ref changes, Side.Sell, _offersBefore, _offersAfter, OrderBook.PublishedDepth, _tickSize);
 
-            if (changes != null)
-                events.Add(new LevelsChanged(_symbol, time, depth, changes));
-        }
+        if (changes != null)
+            events.Add(new LevelsChanged(_symbol, time, OrderBook.PublishedDepth, changes));
     }
 
     // Diffed by price rather than by position - see LevelChange for why - which also means a level

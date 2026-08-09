@@ -63,9 +63,16 @@ public class OrderBook : IOrderBook
     // enough. Cleared at the top of every call rather than left to grow unbounded across them.
     private readonly List<InternalOrder> _pendingImmediateOrCancelStops = new();
 
-    // Ten, because that is what CME's futures books publish and what a by-price product here has
-    // always carried. A default rather than a rule - see below.
-    public const int DefaultPublishedDepth = 10;
+    // How deep a by-price product runs, for every book and every channel. Ten, because that is
+    // what CME's futures books publish and what a by-price product here has always carried.
+    //
+    // Fixed rather than configured. A subscriber wanting fewer levels holds this window and shows
+    // what it likes of it; it cannot be sent a shallower delta stream, because a delta does not
+    // truncate - a level pushed out of a five-deep window is a departure that appears nowhere in
+    // the ten-deep report, at any rank. See LevelsChanged, and LevelWindowDiffTests for the case
+    // asserted. Deriving a shallower stream inside this library would mean a feed holding the book
+    // its subscriber is missing, which is the shadow book the by-price product was built to remove.
+    public const int PublishedDepth = 10;
 
     // What this action did to the displayed book - the levels that moved, the orders that moved,
     // and what printed - which is a different question from how the book matched, and so is
@@ -155,15 +162,8 @@ public class OrderBook : IOrderBook
 
     private const int MaxClientOrderIdLength = 20;
 
-    public OrderBook(Instrument instrument, int publishedDepth = DefaultPublishedDepth)
-        : this(instrument, Adapt(instrument.PriceRestrictions), new[] {publishedDepth})
-    {
-    }
-
-    // For a venue publishing the same book at more than one depth. Order and duplicates do not
-    // matter; what comes back out is ascending and distinct.
-    public OrderBook(Instrument instrument, IReadOnlyList<int> publishedDepths)
-        : this(instrument, Adapt(instrument.PriceRestrictions), publishedDepths)
+    public OrderBook(Instrument instrument)
+        : this(instrument, Adapt(instrument.PriceRestrictions))
     {
     }
 
@@ -192,32 +192,14 @@ public class OrderBook : IOrderBook
     // Restrictions supplied outright rather than derived from the instrument. Internal because it
     // is a seam, not an API: it exists so combinations an Instrument cannot yet describe - two
     // trade-scoped restrictions disagreeing about severity, say - can still be exercised.
-    internal OrderBook(Instrument instrument, IReadOnlyList<IPriceRestriction> priceRestrictions,
-        int publishedDepth = DefaultPublishedDepth)
-        : this(instrument, priceRestrictions, new[] {publishedDepth})
-    {
-    }
-
-    internal OrderBook(Instrument instrument, IReadOnlyList<IPriceRestriction> priceRestrictions,
-        IReadOnlyList<int> publishedDepths)
+    internal OrderBook(Instrument instrument, IReadOnlyList<IPriceRestriction> priceRestrictions)
     {
         _instrument = instrument;
         _priceRestrictions = priceRestrictions;
         _phases = BuildPhases(instrument.MatchingAlgorithm);
 
-        // Validates publishedDepths, which is why it is built before anything reads them.
-        _report = new DisplayedBookReport(instrument.Symbol, instrument.TickSize, publishedDepths);
+        _report = new DisplayedBookReport(instrument.Symbol, instrument.TickSize);
     }
-
-    // What this book reports its levels at, ascending and distinct.
-    public IReadOnlyList<int> PublishedDepths => _report.Depths;
-
-    // Adds a depth to report at. For a channel declared after the book was built: the alternative
-    // is a book that publishes nothing to it, which is the one failure mode worth spending an API
-    // on. Idempotent, and safe between actions - the windows are captured at the top of every
-    // Process, so a depth added here is diffed from the next action onwards and never from a
-    // window it was not part of.
-    internal void AlsoReport(int depth) => _report.AlsoReport(depth);
 
     public string Symbol => _instrument.Symbol;
     public OrderBookStatus Status => _status;
@@ -477,7 +459,7 @@ public class OrderBook : IOrderBook
     // The same goes for order-by-order, which gets a snapshot of its own once it has one to give.
     private BookSnapshot Snapshot(DateTime time) =>
         new(_instrument.Symbol, time,
-            GetLevels(Side.Buy, _report.MaxDepth), GetLevels(Side.Sell, _report.MaxDepth),
+            GetLevels(Side.Buy, PublishedDepth), GetLevels(Side.Sell, PublishedDepth),
             GetRestingOrders(),
             _status, _statusReason, _resumeAt, _limitState,
             _indicativeQuote is { } quote ? ToDecimal(quote.PriceTicks) : null,

@@ -36,8 +36,7 @@ public class EurexShapedVenueTests
             group.AddChannel(byOrder, FeedProducts.ByOrder | FeedProducts.Status,
                 snapshotEvery: ByOrderSnapshotEvery);
             group.AddChannel(byPrice,
-                FeedProducts.ByPrice | FeedProducts.Trades | FeedProducts.Status | FeedProducts.Indicative,
-                depth: VenueSession.Depth);
+                FeedProducts.ByPrice | FeedProducts.Trades | FeedProducts.Status | FeedProducts.Indicative);
         }
 
         // A service per product, so each channel carries one instrument and leaves the other out.

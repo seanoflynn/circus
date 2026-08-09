@@ -30,10 +30,10 @@ namespace Circus.MarketData;
 // Everything by default: a caller who has not thought about channels sees the whole venue, which
 // is more than any real depth feed carries and the useful answer for a simulator.
 //
-// Two numbers go with the products. Depth is how far the by-price products run, which has to be
-// agreed with the book rather than applied here - a shallower delta stream is not a filtered
-// deeper one, so the book is asked to report at this depth and this feed takes those reports. The
-// snapshot half does truncate, because an image cuts cleanly where a delta does not.
+// Nothing here narrows what the book published. Every by-price product runs to
+// OrderBook.PublishedDepth, and a subscriber wanting fewer levels holds that window and shows what
+// it likes of it - see OrderBook.PublishedDepth for why a feed cannot hand it a shallower stream
+// instead, and why doing so would put back the shadow book this product was built to remove.
 //
 // snapshotEvery is how many snapshot ticks pass between images. The venue ticks at the finest
 // cadence any of its channels wants and each feed counts the ticks it cares about, so a group
@@ -68,24 +68,18 @@ public sealed class InstrumentFeed
     private readonly (FeedProducts Product, Func<BookSnapshot, MarketDataEvent> Project)[] _snapshot;
 
     private readonly FeedProducts _products;
-    private readonly int _depth;
     private readonly int _snapshotEvery;
 
     // Snapshot ticks seen, not dispatches: a tick is a dispatch carrying a BookSnapshot for this
     // instrument, and everything else passes without moving the count.
     private long _snapshotTicks;
 
-    public InstrumentFeed(string symbol, FeedProducts products = FeedProducts.All,
-        int depth = OrderBook.DefaultPublishedDepth, int snapshotEvery = 1)
+    public InstrumentFeed(string symbol, FeedProducts products = FeedProducts.All, int snapshotEvery = 1)
     {
         if (products == FeedProducts.None)
             throw new ArgumentException(
                 "a feed carrying no products publishes nothing, which is a channel that should " +
                 "not have been created rather than one that is quiet", nameof(products));
-
-        if (depth <= 0)
-            throw new ArgumentOutOfRangeException(nameof(depth), depth,
-                "a feed carrying no levels is not a by-price feed");
 
         if (snapshotEvery <= 0)
             throw new ArgumentOutOfRangeException(nameof(snapshotEvery), snapshotEvery,
@@ -94,7 +88,6 @@ public sealed class InstrumentFeed
 
         Symbol = symbol ?? throw new ArgumentNullException(nameof(symbol));
         _products = products;
-        _depth = depth;
         _snapshotEvery = snapshotEvery;
 
         _incremental = new (FeedProducts Product, Func<MarketEvent, MarketDataEvent?> Project)[]
@@ -120,10 +113,6 @@ public sealed class InstrumentFeed
     // What this feed carries. A channel is a subset of the venue in two directions - which
     // instruments, and which products about them - and this is the second.
     public FeedProducts Products => _products;
-
-    // How deep its by-price products run. The book has to be reporting at this depth for them to
-    // carry anything, which is why the two are configured together.
-    public int Depth => _depth;
 
     // How many snapshot ticks pass between images on this feed. One restates on every tick.
     public int SnapshotEvery => _snapshotEvery;
@@ -247,14 +236,12 @@ public sealed class InstrumentFeed
     // deriving depth from order events would have to hold the book the subscriber is missing, which
     // is what the old LevelDataProducer did - and why it could never resync after a missed event.
     //
-    // Depth is a subscription rather than a truncation. The book is asked to report at this depth
-    // and this takes those reports; it does not take a deeper report and cut it down, because a
-    // shallower window's departures are not present in a deeper window's report at all - see
-    // LevelsChanged. A feed whose depth the book does not report publishes nothing, which is the
-    // failure InstrumentGroup exists to prevent by building both from one number.
-    private MarketDataEvent? LevelsOf(MarketEvent ev)
+    // Republished at the depth the book reported it, which is the only depth anything here runs
+    // at. Narrowing it would mean re-diffing at the narrower window, which needs the book the
+    // subscriber is missing - see OrderBook.PublishedDepth.
+    private static MarketDataEvent? LevelsOf(MarketEvent ev)
     {
-        if (ev is not LevelsChanged levels || levels.Depth != _depth)
+        if (ev is not LevelsChanged levels)
             return null;
 
         var changes = new List<MarketByPriceDelta>(levels.Changes.Count);
@@ -311,13 +298,13 @@ public sealed class InstrumentFeed
         new InstrumentStatusDataEvent(snapshot.Symbol, snapshot.Time, snapshot.Status,
             snapshot.StatusReason, snapshot.ResumesAt, snapshot.LimitState);
 
-    // The one place a feed shallower than its book truncates rather than subscribing. An image says
-    // where the book is, so the first five entries of a ten-deep image are the five-deep image and
-    // nothing is lost by cutting. A delta is the opposite - see LevelsChanged - which is why the
-    // incremental half takes reports made at its depth instead.
-    private MarketDataEvent LevelsImage(BookSnapshot snapshot) =>
-        new LevelsDataEvent(snapshot.Symbol, snapshot.Time, _depth,
-            Truncate(snapshot.Bids), Truncate(snapshot.Offers));
+    // The book's window as it stands, uncut. An image would truncate cleanly where a delta does not
+    // - the first five entries of a ten-deep image are the five-deep image - but it is not cut here,
+    // because a subscriber holding a five-deep image and a ten-deep delta stream is holding two
+    // different books. Both halves run to the same depth, and reducing is the subscriber's.
+    private static MarketDataEvent LevelsImage(BookSnapshot snapshot) =>
+        new LevelsDataEvent(snapshot.Symbol, snapshot.Time, OrderBook.PublishedDepth,
+            snapshot.Bids, snapshot.Offers);
 
     // Every resting order, for a subscriber joining or recovering an order-by-order book. The
     // heaviest message this venue publishes, and the reason a real snapshot feed cycles slowly.
@@ -330,20 +317,6 @@ public sealed class InstrumentFeed
     private static MarketDataEvent IndicativeImage(BookSnapshot snapshot) =>
         new IndicativePriceDataEvent(snapshot.Symbol, snapshot.Time, snapshot.IndicativePrice,
             snapshot.IndicativeQuantity);
-
-    // The book's list unchanged when it is already within the window, so the common case - a feed
-    // as deep as the book that feeds it - copies nothing.
-    private IReadOnlyList<Level> Truncate(IReadOnlyList<Level> levels)
-    {
-        if (levels.Count <= _depth)
-            return levels;
-
-        var window = new List<Level>(_depth);
-        for (var i = 0; i < _depth; i++)
-            window.Add(levels[i]);
-
-        return window;
-    }
 
     // The boundary where a book's output becomes a venue's. What a participant is told about its
     // own order stops here: the projections above are typed to MarketEvent, so this is the only

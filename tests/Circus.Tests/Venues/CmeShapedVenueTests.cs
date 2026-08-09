@@ -24,7 +24,7 @@ public class CmeShapedVenueTests
     {
         var group = new InstrumentGroup(VenueSession.Day, snapshotInterval);
 
-        group.AddChannel(Channel, FeedProducts.All, depth: VenueSession.Depth);
+        group.AddChannel(Channel, FeedProducts.All);
         group.Add(VenueSession.Gold, VenueSession.Schedule);
         group.Add(VenueSession.Silver, VenueSession.Schedule);
 
