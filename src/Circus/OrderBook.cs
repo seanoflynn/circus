@@ -50,9 +50,10 @@ public class OrderBook : IOrderBook
     // The indicative quote as last published, so only moves in it are emitted.
     private (long PriceTicks, int Quantity)? _indicativeQuote;
 
-    // Order-entry and trade-time price bands, each maintaining its own reference anchor.
-    // A future velocity limit or circuit breaker is a new entry here, not a redesign.
-    private readonly IReadOnlyList<IPriceRestriction> _priceRestrictions;
+    // What this instrument trades under, and the policy for consulting it: which restrictions a
+    // question goes to, and whether the first refusal decides it or the severest. The book asks
+    // and never iterates - see RestrictionSet, which is also where a new restriction is added.
+    private readonly RestrictionSet _restrictions;
 
     // Owns the working/stop ladders and the pure decision helpers (liquidity checks,
     // self-match verdicts) that read them.
@@ -163,39 +164,22 @@ public class OrderBook : IOrderBook
     private const int MaxClientOrderIdLength = 20;
 
     public OrderBook(Instrument instrument)
-        : this(instrument, Adapt(instrument.PriceRestrictions))
+        : this(instrument, new RestrictionSet(instrument.PriceRestrictions))
     {
     }
-
-    // Config in, enforcement out. The instrument describes what it trades under; this is the only
-    // place that knows which adapter each description means, so a new restriction is a new arm
-    // rather than a change to how books are constructed.
-    private static IReadOnlyList<IPriceRestriction> Adapt(IReadOnlyList<PriceRestriction>? configs) =>
-        configs == null
-            ? Array.Empty<IPriceRestriction>()
-            : configs.Select<PriceRestriction, IPriceRestriction>(config => config switch
-            {
-                OrderPriceBand band => new OrderPriceBandRestriction(band.BandTicks),
-                VolatilityBand band => new VolatilityBandRestriction(band.RangeTicks, band.PauseFor,
-                    band.Window, band.ExtendedRangeTicks),
-                StaticPriceRange range => new StaticPriceRangeRestriction(range.RangeTicks, range.PauseFor),
-
-                // Same adapter as VolatilityBand: a velocity limit is that range at a short
-                // window, and the two configs exist to say which is meant, not to behave apart.
-                VelocityLimit limit => new VolatilityBandRestriction(limit.RangeTicks, limit.PauseFor,
-                    limit.Window),
-                DailyPriceLimit limit => new DailyPriceLimitRestriction(limit.Width),
-                CircuitBreaker breaker => new CircuitBreakerRestriction(breaker.Width, breaker.HaltFor),
-                _ => throw new ArgumentException($"Unknown price restriction {config.GetType().Name}")
-            }).ToList();
 
     // Restrictions supplied outright rather than derived from the instrument. Internal because it
     // is a seam, not an API: it exists so combinations an Instrument cannot yet describe - two
     // trade-scoped restrictions disagreeing about severity, say - can still be exercised.
     internal OrderBook(Instrument instrument, IReadOnlyList<IPriceRestriction> priceRestrictions)
+        : this(instrument, new RestrictionSet(priceRestrictions))
+    {
+    }
+
+    private OrderBook(Instrument instrument, RestrictionSet restrictions)
     {
         _instrument = instrument;
-        _priceRestrictions = priceRestrictions;
+        _restrictions = restrictions;
         _phases = BuildPhases(instrument.MatchingAlgorithm);
 
         _report = new DisplayedBookReport(instrument.Symbol, instrument.TickSize);
@@ -334,8 +318,7 @@ public class OrderBook : IOrderBook
         // quote. Reaching restrictions here rather than at order entry means an order is judged
         // against the quote as it stood before that order - which is the only thing it could be
         // judged against, since the quote cannot account for an order that has not arrived.
-        foreach (var restriction in _priceRestrictions)
-            restriction.OnIndicativePrice(quote?.PriceTicks);
+        _restrictions.OnIndicativePrice(quote?.PriceTicks);
 
         return new IndicativePriceChanged(_instrument.Symbol, time,
             quote.HasValue ? (decimal?) ToDecimal(quote.Value.PriceTicks) : null, quote?.Quantity ?? 0);
@@ -374,7 +357,7 @@ public class OrderBook : IOrderBook
         if (triggerTicks != null && priceTicks != null && side == Side.Sell && priceTicks > triggerTicks)
             return RejectCreate(companyId, clientOrderId, OrderRejectedReason.TriggerPriceMustBeGreaterThanPrice, time);
         if (triggerTicks != null && priceTicks != null &&
-            !AllowsStopSpread(triggerTicks.Value, priceTicks.Value))
+            !_restrictions.AllowsStopSpread(triggerTicks.Value, priceTicks.Value))
             return RejectCreate(companyId, clientOrderId, OrderRejectedReason.TriggerPriceTooFarFromPrice, time);
         if (triggerTicks != null && !_lastTradedPrice.HasValue)
             return RejectCreate(companyId, clientOrderId, OrderRejectedReason.NoLastTradedPrice, time);
@@ -382,7 +365,7 @@ public class OrderBook : IOrderBook
             return RejectCreate(companyId, clientOrderId, OrderRejectedReason.TriggerPriceMustBeGreaterThanLastTradedPrice, time);
         if (triggerTicks != null && side == Side.Sell && triggerTicks >= _lastTradedPrice)
             return RejectCreate(companyId, clientOrderId, OrderRejectedReason.TriggerPriceMustBeLessThanLastTradedPrice, time);
-        if (priceTicks.HasValue && FindOrderEntryRefusal(priceTicks.Value, time) is { } entryRefusal)
+        if (priceTicks.HasValue && _restrictions.RefusesEntry(priceTicks.Value, time) is { } entryRefusal)
             return RejectCreate(companyId, clientOrderId, entryRefusal, time);
         if (validity is OrderValidity.ImmediateOrCancel { MinQuantity: int minQty } && (minQty < 1 || minQty > quantity))
             return RejectCreate(companyId, clientOrderId, OrderRejectedReason.MinQuantityOutOfRange, time);
@@ -544,25 +527,6 @@ public class OrderBook : IOrderBook
     // Null when every entry-scoped restriction allows the price, otherwise the rejection the
     // first refusing one asks for - a band and a daily limit turn an order away for reasons
     // that read differently to whoever sent it.
-    private OrderRejectedReason? FindOrderEntryRefusal(long priceTicks, DateTime time)
-    {
-        foreach (var restriction in _priceRestrictions)
-        {
-            if (restriction.Scope.HasFlag(RestrictionScope.OrderEntry) &&
-                !restriction.Allows(priceTicks, time))
-                return restriction.EntryRejectionReason;
-        }
-
-        return null;
-    }
-
-    // A stop elected far from its trigger would rest at a price the band would never have
-    // accepted directly, so CME bounds the gap by the same band. Checked on the pair rather
-    // than on either price, and only where a band exists to bound it.
-    private bool AllowsStopSpread(long triggerTicks, long priceTicks) =>
-        _priceRestrictions.Where(r => r.Scope.HasFlag(RestrictionScope.OrderEntry))
-            .All(r => r.AllowsStopSpread(Math.Abs(priceTicks - triggerTicks)));
-
     // Only ever called on an order currently resting in the working book (a FAK remainder or
     // a self-match-prevention cancel during Match()) - never a still-Hidden stop order.
     private OrderBookEvent CancelRemainder(InternalOrder order, OrderCancelledReason reason, DateTime time)
@@ -597,7 +561,7 @@ public class OrderBook : IOrderBook
             return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.InvalidPriceIncrement, time: time);
         if (!TryConvertToTicks(triggerPrice, out var triggerTicks))
             return RejectUpdate(companyId, clientOrderId, previousClientOrderId, OrderRejectedReason.InvalidPriceIncrement, time: time);
-        if (priceTicks.HasValue && FindOrderEntryRefusal(priceTicks.Value, time) is { } entryRefusal)
+        if (priceTicks.HasValue && _restrictions.RefusesEntry(priceTicks.Value, time) is { } entryRefusal)
             return RejectUpdate(companyId, clientOrderId, previousClientOrderId, entryRefusal, time: time);
         if (!_clientOrderIndex.TryGetValue((companyId, previousClientOrderId), out var order) ||
             order.ClientOrderId != previousClientOrderId)
@@ -626,7 +590,7 @@ public class OrderBook : IOrderBook
                 return RejectUpdate(companyId, clientOrderId, previousClientOrderId,
                     OrderRejectedReason.TriggerPriceMustBeGreaterThanPrice, order.ExchangeOrderId, time);
             if (newTriggerTicks != null && newPriceTicks != null &&
-                !AllowsStopSpread(newTriggerTicks.Value, newPriceTicks.Value))
+                !_restrictions.AllowsStopSpread(newTriggerTicks.Value, newPriceTicks.Value))
                 return RejectUpdate(companyId, clientOrderId, previousClientOrderId,
                     OrderRejectedReason.TriggerPriceTooFarFromPrice, order.ExchangeOrderId, time);
 
@@ -834,7 +798,7 @@ public class OrderBook : IOrderBook
         // judges every price it touches against the same moment the events it emits are stamped
         // with. A restriction reading a clock here instead would drift within a single action.
         foreach (var outcome in _matcher.Run(algorithm ?? continuous, continuous,
-                     priceTicks => CheckTradeRestrictionBreach(priceTicks, time)))
+                     priceTicks => _restrictions.WorstTradeBreach(priceTicks, time)))
             Apply(outcome, events, time, _pendingImmediateOrCancelStops);
 
         // Deferred until the sweep is done: the loop only exits once nothing crosses anywhere,
@@ -850,46 +814,13 @@ public class OrderBook : IOrderBook
     // pure query, consulted by Matcher.Run only outside an auction uncrossing pass. Severest
     // rather than first, so the order these are declared in cannot decide whether a breach that
     // halts is served or shadowed by one that merely pauses.
-    private RestrictionBreach? CheckTradeRestrictionBreach(long priceTicks, DateTime time)
-    {
-        RestrictionBreach? worst = null;
-
-        foreach (var restriction in _priceRestrictions)
-        {
-            if (!restriction.Scope.HasFlag(RestrictionScope.Trade) || restriction.Allows(priceTicks, time))
-                continue;
-
-            var breach = new RestrictionBreach(restriction.OnBreach, restriction.ResumeAfter);
-            if (worst == null || IsMoreSevere(breach, worst.Value))
-                worst = breach;
-        }
-
-        return worst;
-    }
-
-    // Consequence first, then how long it lasts - a price through a circuit breaker's widest
-    // level is through its narrower ones too, and the market should be halted for as long as
-    // the level it actually reached says rather than the one it passed on the way. Never
-    // resuming outranks any duration, which is what the level that ends a trading day is.
-    private static bool IsMoreSevere(RestrictionBreach candidate, RestrictionBreach current)
-    {
-        if (Severity(candidate.Action) != Severity(current.Action))
-            return Severity(candidate.Action) > Severity(current.Action);
-
-        if (!candidate.ResumeAfter.HasValue || !current.ResumeAfter.HasValue)
-            return !candidate.ResumeAfter.HasValue && current.ResumeAfter.HasValue;
-
-        return candidate.ResumeAfter.Value > current.ResumeAfter.Value;
-    }
-
-    // Whether a restriction refuses to let the interruption the book is in end at the price it
-    // would end at. Eurex extends a volatility interruption rather than resolving it at a price
-    // still too far out; without a restriction configured for that, this always declines to
-    // interfere and every transition goes ahead.
+    // Whether the interruption the book is in may end at the price it would end at.
     //
-    // Only where a print is what would end it: a phase leaving for one that does not trade
-    // abandons its orders rather than crossing them, so there is no price to hold to anything -
-    // and a close must never be blocked by a price range.
+    // What this decides is whether there is a price to ask about at all, which only the book can
+    // say: it takes a print to end an interruption, so a phase leaving for one that does not trade
+    // abandons its orders rather than crossing them and has no price to hold to anything - and a
+    // close must never be blocked by a price range. Whether anything refuses that price is the
+    // restrictions' question, and is asked of them.
     private RestrictionBreach? CheckResumptionRefusal(OrderBookStatus arrivingStatus, DateTime time)
     {
         var departing = CurrentPhase;
@@ -899,30 +830,8 @@ public class OrderBook : IOrderBook
         if (!departing.Algorithm!.TryQuoteIndicative(_matcher.Working, out var priceTicks, out _))
             return null;
 
-        foreach (var restriction in _priceRestrictions)
-        {
-            // First refusal rather than the severest: every restriction refusing here is asking
-            // for the same thing, so there is nothing to rank.
-            if (restriction.Scope.HasFlag(RestrictionScope.Trade) &&
-                !restriction.AllowsResumption(priceTicks, time))
-                return new RestrictionBreach(restriction.OnBreach, restriction.ResumeAfter);
-        }
-
-        return null;
+        return _restrictions.RefusesResumption(priceTicks, time);
     }
-
-    // Ranked explicitly rather than leaning on the enum's declaration order, which is free to
-    // change. Reject never reaches here - it is an order-entry consequence.
-    private static int Severity(RestrictionBreachAction action) => action switch
-    {
-        RestrictionBreachAction.Halt => 3,
-        RestrictionBreachAction.Pause => 2,
-
-        // Below both: a limit-locked market is still open and still trading, at the limit. It
-        // is the mildest thing that can stop a sweep, not a form of interruption.
-        RestrictionBreachAction.Block => 1,
-        _ => 0
-    };
 
     private void Apply(MatchOutcome outcome, List<OrderBookEvent> events, DateTime time,
         List<InternalOrder> pendingImmediateOrCancelStops)
@@ -1056,8 +965,7 @@ public class OrderBook : IOrderBook
             _lastTradedPrice = priceTicks;
             foreach (var phase in _phases.Values)
                 phase.Algorithm?.OnTrade(priceTicks);
-            foreach (var restriction in _priceRestrictions)
-                restriction.OnTrade(priceTicks, time);
+            _restrictions.OnTrade(priceTicks, time);
         }
     }
 
@@ -1135,8 +1043,7 @@ public class OrderBook : IOrderBook
         {
             foreach (var phase in _phases.Values)
                 phase.Algorithm?.OnSessionChange(referenceTicks);
-            foreach (var restriction in _priceRestrictions)
-                restriction.OnSessionChange(referenceTicks);
+            _restrictions.OnSessionChange(referenceTicks);
         }
 
         if (!_phases.ContainsKey(status))
