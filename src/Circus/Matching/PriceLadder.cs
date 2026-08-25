@@ -1,18 +1,5 @@
 namespace Circus.Matching;
 
-// Dense, array-backed replacement for SortedDictionary<long, SortedDictionary<long, InternalOrder>>
-// keyed by price tick: the tick is used directly as an array offset (tick - _minTick) for O(1)
-// level access instead of an O(log n) tree lookup, with a cached best-price index so callers
-// don't need to scan the array to find the touch.
-//
-// Each level is an intrusive doubly-linked list threaded through InternalOrder.LevelNext/Prev
-// rather than a LinkedList<T>, which would allocate a node wrapper per order - the very cost
-// this exists to avoid. A newly-touched level costs nothing but flipping array slots.
-//
-// Grows on demand if an order arrives outside the allocated range, so it needs no pre-sizing.
-//
-// descending is true for sides whose priority runs from high tick to low - Side.Buy in the
-// working book, Side.Sell in the stops book.
 internal sealed class PriceLadder(bool descending) : IReadOnlyPriceLadder
 {
     private const int InitialRadius = 64;
@@ -21,10 +8,6 @@ internal sealed class PriceLadder(bool descending) : IReadOnlyPriceLadder
     private InternalOrder?[] _tails = [];
     private int[] _counts = [];
 
-    // Sum of DisplayedQuantity across the level, maintained incrementally rather than walked on
-    // demand: a market data snapshot is taken far more often than a level is deep, and the top of
-    // a busy book carries enough orders that summing it per publish is the more expensive half of
-    // the trade. Never RemainingQuantity - an iceberg's hidden reserve is not on the book.
     private int[] _quantities = [];
 
     private long _minTick;
@@ -59,11 +42,8 @@ internal sealed class PriceLadder(bool descending) : IReadOnlyPriceLadder
         order.RestingTick = tick;
     }
 
-    // Takes the tick from the order rather than the caller. Price moves before the ladder does on
-    // a reprice, so re-deriving it here would read the price the order is moving *to* while it is
-    // still filed under the one it is moving from - which the call order in OrderBook.UpdateOrder
-    // is careful to avoid, but carefully rather than structurally. Reading back what Add filed it
-    // under cannot get that wrong, and the level aggregate below now depends on it not being.
+    // Takes the tick from the order rather than re-deriving it from Price: Price moves before the
+    // ladder does on a reprice, so the two disagree for the length of an update.
     public void Remove(InternalOrder order)
     {
         var index = (int) (order.RestingTick - _minTick);
@@ -89,9 +69,6 @@ internal sealed class PriceLadder(bool descending) : IReadOnlyPriceLadder
         }
     }
 
-    // Corrects a level after a resting order's displayed size moved under it - a fill, an auction
-    // print re-deriving the peak, or an update resizing the order in place. Reached through
-    // Matcher.SyncDisplayed, which is what the callers actually hold.
     internal void AdjustQuantity(long tick, int delta) => _quantities[(int) (tick - _minTick)] += delta;
 
     public bool TryGetBest(out long tick, out InternalOrder? firstOrder)
@@ -108,8 +85,6 @@ internal sealed class PriceLadder(bool descending) : IReadOnlyPriceLadder
         return true;
     }
 
-    // Yields, from best outward, each occupied level's tick, its first (FIFO-earliest) order —
-    // walk `.LevelNext` from there to see the rest — and its order count.
     public IEnumerable<(long Tick, InternalOrder First, int Count)> EnumerateFromBest()
     {
         var step = descending ? -1 : 1;
@@ -122,14 +97,6 @@ internal sealed class PriceLadder(bool descending) : IReadOnlyPriceLadder
         }
     }
 
-    // The aggregate view, from best outward: what a by-price feed publishes, and deliberately
-    // separate from EnumerateFromBest so matching keeps walking orders and market data never
-    // needs to. Stops at maxLevels occupied levels rather than scanning the whole array.
-    //
-    // Fills a caller-owned list rather than returning a sequence, because the book takes this
-    // twice per action to work out what changed - an iterator would allocate four times per
-    // action on the hot path, which is the cost this class exists to avoid. The list is cleared
-    // and refilled, so a caller reusing one allocates nothing after the first call.
     public void CopyLevelsFromBest(int maxLevels, List<(long Tick, int Quantity, int Count)> into)
     {
         into.Clear();
@@ -197,7 +164,6 @@ internal sealed class PriceLadder(bool descending) : IReadOnlyPriceLadder
         Grow(newMin, newMax);
     }
 
-    // Preserves existing levels while growing the backing arrays to cover [newMin, newMax].
     private void Grow(long newMin, long newMax)
     {
         var newLength = checked((int) (newMax - newMin + 1));
@@ -224,8 +190,6 @@ internal sealed class PriceLadder(bool descending) : IReadOnlyPriceLadder
         _quantities = newQuantities;
         _minTick = newMin;
 
-        // Grow is rare (amortized via doubling), so a full recompute here is cheap relative to
-        // how infrequently it happens.
         _bestIndex = _heads.Length;
         var step = descending ? -1 : 1;
         for (var i = descending ? _heads.Length - 1 : 0; i >= 0 && i < _heads.Length; i += step)

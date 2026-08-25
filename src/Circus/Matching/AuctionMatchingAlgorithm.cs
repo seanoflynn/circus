@@ -1,28 +1,18 @@
 namespace Circus.Matching;
 
-// A call-auction print: every trade clears at one price, sized off each side's full remaining
-// quantity. The print is a single atomic allocation, not a sequence of continuous touches an
-// iceberg would have to ration its displayed size across.
 internal sealed class AuctionMatchingAlgorithm : IMatchingAlgorithm
 {
-    // Feeds the tie-break below and nothing else. Seeded from an explicit reference price
-    // (CME's settlement price, pre-open) and thereafter tracks the last trade.
     private long? _referencePriceTicks;
 
-    // Held for the duration of one print, so trades are allocated against the book as it stood
-    // when the price was struck rather than one they are themselves consuming.
     private long _clearingPriceTicks;
 
     public void OnTrade(long priceTicks) => _referencePriceTicks = priceTicks;
 
     public void OnSessionChange(long? referencePriceTicks) => _referencePriceTicks = referencePriceTicks;
 
-    // Commits to the price already being quoted, so an uncrossing pass over an uncrossed book
-    // declines here rather than needing the caller to check first.
     public bool TryBegin(IReadOnlyDictionary<Side, IReadOnlyPriceLadder> working) =>
         TryQuoteIndicative(working, out _clearingPriceTicks, out _);
 
-    // Time priority, at the clearing price rather than each order's own.
     public Allocation? SelectNext(InternalOrder restingHead, InternalOrder aggressor) =>
         new Allocation(restingHead,
             Math.Min(restingHead.RemainingQuantity, aggressor.RemainingQuantity),
@@ -30,26 +20,14 @@ internal sealed class AuctionMatchingAlgorithm : IMatchingAlgorithm
 
     public bool UsesFullRemainingQuantity => true;
 
-    // The print resolves a crossed book; a volatility pause must not interrupt it partway.
     public bool ChecksTradeRestrictions => false;
 
-    // The price maximizing executable volume: min(cumulative bids at/above p, cumulative asks
-    // at/below p). Ties break by minimum surplus (CME's rule), then proximity to the reference
-    // price (no venue documents a case this granular), then CME's final rule - highest price
-    // if the surplus is on the buy side, lowest if on the sell side.
-    //
-    // Stops are deliberately excluded, unlike CME's iterative stop-election loop; Matcher.Run
-    // picks them up afterwards like any other trade.
     public bool TryQuoteIndicative(IReadOnlyDictionary<Side, IReadOnlyPriceLadder> working,
         out long priceTicks, out int quantity)
     {
         priceTicks = 0;
         quantity = 0;
 
-        // Uncrossed - or one-sided, which TryGetBest failing covers - declines here, off the
-        // ladders' own best-price cache rather than after materialising every level on both
-        // sides. Worth the extra check: this runs on every action a pre-open session sees, and
-        // an uncrossed book is the common state for most of it.
         if (!working[Side.Buy].TryGetBest(out var bestBid, out _) ||
             !working[Side.Sell].TryGetBest(out var bestAsk, out _) ||
             bestBid < bestAsk)
@@ -99,12 +77,9 @@ internal sealed class AuctionMatchingAlgorithm : IMatchingAlgorithm
                 return candidateDistance < currentDistance;
         }
 
-        // surplus on the buy side (positive) -> prefer the higher price; sell side -> lower
         return candidateSurplus > 0 ? candidatePrice > currentPrice : candidatePrice < currentPrice;
     }
 
-    // Counts an iceberg's hidden reserve: price discovery is on true size, unlike the
-    // displayed-only aggregates published as market data.
     private static int SumRemaining(InternalOrder? first)
     {
         var total = 0;

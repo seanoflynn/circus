@@ -6,92 +6,39 @@ using Circus.Restrictions;
 
 namespace Circus;
 
-// Working state, not a record of it. A book holds the day's orders for as long as the process
-// does and writes nothing down, which is what a book is rather than a limitation of this one:
-// durability belongs to whatever journals the action stream on the way in, and rebuilds a book
-// by replaying it rather than by asking this one what it holds.
-//
-// A pure function of the actions it is given: it reads no clock and consults nothing ambient,
-// so the same actions always produce the same events. Time arrives stamped on each action -
-// see TimestampingOrderBook for the boundary that does the stamping.
 public class OrderBook : IOrderBook
 {
     private readonly Instrument _instrument;
 
     private OrderBookStatus _status = OrderBookStatus.Closed;
 
-    // Why the book is in that status, kept beside it so a snapshot can restate the whole composite
-    // rather than the half of it a status alone carries. Starts where a book starts: closed
-    // because nobody has opened it yet, which is a request rather than anything having happened.
     private OrderBookStatusChangeReason _statusReason = OrderBookStatusChangeReason.Requested;
 
-    // The last action's stamp, kept only to refuse one that moves time backwards. Set from the
-    // first action, so a book has no opinion about what time it is until something tells it.
     private DateTime _lastActionTime;
     private long _nextSequenceNumber;
 
-    // Trades are numbered separately from orders. The two are different namespaces - a trade and
-    // an order may both be 5 without ambiguity, since nothing ever holds one where the other is
-    // expected - and interleaving them into a single run would make each harder to read for no
-    // gain. Seeded alongside the order counter at the start of a session, for the reasons given
-    // there.
     private long _nextTradeId;
     private long? _lastTradedPrice;
 
-    // A timed interruption's deadline and where it returns to. Null whenever the book is not
-    // serving one, which includes an interruption configured to last until told otherwise.
     private DateTime? _resumeAt;
     private OrderBookStatus _resumeTo;
 
-    // Which way a daily limit currently has the market stuck, so the state is published on the
-    // change rather than on every sweep it turns away. Null is a market free to trade.
     private Side? _limitState;
 
-    // The indicative quote as last published, so only moves in it are emitted.
     private (long PriceTicks, int Quantity)? _indicativeQuote;
 
-    // Order-entry and trade-time price bands, each maintaining its own reference anchor.
-    // A future velocity limit or circuit breaker is a new entry here, not a redesign.
     private readonly IReadOnlyList<IPriceRestriction> _priceRestrictions;
 
-    // Owns the working/stop ladders and the pure decision helpers (liquidity checks,
-    // self-match verdicts) that read them.
     private readonly Matcher _matcher = new();
 
-    // Scratch space for Match, reused rather than allocated per call: a book processes one
-    // action at a time and Match never re-enters itself within that, so one buffer per book is
-    // enough. Cleared at the top of every call rather than left to grow unbounded across them.
     private readonly List<InternalOrder> _pendingImmediateOrCancelStops = new();
 
-    // How deep a by-price product runs, for every book and every channel. Ten, because that is
-    // what CME's futures books publish and what a by-price product here has always carried.
-    //
-    // Fixed rather than configured. A subscriber wanting fewer levels holds this window and shows
-    // what it likes of it; it cannot be sent a shallower delta stream, because a delta does not
-    // truncate - a level pushed out of a five-deep window is a departure that appears nowhere in
-    // the ten-deep report, at any rank. See LevelsChanged, and LevelWindowDiffTests for the case
-    // asserted. Deriving a shallower stream inside this library would mean a feed holding the book
-    // its subscriber is missing, which is the shadow book the by-price product was built to remove.
     public const int PublishedDepth = 10;
 
-    // What this action did to the displayed book - the levels that moved, the orders that moved,
-    // and what printed - which is a different question from how the book matched, and so is
-    // answered outside it. Told how deep to look and handed the ladders either side of an action;
-    // it holds nothing of the book between calls.
     private readonly DisplayedBookReport _report;
 
-    // Nothing outside this table names a status - the rest of the book reads the current phase
-    // and acts on what it says. Pre-open's auction instance is also what prints on the way out
-    // of it, so the opening print is the quote it had been publishing.
-    //
-    // Built per book rather than shared between them, because every algorithm in it carries
-    // run-scoped state - an auction's struck price, a pro-rata level's pending allocations -
-    // and two books sharing one instance would interleave it.
     private readonly IReadOnlyDictionary<OrderBookStatus, TradingPhase> _phases;
 
-    // Only the continuous phase varies with the instrument: an auction uncrosses at a single
-    // price whatever the rest of the day allocates under, and a closed or halted book matches
-    // nothing at all.
     private static IReadOnlyDictionary<OrderBookStatus, TradingPhase> BuildPhases(
         MatchingAlgorithm algorithm) =>
         new Dictionary<OrderBookStatus, TradingPhase>
@@ -112,28 +59,17 @@ public class OrderBook : IOrderBook
                     MatchesContinuously: false, StartsSession: false, ExpiresDayOrders: true)
             },
             {
-                // Quotes and prints on the way out exactly as pre-open does, so a pause
-                // resolves into a single uncrossing price rather than resuming mid-sweep. It is
-                // an interruption within a session and not the start of one, though, so unlike
-                // pre-open it neither reseeds sequence numbers nor retires anything.
                 OrderBookStatus.Paused,
                 new TradingPhase(new AuctionMatchingAlgorithm(), AcceptsOrderActions: true, AcceptsMarketOrders: false,
                     MatchesContinuously: false, StartsSession: false, ExpiresDayOrders: false)
             },
             {
-                // No algorithm, so nothing matches and no indicative quote is published -
-                // withholding price discovery is what makes this a halt rather than a pause.
-                // Order actions stay open so resting positions can still be managed, and the
-                // day's orders survive: a halt is not a close. Nothing prints on the way out
-                // either, so a caller wanting a reopening auction goes through PreOpen or
-                // Paused rather than straight back to Open.
                 OrderBookStatus.Halted,
                 new TradingPhase(null, AcceptsOrderActions: true, AcceptsMarketOrders: false,
                     MatchesContinuously: false, StartsSession: false, ExpiresDayOrders: false)
             }
         };
 
-    // Config in, enforcement out, the same way price restrictions are adapted below.
     private static IMatchingAlgorithm Continuous(MatchingAlgorithm algorithm) => algorithm switch
     {
         MatchingAlgorithm.PriceTime => new PriceTimeMatchingAlgorithm(),
@@ -147,17 +83,10 @@ public class OrderBook : IOrderBook
     // Keyed by InternalId, not ExchangeOrderId - the latter changes across an order's life.
     private readonly Dictionary<long, InternalOrder> _orders = new();
 
-    // The day the venue last said it was trading, carried on the session actions that move the
-    // book between phases. Null until something says, which is the state a book driven by hand
-    // stays in - and TradingDayOn then dates it from the clock, exactly as it always did.
-    //
-    // Held rather than read off each action because the question is asked by order flow too: a
-    // GTD order arriving mid-session is good till a trading day, and the action creating it
-    // carries no schedule.
     private DateOnly? _tradeDate;
 
-    // every (companyId, clientOrderId) pair ever assigned by a client, permanently reserved -
-    // used for per-client uniqueness checks, ownership enforcement, and Update/Cancel lookups
+    // Entries are never removed: a (companyId, clientOrderId) pair stays reserved for the life of
+    // the book, which is what OrderIdAlreadyUsed is checked against.
     private readonly Dictionary<(string CompanyId, string ClientOrderId), InternalOrder> _clientOrderIndex = new();
 
     private const int MaxClientOrderIdLength = 20;
@@ -167,9 +96,6 @@ public class OrderBook : IOrderBook
     {
     }
 
-    // Config in, enforcement out. The instrument describes what it trades under; this is the only
-    // place that knows which adapter each description means, so a new restriction is a new arm
-    // rather than a change to how books are constructed.
     private static IReadOnlyList<IPriceRestriction> Adapt(IReadOnlyList<PriceRestriction>? configs) =>
         configs == null
             ? Array.Empty<IPriceRestriction>()
@@ -180,8 +106,6 @@ public class OrderBook : IOrderBook
                     band.Window, band.ExtendedRangeTicks),
                 StaticPriceRange range => new StaticPriceRangeRestriction(range.RangeTicks, range.PauseFor),
 
-                // Same adapter as VolatilityBand: a velocity limit is that range at a short
-                // window, and the two configs exist to say which is meant, not to behave apart.
                 VelocityLimit limit => new VolatilityBandRestriction(limit.RangeTicks, limit.PauseFor,
                     limit.Window),
                 DailyPriceLimit limit => new DailyPriceLimitRestriction(limit.Width),
@@ -189,9 +113,6 @@ public class OrderBook : IOrderBook
                 _ => throw new ArgumentException($"Unknown price restriction {config.GetType().Name}")
             }).ToList();
 
-    // Restrictions supplied outright rather than derived from the instrument. Internal because it
-    // is a seam, not an API: it exists so combinations an Instrument cannot yet describe - two
-    // trade-scoped restrictions disagreeing about severity, say - can still be exercised.
     internal OrderBook(Instrument instrument, IReadOnlyList<IPriceRestriction> priceRestrictions)
     {
         _instrument = instrument;
@@ -206,10 +127,6 @@ public class OrderBook : IOrderBook
 
     public IReadOnlyList<OrderBookEvent> Process(OrderBookAction action)
     {
-        // The action's own stamp is the only time this book has, and every event below carries
-        // it. An unstamped action is a caller that has not decided when its action happened,
-        // which would otherwise land silently at DateTime.MinValue and expire every GTD order
-        // in the book.
         var time = action.Time;
         if (time == default)
             throw new ArgumentException(
@@ -217,9 +134,6 @@ public class OrderBook : IOrderBook
                 "drive the book through a TimestampingOrderBook to have a clock stamp it.",
                 nameof(action));
 
-        // Refused rather than clamped: time running backwards means the caller has misordered
-        // its stream, and quietly carrying on would leave a book whose state no replay of those
-        // same actions could reproduce. Equal stamps are fine - a burst can share an instant.
         if (time < _lastActionTime)
             throw new ArgumentException(
                 $"{action.GetType().Name} is stamped {time:O}, behind the previous action's " +
@@ -228,28 +142,15 @@ public class OrderBook : IOrderBook
 
         _lastActionTime = time;
 
-        // Captured before anything runs, including the resumption below - a resumption can carry
-        // an auction print with it, and the levels that moved doing so are as much a part of what
-        // this action did as the ones the action itself moved.
         _report.CaptureBefore(_matcher.Working[Side.Buy], _matcher.Working[Side.Sell]);
 
-        // Before the action rather than after: an order arriving once the interruption has
-        // elapsed should meet a resumed book, not the paused one it would otherwise land in.
-        // Doing it here rather than only on AdvanceTime means a book being fed order flow
-        // resumes on its own, without needing anything to poke it.
         var events = ResumeIfDue(time);
         events.AddRange(Handle(action, time));
 
-        // Last of the order-flow events, so it reports where the action left the book rather than
-        // any state it passed through - a pre-open cancel that uncrosses the book withdraws the
-        // quote, and the opening print withdraws it after the trades it produced.
         var quoteChange = TakeIndicativeQuoteChange(time);
         if (quoteChange != null)
             events.Add(quoteChange);
 
-        // Last, because these describe what the action left behind rather than what it did, and
-        // they are read off the events above - so everything that has anything to say must have
-        // said it by now. What they report and why is DisplayedBookReport's business.
         _report.Append(events, time, _matcher.Working[Side.Buy], _matcher.Working[Side.Sell]);
 
         return events;
@@ -278,44 +179,23 @@ public class OrderBook : IOrderBook
             PauseTrading => UpdateStatus(OrderBookStatus.Paused, null, true, OrderBookStatusChangeReason.Requested, time),
             HaltTrading => UpdateStatus(OrderBookStatus.Halted, null, true, OrderBookStatusChangeReason.Requested, time),
 
-            // Carries nothing and does nothing: the work is the due-interruption check every
-            // Process already runs, and this is how a caller with no order flow reaches it.
             AdvanceTime => new List<OrderBookEvent>(),
 
-            // Changes nothing either - it reports where the action stream has already left the
-            // book. Note this runs after ResumeIfDue in Process, so a snapshot tick arriving past
-            // a resume deadline describes the resumed book rather than the paused one, and the
-            // resumption itself is reported ahead of it as an ordinary status change.
             PublishSnapshot => new List<OrderBookEvent> {Snapshot(time)},
             _ => throw new ArgumentException("Unknown order book action")
         };
     }
 
-    // A timed interruption returns the book to whatever it interrupted. Cleared by any explicit
-    // status change, so a session closing over a pause ends it rather than being undone by it.
     private List<OrderBookEvent> ResumeIfDue(DateTime time)
     {
         if (_resumeAt == null || time < _resumeAt.Value)
             return new List<OrderBookEvent>();
 
-        // Stamped at the deadline rather than at the action that noticed it: a book paused until
-        // 10:05 that sees nothing until 10:47 resumed at 10:05, and the tape should say so. The
-        // state is the same either way - the resume runs before the arriving action, so the
-        // auction uncrosses against the book as of the deadline - and this only fixes what the
-        // events say about when. Poked punctually the two instants coincide, so it is a book
-        // driven directly, without anything ticking it, that this is for.
-        //
-        // An event stamped behind the action carrying it cannot trip the monotonicity guard,
-        // which checks inbound actions rather than emitted events.
         var due = _resumeAt.Value;
         _resumeAt = null;
         return UpdateStatus(_resumeTo, null, true, OrderBookStatusChangeReason.InterruptionElapsed, due);
     }
 
-    // Asked of the phase's own algorithm, so a quote exists exactly when there is an auction
-    // to report one for - the start-of-day session or a volatility pause. Continuous trading
-    // declines (price-time prints at as many prices as a sweep touches, not one), as does an
-    // uncrossed book and a phase with no algorithm at all.
     private OrderBookEvent? TakeIndicativeQuoteChange(DateTime time)
     {
         var algorithm = CurrentPhase.Algorithm;
@@ -330,10 +210,6 @@ public class OrderBook : IOrderBook
 
         _indicativeQuote = quote;
 
-        // An anchor for anything banding against the auction price, withdrawn along with the
-        // quote. Reaching restrictions here rather than at order entry means an order is judged
-        // against the quote as it stood before that order - which is the only thing it could be
-        // judged against, since the quote cannot account for an order that has not arrived.
         foreach (var restriction in _priceRestrictions)
             restriction.OnIndicativePrice(quote?.PriceTicks);
 
@@ -450,13 +326,6 @@ public class OrderBook : IOrderBook
 
     private decimal ToDecimal(long ticks) => ticks * _instrument.TickSize;
 
-    // Everything a subscriber joining mid-session cannot derive from a stream it did not hear the
-    // start of: the published depth, and the composite the book assembles from separate events -
-    // status with its reason and any pending resumption, the limit state, the auction quote.
-    //
-    // Not the trades. A print is a thing that happened rather than a state the book is in, and a
-    // joiner does not need the last one to be correct from here on; it simply starts hearing them.
-    // The same goes for order-by-order, which gets a snapshot of its own once it has one to give.
     private BookSnapshot Snapshot(DateTime time) =>
         new(_instrument.Symbol, time,
             GetLevels(Side.Buy, PublishedDepth), GetLevels(Side.Sell, PublishedDepth),
@@ -465,12 +334,6 @@ public class OrderBook : IOrderBook
             _indicativeQuote is { } quote ? ToDecimal(quote.PriceTicks) : null,
             _indicativeQuote?.Quantity ?? 0);
 
-    // Every order in the working book, best price outward and in queue order within a price -
-    // walking the ladders' own lists, so what comes out is the order the book would match in.
-    //
-    // The whole book rather than the published window, unlike the levels above: an order-by-order
-    // product exists to carry all of it. Untriggered stops rest in a separate ladder and are not
-    // in the working book, so they do not appear.
     internal IReadOnlyList<RestingOrder> GetRestingOrders()
     {
         var orders = new List<RestingOrder>();
@@ -488,33 +351,11 @@ public class OrderBook : IOrderBook
         return orders;
     }
 
-
-    // Internal on purpose, and not on IOrderBook. Process is the whole public API of a book:
-    // everything a consumer knows arrives as an event, so a market data feed can be rebuilt from
-    // a journal of those events with no book involved. A query method in the public surface
-    // breaks that twice over - it lets a consumer read state that never crossed the feed, and it
-    // would make a snapshot built by calling it unreproducible from the journal, since the call
-    // leaves no trace in the event stream.
-    //
-    // The snapshot feed needs this aggregate, but it reaches it the same way everything else
-    // does: a snapshot tick dispatches an action, and the book answers with an event carrying
-    // the image. This is how the book builds that image, which makes it an implementation
-    // detail rather than a seam. Visible to the tests, which assert the aggregate directly.
-    //
-    // The ladders already carry the totals, maintained as orders rest, fill and leave, so this
-    // reads them rather than computing them. The iceberg cases come out right without
-    // special-casing: an auction print can trade straight through a peak into the reserve,
-    // leaving the order displaying a fresh peak and firing no requeue event, which a feed
-    // deriving depth has to reconstruct from the change in displayed size across the fill. That
-    // is why FillOrderConfirmed carries PreviousDisplayedQuantity at all. Reading the level,
-    // there is nothing to reconstruct.
     internal IReadOnlyList<Level> GetLevels(Side side, int maxLevels)
     {
         if (maxLevels <= 0)
             return Array.Empty<Level>();
 
-        // Its own list rather than the scratch buffers above: this is the snapshot path, taken on
-        // a tick rather than per action, and it hands the result out where those are reused.
         var scratch = new List<(long Tick, int Quantity, int Count)>(maxLevels);
         _matcher.Working[side].CopyLevelsFromBest(maxLevels, scratch);
 
@@ -538,12 +379,6 @@ public class OrderBook : IOrderBook
         return true;
     }
 
-    // Client-supplied resting limit prices only. Trigger prices are governed by the
-    // TriggerPriceMustBe... checks above, and Market/MarketLimit prices by
-    // MarketOrderProtectionTicks.
-    // Null when every entry-scoped restriction allows the price, otherwise the rejection the
-    // first refusing one asks for - a band and a daily limit turn an order away for reasons
-    // that read differently to whoever sent it.
     private OrderRejectedReason? FindOrderEntryRefusal(long priceTicks, DateTime time)
     {
         foreach (var restriction in _priceRestrictions)
@@ -556,15 +391,10 @@ public class OrderBook : IOrderBook
         return null;
     }
 
-    // A stop elected far from its trigger would rest at a price the band would never have
-    // accepted directly, so CME bounds the gap by the same band. Checked on the pair rather
-    // than on either price, and only where a band exists to bound it.
     private bool AllowsStopSpread(long triggerTicks, long priceTicks) =>
         _priceRestrictions.Where(r => r.Scope.HasFlag(RestrictionScope.OrderEntry))
             .All(r => r.AllowsStopSpread(Math.Abs(priceTicks - triggerTicks)));
 
-    // Only ever called on an order currently resting in the working book (a FAK remainder or
-    // a self-match-prevention cancel during Match()) - never a still-Hidden stop order.
     private OrderBookEvent CancelRemainder(InternalOrder order, OrderCancelledReason reason, DateTime time)
     {
         var previousClientOrderId = order.ClientOrderId;
@@ -639,15 +469,11 @@ public class OrderBook : IOrderBook
         }
         else
         {
-            // ignore trigger price if already triggered
             triggerTicks = null;
         }
 
         // TODO: can't update price on stop market order?
 
-        // Captured before any mutation below. previousPrice is null when the order isn't
-        // currently resting in the working book (still Hidden) - the working-book level
-        // aggregate treats that case as an arrival, not a move.
         var previousQuantity = order.DisplayedQuantity;
         var previousPrice = order.Status == OrderStatus.Hidden ? (decimal?) null : ToDecimal(order.Price!.Value);
 
@@ -667,9 +493,6 @@ public class OrderBook : IOrderBook
         var sequenceNumber = order.SequenceNumber;
         var isPriceChange = (triggerTicks != null && order.Status == OrderStatus.Hidden && triggerTicks != order.TriggerPrice) ||
                             (priceTicks != null && order.Status != OrderStatus.Hidden && priceTicks != order.Price);
-        // For an iceberg order, MaxVisibleQuantity (the peak) is immutable, so any quantity
-        // increase here can only be growing the hidden reserve - CME/Eurex don't lose
-        // priority for that, only for a peak increase, which isn't possible in this scope.
         var isQuantityIncrease = order.MaxVisibleQuantity == null &&
             (newTotalQuantity != null && newTotalQuantity > order.Quantity);
 
@@ -681,20 +504,12 @@ public class OrderBook : IOrderBook
                 (order.Status == OrderStatus.Hidden ? triggerTicks ?? order.TriggerPrice : priceTicks ?? order.Price) ??
                 throw new InvalidOperationException("missing price");
 
-            // Reprice reads back the tick the ladder filed the order under rather than its
-            // current Price, so this no longer has to run before order.Update() to be correct.
-            // Still does, because the level correction below depends on the order having already
-            // arrived at its new level.
             _matcher.Reprice(order, updatedPriceTicks);
         }
 
-        // captured before Update() below, which - since sequenceNumber may have just been
-        // bumped above - is where ExchangeOrderId (derived from SequenceNumber) actually changes.
         var previousExchangeOrderId = order.ExchangeOrderId;
         order.Update(sequenceNumber, time, newTotalQuantity, triggerTicks, priceTicks, clientOrderId);
 
-        // After any Reprice above, so this corrects the level the order now rests at rather than
-        // the one it left - Reprice moved it there still showing its pre-update size.
         _matcher.SyncDisplayed(order, previousQuantity);
         _clientOrderIndex[(companyId, clientOrderId)] = order;
 
@@ -786,8 +601,8 @@ public class OrderBook : IOrderBook
         _orders.Remove(order.InternalId);
     }
 
-    // Called immediately after order.Fill(...). Snapshot the order for FillOrderConfirmed
-    // before calling: a replenish changes ExchangeOrderId, and the fill was against the old one.
+    // Call immediately after order.Fill(...), having already snapshotted the order for
+    // FillOrderConfirmed: a replenish changes ExchangeOrderId, and the fill was against the old one.
     private OrderBookEvent? FinishFill(InternalOrder order, DateTime time)
     {
         if (order.Status == OrderStatus.Filled)
@@ -798,9 +613,6 @@ public class OrderBook : IOrderBook
 
         if (order.DisplayedQuantity == 0 && order.MaxVisibleQuantity.HasValue)
         {
-            // Peak exhausted with reserve remaining. Requeues to the back of the level with a
-            // fresh ExchangeOrderId, as CME and Eurex both do - so a full-book feed sees the
-            // old id leave and a new one arrive rather than an in-place modify.
             var previousExchangeOrderId = order.ExchangeOrderId;
             var priceTicks = order.Price ?? throw new InvalidOperationException("limit order missing price");
             _matcher.Unrest(order);
@@ -815,9 +627,6 @@ public class OrderBook : IOrderBook
         return null;
     }
 
-    // The single gate on whether trading may happen right now, which is why an exiting
-    // auction's print goes through it too: a phase left for one that does not trade abandons
-    // the orders it accumulated rather than crossing them.
     private void Match(List<OrderBookEvent> events, IMatchingAlgorithm? algorithm = null, DateTime time = default)
     {
         var phase = CurrentPhase;
@@ -830,15 +639,10 @@ public class OrderBook : IOrderBook
             throw new InvalidOperationException("a phase that matches continuously needs an algorithm");
         _pendingImmediateOrCancelStops.Clear();
 
-        // Closed over the action's instant rather than passed as a method group, so a sweep
-        // judges every price it touches against the same moment the events it emits are stamped
-        // with. A restriction reading a clock here instead would drift within a single action.
         foreach (var outcome in _matcher.Run(algorithm ?? continuous, continuous,
                      priceTicks => CheckTradeRestrictionBreach(priceTicks, time)))
             Apply(outcome, events, time, _pendingImmediateOrCancelStops);
 
-        // Deferred until the sweep is done: the loop only exits once nothing crosses anywhere,
-        // so "did it fill" cannot be answered any earlier.
         foreach (var order in _pendingImmediateOrCancelStops)
         {
             if (order.RemainingQuantity > 0)
@@ -846,10 +650,6 @@ public class OrderBook : IOrderBook
         }
     }
 
-    // The severest consequence among the Trade-scoped restrictions that disallow priceTicks; a
-    // pure query, consulted by Matcher.Run only outside an auction uncrossing pass. Severest
-    // rather than first, so the order these are declared in cannot decide whether a breach that
-    // halts is served or shadowed by one that merely pauses.
     private RestrictionBreach? CheckTradeRestrictionBreach(long priceTicks, DateTime time)
     {
         RestrictionBreach? worst = null;
@@ -867,10 +667,6 @@ public class OrderBook : IOrderBook
         return worst;
     }
 
-    // Consequence first, then how long it lasts - a price through a circuit breaker's widest
-    // level is through its narrower ones too, and the market should be halted for as long as
-    // the level it actually reached says rather than the one it passed on the way. Never
-    // resuming outranks any duration, which is what the level that ends a trading day is.
     private static bool IsMoreSevere(RestrictionBreach candidate, RestrictionBreach current)
     {
         if (Severity(candidate.Action) != Severity(current.Action))
@@ -882,14 +678,6 @@ public class OrderBook : IOrderBook
         return candidate.ResumeAfter.Value > current.ResumeAfter.Value;
     }
 
-    // Whether a restriction refuses to let the interruption the book is in end at the price it
-    // would end at. Eurex extends a volatility interruption rather than resolving it at a price
-    // still too far out; without a restriction configured for that, this always declines to
-    // interfere and every transition goes ahead.
-    //
-    // Only where a print is what would end it: a phase leaving for one that does not trade
-    // abandons its orders rather than crossing them, so there is no price to hold to anything -
-    // and a close must never be blocked by a price range.
     private RestrictionBreach? CheckResumptionRefusal(OrderBookStatus arrivingStatus, DateTime time)
     {
         var departing = CurrentPhase;
@@ -901,8 +689,6 @@ public class OrderBook : IOrderBook
 
         foreach (var restriction in _priceRestrictions)
         {
-            // First refusal rather than the severest: every restriction refusing here is asking
-            // for the same thing, so there is nothing to rank.
             if (restriction.Scope.HasFlag(RestrictionScope.Trade) &&
                 !restriction.AllowsResumption(priceTicks, time))
                 return new RestrictionBreach(restriction.OnBreach, restriction.ResumeAfter);
@@ -911,15 +697,11 @@ public class OrderBook : IOrderBook
         return null;
     }
 
-    // Ranked explicitly rather than leaning on the enum's declaration order, which is free to
-    // change. Reject never reaches here - it is an order-entry consequence.
     private static int Severity(RestrictionBreachAction action) => action switch
     {
         RestrictionBreachAction.Halt => 3,
         RestrictionBreachAction.Pause => 2,
 
-        // Below both: a limit-locked market is still open and still trading, at the limit. It
-        // is the mildest thing that can stop a sweep, not a form of interruption.
         RestrictionBreachAction.Block => 1,
         _ => 0
     };
@@ -940,20 +722,13 @@ public class OrderBook : IOrderBook
                 ApplyTrade(resting, aggressor, priceTicks, quantity, usesFullRemainingQuantity, events, time);
                 break;
 
-            // A limit stops the sweep and nothing else: the market is open, quoting, and can
-            // trade at the limit and back inside it. Only the status is spared - the run has
-            // already ended, since Matcher.Run stops on any breach.
             case TradeRestrictionBreached(var blockedTicks, {Action: RestrictionBreachAction.Block}):
                 TakeLimitStateChange(blockedTicks, events, time);
                 break;
 
-            // Assigned directly rather than routed through UpdateStatus: this runs inside the
-            // Run/Apply loop, and UpdateStatus matches, which would re-enter the matcher
-            // mid-enumeration. The phases these land on are deliberately ones with nothing to
-            // do on arrival anyway - neither starts a session nor expires orders.
+            // Assigned directly rather than routed through UpdateStatus: this runs inside the Run/Apply
+            // loop, and UpdateStatus matches, which would re-enter the matcher mid-enumeration.
             case TradeRestrictionBreached(_, var breach):
-                // Captured before the overwrite: an interruption returns to whatever it
-                // interrupted, which is the only phase that could have been matching.
                 _resumeTo = _status;
                 _status = breach.Action == RestrictionBreachAction.Halt
                     ? OrderBookStatus.Halted
@@ -970,10 +745,6 @@ public class OrderBook : IOrderBook
         }
     }
 
-    // Which way the market is stuck, and only when that changes - a limit-locked book refuses
-    // every sweep that follows, and saying so once is enough. Direction comes from where the
-    // blocked price sits against the last one that traded; with nothing traded yet there is
-    // nothing to compare it to, and the price alone says where the limit is.
     private void TakeLimitStateChange(long blockedTicks, List<OrderBookEvent> events, DateTime time)
     {
         var side = _lastTradedPrice switch
@@ -992,9 +763,6 @@ public class OrderBook : IOrderBook
             _status, _statusReason, _resumeAt));
     }
 
-    // A print means the market is trading again, wherever it is trading. Releasing on any trade
-    // rather than on one strictly inside the limits is deliberate: trading at the limit is the
-    // market working, not the market stuck.
     private void ReleaseLimitState(List<OrderBookEvent> events, DateTime time)
     {
         if (_limitState == null)
@@ -1018,9 +786,6 @@ public class OrderBook : IOrderBook
                 order.Fill(time, quantity);
         }
 
-        // SyncDisplayed before FinishFill, not after: FinishFill can unrest the order, and
-        // removing it backs out whatever it is displaying then - so a level still carrying the
-        // pre-fill size would have the fill taken off it twice.
         var restingDisplayed = resting.DisplayedQuantity;
         FillOrder(resting);
         _matcher.SyncDisplayed(resting, restingDisplayed);
@@ -1033,9 +798,6 @@ public class OrderBook : IOrderBook
         var aggressorSnapshot = aggressor.ToOrder();
         var aggressorReplenish = FinishFill(aggressor, time);
 
-        // Resting first, then the aggressor: the order the two sides used to appear in within
-        // OrdersMatched.Fills, and the order a consumer deriving one public print from the pair
-        // relies on to see the trade begin.
         _nextTradeId++;
         var tradeId = _nextTradeId.ToString();
 
@@ -1066,13 +828,11 @@ public class OrderBook : IOrderBook
     {
         foreach (var order in orders)
         {
-            // Lifted out while still typed as a stop; converted or cancelled below.
             _matcher.Unrest(order);
 
             if (order.Validity is OrderValidity.ImmediateOrCancel)
                 pendingImmediateOrCancelStops.Add(order);
 
-            // calculate price for stop market orders
             long? newPriceTicks = order.Price;
             if (order.Type == OrderType.StopMarket &&
                 !TryGetLimitPrice(order.Side, _instrument.MarketOrderProtectionTicks, out newPriceTicks))
@@ -1082,8 +842,6 @@ public class OrderBook : IOrderBook
                 order.Cancel(time);
                 FinishOrder(order);
 
-                // FinishOrder, not CompleteOrder: already unrested above and never reached the
-                // working book, which is also why previousPrice is null.
                 events.Add(new CancelOrderConfirmed(_instrument.Symbol, time, order.CompanyId, order.ToOrder(),
                     previousClientOrderId, OrderCancelledReason.NoOrdersToMatchMarketOrder, null,
                     previousQuantity));
@@ -1109,26 +867,17 @@ public class OrderBook : IOrderBook
             _nextSequenceNumber++;
             order.ConvertToLimit(time, _nextSequenceNumber, newPriceTicks);
 
-            // Retyped as a limit order, so this rests it in the working book.
             _matcher.Rest(order);
 
-            // previousPrice null - an arrival, not a move between working-book levels.
             events.Add(new UpdateOrderConfirmed(_instrument.Symbol, time, order.CompanyId, order.ToOrder(),
                 order.ClientOrderId, previousExchangeOrderId, null, order.DisplayedQuantity));
         }
     }
 
-    // endsTradingDay qualifies a close: several sessions can share one trading day, and only the
-    // last of them ends it. The phase table stays the authority on whether a phase expires day
-    // orders at all - this only says whether this particular close is that day's last.
     private List<OrderBookEvent> UpdateStatus(OrderBookStatus status, decimal? referencePrice = null,
         bool endsTradingDay = true, OrderBookStatusChangeReason reason = OrderBookStatusChangeReason.Requested,
         DateTime time = default, DateOnly? tradeDate = null)
     {
-        // Before anything reads it, and on every session action that carries one rather than only
-        // on the one that starts a session: a book driven straight to a close - or to an open,
-        // without a pre-open ahead of it - is still owed the day it is closing for. A transition
-        // that says nothing leaves the book dated where it was.
         if (tradeDate.HasValue) _tradeDate = tradeDate;
 
         if (referencePrice.HasValue && TryConvertToTicks(referencePrice, out var referenceTicks))
@@ -1145,17 +894,12 @@ public class OrderBook : IOrderBook
         var extension = CheckResumptionRefusal(status, time);
         if (extension != null)
         {
-            // Nothing has moved yet, so refusing simply leaves the book where it was. The status
-            // is unchanged and re-reported: what a subscriber needs to know is that the
-            // interruption is still running and why, which is the same thing a fresh one says.
             _resumeAt = extension.Value.ResumeAfter.HasValue ? time + extension.Value.ResumeAfter.Value : null;
             _statusReason = OrderBookStatusChangeReason.PriceRestriction;
             return new List<OrderBookEvent>
                 {new StatusChanged(_instrument.Symbol, time, _status, _statusReason, _resumeAt, _limitState)};
         }
 
-        // Any transition supersedes a pending one, so a session closing over a running pause
-        // ends it rather than being undone when that pause's deadline arrives.
         _resumeAt = null;
 
         var departing = CurrentPhase;
@@ -1164,41 +908,22 @@ public class OrderBook : IOrderBook
 
         if (arriving.StartsSession)
         {
-            // Seeded from the trading day so an id carries the day it was issued, but only ever
-            // forwards: a second session on the same day computes a seed the counter has
-            // already passed and so continues from where it was. Restarting it would re-issue
-            // ids that orders surviving the previous session (GTC, or GTD not yet due) still
-            // hold, and _orders is keyed on exactly that. Math.Max is also what keeps a replay
-            // whose clock moves backwards from colliding - a run of ids that no longer encodes
-            // its day beats one that repeats itself.
-            //
-            // The trading day rather than the clock's date, so an overnight session's ids carry
-            // the day they trade for from the evening onwards rather than changing over at
-            // midnight halfway through.
             var day = TradingDayOn(time);
             var seed = ((day.Year * 10000) + (day.Month * 100) + day.Day) * 10000000000L;
+            // Forward-only. Restarting the counter would re-issue ids that orders surviving the previous
+            // session (GTC, or GTD not yet due) still hold, and _orders is keyed on exactly that.
             _nextSequenceNumber = Math.Max(_nextSequenceNumber, seed);
 
-            // Trade ids carry the day and never run backwards for the same reasons, though a
-            // trade is finished the moment it prints and so nothing outlives a session holding
-            // one. What the forward-only seed protects here is a journal or a recorded stream
-            // spanning sessions, where a repeated id would describe two different trades.
             _nextTradeId = Math.Max(_nextTradeId, seed);
         }
 
-        // _resumeAt was cleared above, so this reports nothing pending - which is what an
-        // explicit transition means, having just superseded whatever was.
         _statusReason = reason;
         var events = new List<OrderBookEvent>
             {new StatusChanged(_instrument.Symbol, time, _status, reason, _resumeAt, _limitState)};
 
-        // A quoting phase has been accumulating orders for a print, and leaving it is where
-        // that print happens - so a second auction phase would need nothing changed here.
-        // Match declines it if the phase just entered does not trade.
         if (departing.PrintsOnExit)
             Match(events, departing.Algorithm, time);
 
-        // Then trading continues under whatever governs the phase just entered.
         Match(events, time: time);
 
         if (arriving.ExpiresDayOrders && endsTradingDay)
@@ -1207,9 +932,6 @@ public class OrderBook : IOrderBook
         return events;
     }
 
-    // The trading day as of `time`: what the schedule last said, or the date on the clock when
-    // nothing has. The two agree for every schedule that stays within its day, which is why a
-    // book nobody tells behaves as it always did.
     private DateOnly TradingDayOn(DateTime time) => _tradeDate ?? DateOnly.FromDateTime(time);
 
     private IEnumerable<OrderBookEvent> ExpireOrders(DateTime time)

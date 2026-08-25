@@ -3,14 +3,6 @@ using Circus.Events;
 
 namespace Circus;
 
-// Convenience over Process(action) for callers building one action at a time.
-//
-// Each takes an optional time. Left out, the action goes unstamped and wants a book that stamps
-// - TimestampingOrderBook, or anything else wrapping one; a bare OrderBook refuses it and says
-// so, rather than treating the missing stamp as the start of time. Passed, it is the instant the
-// action happened, which is what a caller owning a schedule should do: a session provider knows
-// the boundary time it is firing on, and that is more truthful than whatever a clock reads by
-// the time the event handler runs.
 public static class OrderBookExtensions
 {
     private static SelfMatchPrevention? BuildSelfMatchPrevention(string? id,
@@ -102,9 +94,6 @@ public static class OrderBookExtensions
             PreviousClientOrderId = previousClientOrderId
         });
 
-    // tradeDate left out dates the book from the instant, which is what a schedule that stays
-    // within its day means anyway - a caller driving a book by hand only needs it for a session
-    // that runs past midnight.
     public static IReadOnlyList<OrderBookEvent> PreOpenTrading(this IOrderBook book,
         decimal? referencePrice = null, DateTime time = default, DateOnly? tradeDate = null) =>
         book.Process(new PreOpenTrading
@@ -126,16 +115,9 @@ public static class OrderBookExtensions
     public static IReadOnlyList<OrderBookEvent> HaltTrading(this IOrderBook book, DateTime time = default) =>
         book.Process(new HaltTrading { Symbol = book.Symbol, Time = time });
 
-    // Returns whatever the elapsed time turned out to imply - a resumption and its print, or
-    // nothing at all.
     public static IReadOnlyList<OrderBookEvent> AdvanceTime(this IOrderBook book, DateTime time = default) =>
         book.Process(new AdvanceTime { Symbol = book.Symbol, Time = time });
 
-    // Bridge for callers that only know the target status at runtime (e.g. a session/schedule
-    // provider driving the book off a clock) and so can't pick PreOpenTrading/OpenTrading/
-    // CloseTrading directly. ReferencePrice is ignored for every status but the two opening
-    // ones - a reference price is meaningless once the book stops trading - and endsTradingDay
-    // applies only to closing, since nothing else ends a day.
     public static IReadOnlyList<OrderBookEvent> UpdateStatus(this IOrderBook book, OrderBookStatus status,
         decimal? referencePrice = null, bool endsTradingDay = true, DateTime time = default) =>
         status switch

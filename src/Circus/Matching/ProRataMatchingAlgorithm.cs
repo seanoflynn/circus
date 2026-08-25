@@ -1,25 +1,7 @@
 namespace Circus.Matching;
 
-// Continuous trading under pro-rata priority. The aggressor's quantity is distributed
-// proportionally among all orders at the resting side's best crossing level, with each
-// order receiving a share proportional to its own remaining size. Unlike price-time, a
-// later-arriving larger order gets a larger allocation than an earlier-arriving smaller
-// one at the same price.
-//
-// Trades print at the resting order's own limit price, so an aggressor whose limit was
-// better than the touch gets the improvement. Sized off the full remaining quantity, since
-// an iceberg's hidden reserve participates in the allocation.
-//
-// Allocations for a level are computed up front when the level is first entered, so the
-// aggressor's quantity is distributed once across all orders at that level rather than
-// iteratively re-allocating to only the head each time.
-//
-// Selected by an instrument naming MatchingAlgorithm.ProRata, which the book turns into an
-// instance of this for its continuous phase and nowhere else - an auction uncrosses at one
-// price whatever the rest of the day allocates under.
 internal sealed class ProRataMatchingAlgorithm : IMatchingAlgorithm
 {
-    // Cached allocations for the current price level, consumed one per SelectNext call.
     private List<(InternalOrder Order, int Quantity)>? _pending;
     private int _index;
     private long? _currentPrice;
@@ -36,8 +18,6 @@ internal sealed class ProRataMatchingAlgorithm : IMatchingAlgorithm
 
     public Allocation? SelectNext(InternalOrder restingHead, InternalOrder aggressor)
     {
-        // On the first call, or when the price level changes, compute all allocations for
-        // this level up front. The state is discarded once the level is exhausted.
         if (restingHead.Price != _currentPrice || _pending == null)
         {
             _pending = ComputeAllocations(restingHead, aggressor);
@@ -53,13 +33,9 @@ internal sealed class ProRataMatchingAlgorithm : IMatchingAlgorithm
             order.Price ?? throw new InvalidOperationException("limit order requires price"));
     }
 
-    // Walks the level and computes each order's pro-rata share of the aggressor's remaining
-    // quantity. The first pass allocates proportionally by remaining size; the remainder
-    // (from rounding) is given one lot at a time to the largest orders first.
     private static List<(InternalOrder Order, int Quantity)> ComputeAllocations(
         InternalOrder restingHead, InternalOrder aggressor)
     {
-        // Gather all orders at this level.
         var orders = new List<InternalOrder>();
         long totalLevelQty = 0;
         for (var order = restingHead;
@@ -80,7 +56,6 @@ internal sealed class ProRataMatchingAlgorithm : IMatchingAlgorithm
         var allocations = new (InternalOrder Order, int Quantity)[orders.Count];
         long allocatedTotal = 0;
 
-        // First pass: proportional allocation.
         for (var i = 0; i < orders.Count; i++)
         {
             var order = orders[i];
@@ -90,11 +65,9 @@ internal sealed class ProRataMatchingAlgorithm : IMatchingAlgorithm
             allocatedTotal += share;
         }
 
-        // Distribute the remainder from rounding, one lot at a time, largest orders first.
         var remainder = (int)(remainingAggressor - allocatedTotal);
         if (remainder > 0)
         {
-            // Sort by remaining quantity descending, then by sequence number for stability.
             var indices = Enumerable.Range(0, orders.Count)
                 .OrderByDescending(i => orders[i].RemainingQuantity)
                 .ThenBy(i => orders[i].SequenceNumber)
@@ -111,7 +84,6 @@ internal sealed class ProRataMatchingAlgorithm : IMatchingAlgorithm
             }
         }
 
-        // Filter out zero-quantity allocations and return in FIFO order.
         return allocations.Where(a => a.Quantity > 0)
             .OrderBy(a => a.Order.SequenceNumber)
             .Select(a => (a.Order, a.Quantity))
