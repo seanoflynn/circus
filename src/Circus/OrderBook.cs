@@ -986,8 +986,6 @@ public class OrderBook : IOrderBook
                 order.Fill(time, quantity);
         }
 
-        // Before FinishFill, which can unrest the order and backs out whatever it is displaying then -
-        // a level still carrying the pre-fill size would have the fill taken off it twice.
         var restingDisplayed = resting.DisplayedQuantity;
         FillOrder(resting);
         _matcher.SyncDisplayed(resting, restingDisplayed);
