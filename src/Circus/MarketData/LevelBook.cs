@@ -1,3 +1,5 @@
+using Circus.Events;
+
 namespace Circus.MarketData;
 
 public sealed class LevelBook
@@ -45,7 +47,7 @@ public sealed class LevelBook
         {
             var side = change.Side == Side.Buy ? _bids : _offers;
 
-            if (change.Action == MarketByPriceDeltaAction.Removed)
+            if (change.Action == LevelChangeAction.Removed)
                 side.Remove(change.Price);
             else
                 side[change.Price] = (change.Quantity, change.Count);

@@ -1,7 +1,9 @@
+using Circus.Events;
+
 namespace Circus.MarketData;
 
 public record MarketByPriceDelta(Side Side, int LevelIndex, decimal Price, int Quantity, int Count,
-    MarketByPriceDeltaAction Action);
+    LevelChangeAction Action);
 
 public record MarketByPriceDeltaEvent(string Symbol, DateTime Time, int Depth,
         IReadOnlyList<MarketByPriceDelta> Changes)

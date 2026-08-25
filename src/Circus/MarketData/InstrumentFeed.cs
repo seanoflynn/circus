@@ -4,33 +4,21 @@ namespace Circus.MarketData;
 
 public sealed class InstrumentFeed
 {
-    private readonly MarketByPriceIncrementalProducer _levels;
-    private readonly MarketByOrderIncrementalProducer _orderByOrder = new();
-    private readonly TradeDataProducer _trades = new();
-    private readonly IndicativePriceDataProducer _indicative = new();
+    private readonly (FeedProducts Product, Func<MarketEvent, MarketDataEvent?> Project)[] _incremental;
 
-    private readonly MarketByPriceSnapshotProducer _levelsSnapshot;
-    private readonly InstrumentStatusSnapshotProducer _statusSnapshot = new();
-    private readonly IndicativePriceSnapshotProducer _indicativeSnapshot = new();
-    private readonly MarketByOrderSnapshotProducer _orderByOrderSnapshot = new();
+    private readonly (FeedProducts Product, Func<BookSnapshot, MarketDataEvent> Project)[] _snapshot;
 
     private readonly FeedProducts _products;
-    private readonly int _depth;
     private readonly int _snapshotEvery;
 
     private long _snapshotTicks;
 
-    public InstrumentFeed(string symbol, FeedProducts products = FeedProducts.All,
-        int depth = OrderBook.DefaultPublishedDepth, int snapshotEvery = 1)
+    public InstrumentFeed(string symbol, FeedProducts products = FeedProducts.All, int snapshotEvery = 1)
     {
         if (products == FeedProducts.None)
             throw new ArgumentException(
                 "a feed carrying no products publishes nothing, which is a channel that should " +
                 "not have been created rather than one that is quiet", nameof(products));
-
-        if (depth <= 0)
-            throw new ArgumentOutOfRangeException(nameof(depth), depth,
-                "a feed carrying no levels is not a by-price feed");
 
         if (snapshotEvery <= 0)
             throw new ArgumentOutOfRangeException(nameof(snapshotEvery), snapshotEvery,
@@ -39,18 +27,29 @@ public sealed class InstrumentFeed
 
         Symbol = symbol ?? throw new ArgumentNullException(nameof(symbol));
         _products = products;
-        _depth = depth;
         _snapshotEvery = snapshotEvery;
 
-        _levels = new MarketByPriceIncrementalProducer(depth);
-        _levelsSnapshot = new MarketByPriceSnapshotProducer(depth);
+        _incremental = new (FeedProducts Product, Func<MarketEvent, MarketDataEvent?> Project)[]
+        {
+            (FeedProducts.Status, StatusOf),
+            (FeedProducts.Trades, TradeOf),
+            (FeedProducts.ByPrice, LevelsOf),
+            (FeedProducts.ByOrder, OrdersOf),
+            (FeedProducts.Indicative, IndicativeOf)
+        };
+
+        _snapshot = new (FeedProducts Product, Func<BookSnapshot, MarketDataEvent> Project)[]
+        {
+            (FeedProducts.Status, StatusImage),
+            (FeedProducts.ByPrice, LevelsImage),
+            (FeedProducts.ByOrder, OrdersImage),
+            (FeedProducts.Indicative, IndicativeImage)
+        };
     }
 
     public string Symbol { get; }
 
     public FeedProducts Products => _products;
-
-    public int Depth => _depth;
 
     public int SnapshotEvery => _snapshotEvery;
 
@@ -64,22 +63,25 @@ public sealed class InstrumentFeed
 
         List<MarketDataEvent>? output = null;
 
-        if (Carries(FeedProducts.Status)) Collect(ref output, StatusOf(events));
-        if (Carries(FeedProducts.Trades)) Collect(ref output, _trades.Process(events));
-        if (Carries(FeedProducts.ByPrice)) Collect(ref output, _levels.Process(events));
-        if (Carries(FeedProducts.ByOrder)) Collect(ref output, _orderByOrder.Process(events));
-        if (Carries(FeedProducts.Indicative)) Collect(ref output, _indicative.Process(events));
+        foreach (var (product, project) in _incremental)
+        {
+            if (!Carries(product))
+                continue;
+
+            foreach (var ev in events)
+            {
+                if (project(ev) is { } data)
+                    (output ??= new List<MarketDataEvent>()).Add(data);
+            }
+        }
 
         return output ?? (IReadOnlyList<MarketDataEvent>) Array.Empty<MarketDataEvent>();
     }
 
     public IReadOnlyList<MarketDataEvent> Snapshot(IReadOnlyList<OrderBookEvent> bookEvents)
     {
-        var events = PublicHalf(bookEvents);
-        if (events.Count == 0)
-            return Array.Empty<MarketDataEvent>();
-
-        if (!IsSnapshotTick(events))
+        var images = Images(bookEvents);
+        if (images.Count == 0)
             return Array.Empty<MarketDataEvent>();
 
         if (++_snapshotTicks % _snapshotEvery != 0)
@@ -87,37 +89,83 @@ public sealed class InstrumentFeed
 
         List<MarketDataEvent>? output = null;
 
-        if (Carries(FeedProducts.Status)) Collect(ref output, _statusSnapshot.Process(events));
-        if (Carries(FeedProducts.ByPrice)) Collect(ref output, _levelsSnapshot.Process(events));
-        if (Carries(FeedProducts.ByOrder)) Collect(ref output, _orderByOrderSnapshot.Process(events));
-        if (Carries(FeedProducts.Indicative)) Collect(ref output, _indicativeSnapshot.Process(events));
+        foreach (var (product, project) in _snapshot)
+        {
+            if (!Carries(product))
+                continue;
+
+            foreach (var image in images)
+                (output ??= new List<MarketDataEvent>()).Add(project(image));
+        }
 
         return output ?? (IReadOnlyList<MarketDataEvent>) Array.Empty<MarketDataEvent>();
     }
 
-    private static IList<InstrumentStatusDataEvent> StatusOf(IReadOnlyList<MarketEvent> events)
+    private static MarketDataEvent? StatusOf(MarketEvent ev) => ev switch
     {
-        List<InstrumentStatusDataEvent>? output = null;
+        StatusChanged status => new InstrumentStatusDataEvent(status.Symbol, status.Time,
+            status.Status, status.Reason, status.ResumesAt, status.LimitState),
 
-        foreach (var ev in events)
+        LimitStateChanged limit => new InstrumentStatusDataEvent(limit.Symbol, limit.Time,
+            limit.Status, limit.Reason, limit.ResumesAt, limit.Side),
+
+        _ => null
+    };
+
+    private static MarketDataEvent? TradeOf(MarketEvent ev) =>
+        ev is TradePrinted trade
+            ? new TradeDataEvent(trade.Symbol, trade.Time, trade.TradeId, trade.Price, trade.Quantity)
+            : null;
+
+    private static MarketDataEvent? LevelsOf(MarketEvent ev)
+    {
+        if (ev is not LevelsChanged levels)
+            return null;
+
+        var changes = new List<MarketByPriceDelta>(levels.Changes.Count);
+        foreach (var change in levels.Changes)
         {
-            InstrumentStatusDataEvent? data = ev switch
-            {
-                StatusChanged status => new InstrumentStatusDataEvent(status.Symbol, status.Time,
-                    status.Status, status.Reason, status.ResumesAt, status.LimitState),
-
-                LimitStateChanged limit => new InstrumentStatusDataEvent(limit.Symbol, limit.Time,
-                    limit.Status, limit.Reason, limit.ResumesAt, limit.Side),
-
-                _ => null
-            };
-
-            if (data != null)
-                (output ??= new List<InstrumentStatusDataEvent>()).Add(data);
+            changes.Add(new MarketByPriceDelta(change.Side, change.LevelIndex, change.Price,
+                change.Quantity, change.Count, change.Action));
         }
 
-        return output ?? (IList<InstrumentStatusDataEvent>) Array.Empty<InstrumentStatusDataEvent>();
+        return new MarketByPriceDeltaEvent(levels.Symbol, levels.Time, levels.Depth, changes);
     }
+
+    private static MarketDataEvent? OrdersOf(MarketEvent ev)
+    {
+        if (ev is not OrdersChanged orders)
+            return null;
+
+        var changes = new List<MarketByOrderDelta>(orders.Changes.Count);
+        foreach (var change in orders.Changes)
+        {
+            changes.Add(new MarketByOrderDelta(change.Side, change.ExchangeOrderId, change.Price,
+                change.Quantity, change.Action, change.TradeId));
+        }
+
+        return new MarketByOrderDeltaEvent(orders.Symbol, orders.Time, changes);
+    }
+
+    private static MarketDataEvent? IndicativeOf(MarketEvent ev) =>
+        ev is IndicativePriceChanged changed
+            ? new IndicativePriceDataEvent(changed.Symbol, changed.Time, changed.Price, changed.Quantity)
+            : null;
+
+    private static MarketDataEvent StatusImage(BookSnapshot snapshot) =>
+        new InstrumentStatusDataEvent(snapshot.Symbol, snapshot.Time, snapshot.Status,
+            snapshot.StatusReason, snapshot.ResumesAt, snapshot.LimitState);
+
+    private static MarketDataEvent LevelsImage(BookSnapshot snapshot) =>
+        new LevelsDataEvent(snapshot.Symbol, snapshot.Time, OrderBook.PublishedDepth,
+            snapshot.Bids, snapshot.Offers);
+
+    private static MarketDataEvent OrdersImage(BookSnapshot snapshot) =>
+        new OrdersDataEvent(snapshot.Symbol, snapshot.Time, snapshot.Orders);
+
+    private static MarketDataEvent IndicativeImage(BookSnapshot snapshot) =>
+        new IndicativePriceDataEvent(snapshot.Symbol, snapshot.Time, snapshot.IndicativePrice,
+            snapshot.IndicativeQuantity);
 
     private static IReadOnlyList<MarketEvent> PublicHalf(IReadOnlyList<OrderBookEvent> bookEvents)
     {
@@ -132,25 +180,16 @@ public sealed class InstrumentFeed
         return publicEvents ?? (IReadOnlyList<MarketEvent>) Array.Empty<MarketEvent>();
     }
 
-    private static bool IsSnapshotTick(IReadOnlyList<MarketEvent> events)
+    private static IReadOnlyList<BookSnapshot> Images(IReadOnlyList<OrderBookEvent> bookEvents)
     {
-        for (var i = 0; i < events.Count; i++)
+        List<BookSnapshot>? images = null;
+
+        for (var i = 0; i < bookEvents.Count; i++)
         {
-            if (events[i] is BookSnapshot)
-                return true;
+            if (bookEvents[i] is BookSnapshot image)
+                (images ??= new List<BookSnapshot>(1)).Add(image);
         }
 
-        return false;
-    }
-
-    private static void Collect<T>(ref List<MarketDataEvent>? output, IList<T> produced)
-        where T : MarketDataEvent
-    {
-        if (produced.Count == 0)
-            return;
-
-        output ??= new List<MarketDataEvent>();
-        foreach (var data in produced)
-            output.Add(data);
+        return images ?? (IReadOnlyList<BookSnapshot>) Array.Empty<BookSnapshot>();
     }
 }

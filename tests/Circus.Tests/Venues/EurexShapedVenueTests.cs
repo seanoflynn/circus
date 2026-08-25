@@ -1,3 +1,4 @@
+using Circus.Events;
 using Circus.MarketData;
 using Circus.Sequencing;
 using NUnit.Framework;
@@ -35,8 +36,7 @@ public class EurexShapedVenueTests
             group.AddChannel(byOrder, FeedProducts.ByOrder | FeedProducts.Status,
                 snapshotEvery: ByOrderSnapshotEvery);
             group.AddChannel(byPrice,
-                FeedProducts.ByPrice | FeedProducts.Trades | FeedProducts.Status | FeedProducts.Indicative,
-                depth: VenueSession.Depth);
+                FeedProducts.ByPrice | FeedProducts.Trades | FeedProducts.Status | FeedProducts.Indicative);
         }
 
         // A service per product, so each channel carries one instrument and leaves the other out.
@@ -102,7 +102,7 @@ public class EurexShapedVenueTests
 
         Assert.AreEqual(2, fills.Count, "one per side of the trade");
         Assert.AreEqual(new[] {Side.Buy, Side.Sell}, fills.Select(f => f.Side).OrderBy(s => s).ToArray());
-        Assert.IsTrue(fills.All(f => f.Action == MarketByOrderDeltaAction.Filled));
+        Assert.IsTrue(fills.All(f => f.Action == OrderChangeAction.Filled));
         Assert.AreEqual(print.Price, fills[0].Price);
         Assert.AreEqual(print.Quantity, fills[0].Quantity);
 

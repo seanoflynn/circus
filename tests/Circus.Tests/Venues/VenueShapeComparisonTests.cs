@@ -1,3 +1,4 @@
+using Circus.Events;
 using Circus.MarketData;
 using Circus.Sequencing;
 using Circus.Tests.Helpers;
@@ -30,7 +31,7 @@ public class VenueShapeComparisonTests
     {
         var group = new InstrumentGroup(VenueSession.Day, snapshotInterval);
 
-        group.AddChannel(CmeChannel, FeedProducts.All, depth: VenueSession.Depth);
+        group.AddChannel(CmeChannel, FeedProducts.All);
         group.Add(VenueSession.Gold, VenueSession.Schedule);
         group.Add(VenueSession.Silver, VenueSession.Schedule);
 
@@ -44,8 +45,7 @@ public class VenueShapeComparisonTests
 
         group.AddChannel(EurexByOrder, FeedProducts.ByOrder | FeedProducts.Status);
         group.AddChannel(EurexByPrice,
-            FeedProducts.ByPrice | FeedProducts.Trades | FeedProducts.Status | FeedProducts.Indicative,
-            depth: VenueSession.Depth);
+            FeedProducts.ByPrice | FeedProducts.Trades | FeedProducts.Status | FeedProducts.Indicative);
         group.Add(VenueSession.Gold, VenueSession.Schedule, new[] {EurexByOrder, EurexByPrice});
         group.Add(VenueSession.Silver, VenueSession.Schedule, new[] {EurexByOrder, EurexByPrice});
 
@@ -165,7 +165,7 @@ public class VenueShapeComparisonTests
             Assert.IsTrue(sidesOfTrade.TryGetValue((print.Symbol, print.TradeId), out var sides),
                 $"{print.Symbol} trade {print.TradeId} printed with no order events naming it");
             Assert.AreEqual(new[] {Side.Buy, Side.Sell}, sides!.Select(s => s.Side).OrderBy(s => s).ToArray());
-            Assert.IsTrue(sides.All(s => s.Action == MarketByOrderDeltaAction.Filled));
+            Assert.IsTrue(sides.All(s => s.Action == OrderChangeAction.Filled));
             Assert.IsTrue(sides.All(s => s.Price == print.Price && s.Quantity == print.Quantity),
                 "the two sides of a trade are the trade, at its price and its size");
         }

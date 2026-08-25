@@ -33,16 +33,9 @@ public class OrderBook : IOrderBook
 
     private readonly List<InternalOrder> _pendingImmediateOrCancelStops = new();
 
-    public const int DefaultPublishedDepth = 10;
+    public const int PublishedDepth = 10;
 
-    private int[] _publishedDepths;
-
-    private int _maxPublishedDepth;
-
-    private readonly List<(long Tick, int Quantity, int Count)> _bidsBefore;
-    private readonly List<(long Tick, int Quantity, int Count)> _offersBefore;
-    private readonly List<(long Tick, int Quantity, int Count)> _bidsAfter;
-    private readonly List<(long Tick, int Quantity, int Count)> _offersAfter;
+    private readonly DisplayedBookReport _report;
 
     private readonly IReadOnlyDictionary<OrderBookStatus, TradingPhase> _phases;
 
@@ -98,13 +91,8 @@ public class OrderBook : IOrderBook
 
     private const int MaxClientOrderIdLength = 20;
 
-    public OrderBook(Instrument instrument, int publishedDepth = DefaultPublishedDepth)
-        : this(instrument, Adapt(instrument.PriceRestrictions), new[] {publishedDepth})
-    {
-    }
-
-    public OrderBook(Instrument instrument, IReadOnlyList<int> publishedDepths)
-        : this(instrument, Adapt(instrument.PriceRestrictions), publishedDepths)
+    public OrderBook(Instrument instrument)
+        : this(instrument, Adapt(instrument.PriceRestrictions))
     {
     }
 
@@ -125,53 +113,13 @@ public class OrderBook : IOrderBook
                 _ => throw new ArgumentException($"Unknown price restriction {config.GetType().Name}")
             }).ToList();
 
-    internal OrderBook(Instrument instrument, IReadOnlyList<IPriceRestriction> priceRestrictions,
-        int publishedDepth = DefaultPublishedDepth)
-        : this(instrument, priceRestrictions, new[] {publishedDepth})
+    internal OrderBook(Instrument instrument, IReadOnlyList<IPriceRestriction> priceRestrictions)
     {
-    }
-
-    internal OrderBook(Instrument instrument, IReadOnlyList<IPriceRestriction> priceRestrictions,
-        IReadOnlyList<int> publishedDepths)
-    {
-        ArgumentNullException.ThrowIfNull(publishedDepths);
-
-        if (publishedDepths.Count == 0)
-            throw new ArgumentException(
-                "a book reporting at no depth publishes no by-price data at all", nameof(publishedDepths));
-
-        foreach (var depth in publishedDepths)
-        {
-            if (depth <= 0)
-                throw new ArgumentOutOfRangeException(nameof(publishedDepths), depth,
-                    "a book that reports no levels publishes no depth at all");
-        }
-
         _instrument = instrument;
         _priceRestrictions = priceRestrictions;
         _phases = BuildPhases(instrument.MatchingAlgorithm);
-        _publishedDepths = publishedDepths.Distinct().OrderBy(d => d).ToArray();
-        _maxPublishedDepth = _publishedDepths[^1];
 
-        _bidsBefore = new List<(long, int, int)>(_maxPublishedDepth);
-        _offersBefore = new List<(long, int, int)>(_maxPublishedDepth);
-        _bidsAfter = new List<(long, int, int)>(_maxPublishedDepth);
-        _offersAfter = new List<(long, int, int)>(_maxPublishedDepth);
-    }
-
-    public IReadOnlyList<int> PublishedDepths => _publishedDepths;
-
-    internal void AlsoReport(int depth)
-    {
-        if (depth <= 0)
-            throw new ArgumentOutOfRangeException(nameof(depth), depth,
-                "a book that reports no levels publishes no depth at all");
-
-        if (Array.IndexOf(_publishedDepths, depth) >= 0)
-            return;
-
-        _publishedDepths = _publishedDepths.Append(depth).OrderBy(d => d).ToArray();
-        _maxPublishedDepth = _publishedDepths[^1];
+        _report = new DisplayedBookReport(instrument.Symbol, instrument.TickSize);
     }
 
     public string Symbol => _instrument.Symbol;
@@ -194,8 +142,7 @@ public class OrderBook : IOrderBook
 
         _lastActionTime = time;
 
-        CaptureWindow(_bidsBefore, Side.Buy);
-        CaptureWindow(_offersBefore, Side.Sell);
+        _report.CaptureBefore(_matcher.Working[Side.Buy], _matcher.Working[Side.Sell]);
 
         var events = ResumeIfDue(time);
         events.AddRange(Handle(action, time));
@@ -204,9 +151,7 @@ public class OrderBook : IOrderBook
         if (quoteChange != null)
             events.Add(quoteChange);
 
-        AppendLevelChanges(events, time);
-        AppendOrderChanges(events, time);
-        AppendTradePrints(events, time);
+        _report.Append(events, time, _matcher.Working[Side.Buy], _matcher.Working[Side.Sell]);
 
         return events;
     }
@@ -383,7 +328,7 @@ public class OrderBook : IOrderBook
 
     private BookSnapshot Snapshot(DateTime time) =>
         new(_instrument.Symbol, time,
-            GetLevels(Side.Buy, _maxPublishedDepth), GetLevels(Side.Sell, _maxPublishedDepth),
+            GetLevels(Side.Buy, PublishedDepth), GetLevels(Side.Sell, PublishedDepth),
             GetRestingOrders(),
             _status, _statusReason, _resumeAt, _limitState,
             _indicativeQuote is { } quote ? ToDecimal(quote.PriceTicks) : null,
@@ -404,152 +349,6 @@ public class OrderBook : IOrderBook
         }
 
         return orders;
-    }
-
-    private void AppendOrderChanges(List<OrderBookEvent> events, DateTime time)
-    {
-        List<OrderChange>? changes = null;
-
-        // Snapshot the count first: this appends to the same list it is reading.
-        var count = events.Count;
-        for (var i = 0; i < count; i++)
-        {
-            switch (events[i])
-            {
-                case FillOrderConfirmed fill:
-                    Add(ref changes, new OrderChange(fill.Order.Side, fill.Order.ExchangeOrderId,
-                        fill.Price, fill.Quantity, OrderChangeAction.Filled, fill.TradeId));
-                    break;
-
-                case UpdateOrderConfirmed {PreviousPrice: { } movedFrom} moved:
-                    if (moved.PreviousExchangeOrderId != moved.Order.ExchangeOrderId)
-                    {
-                        Add(ref changes, new OrderChange(moved.Order.Side, moved.PreviousExchangeOrderId,
-                            movedFrom, moved.PreviousQuantity, OrderChangeAction.Removed));
-                        Add(ref changes, new OrderChange(moved.Order.Side, moved.Order.ExchangeOrderId,
-                            moved.Order.Price!.Value, moved.Order.DisplayedQuantity, OrderChangeAction.Added));
-                    }
-                    else
-                    {
-                        Add(ref changes, new OrderChange(moved.Order.Side, moved.Order.ExchangeOrderId,
-                            moved.Order.Price!.Value, moved.Order.DisplayedQuantity, OrderChangeAction.Modified));
-                    }
-
-                    break;
-
-                case CreateOrderConfirmed {Order.Status: not OrderStatus.Hidden} create:
-                    Add(ref changes, new OrderChange(create.Order.Side, create.Order.ExchangeOrderId,
-                        create.Order.Price!.Value, create.Order.DisplayedQuantity, OrderChangeAction.Added));
-                    break;
-
-                case UpdateOrderConfirmed {PreviousPrice: null, Order.Status: OrderStatus.Hidden}:
-                    break;
-
-                case UpdateOrderConfirmed {PreviousPrice: null} update:
-                    Add(ref changes, new OrderChange(update.Order.Side, update.Order.ExchangeOrderId,
-                        update.Order.Price!.Value, update.Order.DisplayedQuantity, OrderChangeAction.Added));
-                    break;
-
-                case CancelOrderConfirmed {PreviousPrice: { } cancelledAt} cancel:
-                    Add(ref changes, new OrderChange(cancel.Order.Side, cancel.Order.ExchangeOrderId,
-                        cancelledAt, cancel.PreviousQuantity, OrderChangeAction.Removed));
-                    break;
-
-                case ExpireOrderConfirmed {PreviousPrice: { } expiredAt} expire:
-                    Add(ref changes, new OrderChange(expire.Order.Side, expire.Order.ExchangeOrderId,
-                        expiredAt, expire.PreviousQuantity, OrderChangeAction.Removed));
-                    break;
-            }
-        }
-
-        if (changes != null)
-            events.Add(new OrdersChanged(_instrument.Symbol, time, changes));
-    }
-
-    private static void Add(ref List<OrderChange>? changes, OrderChange change) =>
-        (changes ??= new List<OrderChange>()).Add(change);
-
-    private void AppendTradePrints(List<OrderBookEvent> events, DateTime time)
-    {
-        List<OrderBookEvent>? prints = null;
-        string? lastTradeId = null;
-
-        var count = events.Count;
-        for (var i = 0; i < count; i++)
-        {
-            if (events[i] is not FillOrderConfirmed fill || fill.TradeId == lastTradeId)
-                continue;
-
-            lastTradeId = fill.TradeId;
-            (prints ??= new List<OrderBookEvent>()).Add(
-                new TradePrinted(_instrument.Symbol, time, fill.TradeId, fill.Price, fill.Quantity));
-        }
-
-        if (prints != null)
-            events.AddRange(prints);
-    }
-
-    private void CaptureWindow(List<(long Tick, int Quantity, int Count)> into, Side side) =>
-        _matcher.Working[side].CopyLevelsFromBest(_maxPublishedDepth, into);
-
-    private void AppendLevelChanges(List<OrderBookEvent> events, DateTime time)
-    {
-        CaptureWindow(_bidsAfter, Side.Buy);
-        CaptureWindow(_offersAfter, Side.Sell);
-
-        foreach (var depth in _publishedDepths)
-        {
-            List<LevelChange>? changes = null;
-            CollectLevelChanges(ref changes, Side.Buy, _bidsBefore, _bidsAfter, depth);
-            CollectLevelChanges(ref changes, Side.Sell, _offersBefore, _offersAfter, depth);
-
-            if (changes != null)
-                events.Add(new LevelsChanged(_instrument.Symbol, time, depth, changes));
-        }
-    }
-
-    private void CollectLevelChanges(ref List<LevelChange>? changes, Side side,
-        List<(long Tick, int Quantity, int Count)> before, List<(long Tick, int Quantity, int Count)> after,
-        int depth)
-    {
-        var beforeCount = Math.Min(before.Count, depth);
-        var afterCount = Math.Min(after.Count, depth);
-
-        for (var i = 0; i < afterCount; i++)
-        {
-            var (tick, quantity, count) = after[i];
-            var previous = IndexOfTick(before, beforeCount, tick);
-
-            if (previous < 0)
-            {
-                (changes ??= new List<LevelChange>()).Add(new LevelChange(side, i + 1, ToDecimal(tick),
-                    quantity, count, LevelChangeAction.Added));
-            }
-            else if (before[previous].Quantity != quantity || before[previous].Count != count)
-            {
-                (changes ??= new List<LevelChange>()).Add(new LevelChange(side, i + 1, ToDecimal(tick),
-                    quantity, count, LevelChangeAction.Modified));
-            }
-        }
-
-        for (var i = 0; i < beforeCount; i++)
-        {
-            var tick = before[i].Tick;
-            if (IndexOfTick(after, afterCount, tick) < 0)
-                (changes ??= new List<LevelChange>()).Add(new LevelChange(side, i + 1, ToDecimal(tick),
-                    0, 0, LevelChangeAction.Removed));
-        }
-    }
-
-    private static int IndexOfTick(List<(long Tick, int Quantity, int Count)> levels, int count, long tick)
-    {
-        for (var i = 0; i < count; i++)
-        {
-            if (levels[i].Tick == tick)
-                return i;
-        }
-
-        return -1;
     }
 
     internal IReadOnlyList<Level> GetLevels(Side side, int maxLevels)
@@ -574,6 +373,7 @@ public class OrderBook : IOrderBook
         if (!opposing.TryGetBest(out var bestTick, out _))
             return false;
 
+        // set price as best offer + protection ticks for buy orders, best bid - protection ticks for sell orders
         // TODO: option to use best bid + protection tickets for buy orders, etc (eurex)
         priceTicks = bestTick + ((side == Side.Buy ? 1 : -1) * protectionTicks);
         return true;
@@ -1108,10 +908,10 @@ public class OrderBook : IOrderBook
 
         if (arriving.StartsSession)
         {
-            // Forward-only. Restarting the counter would re-issue ids that orders surviving the previous
-            // session (GTC, or GTD not yet due) still hold, and _orders is keyed on exactly that.
             var day = TradingDayOn(time);
             var seed = ((day.Year * 10000) + (day.Month * 100) + day.Day) * 10000000000L;
+            // Forward-only. Restarting the counter would re-issue ids that orders surviving the previous
+            // session (GTC, or GTD not yet due) still hold, and _orders is keyed on exactly that.
             _nextSequenceNumber = Math.Max(_nextSequenceNumber, seed);
 
             _nextTradeId = Math.Max(_nextTradeId, seed);

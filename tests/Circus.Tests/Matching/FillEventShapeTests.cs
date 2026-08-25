@@ -86,17 +86,17 @@ public class FillEventShapeTests
     }
 
     [Test]
-    public void TradeDataProducer_PublishesOnePrintPerTrade_NotOnePerFill()
+    public void TheTradeFeed_PublishesOnePrintPerTrade_NotOnePerFill()
     {
         var book = OpenBook();
-        var producer = new TradeDataProducer();
+        var feed = ProductFeed.Carrying(FeedProducts.Trades);
 
         book.CreateLimitOrder("Resting", "R1", new OrderValidity.Day(), Side.Buy, 5, 100,
             time: Open.AddSeconds(1));
         var events = book.CreateLimitOrder("Aggressor", "A1", new OrderValidity.Day(), Side.Sell, 5, 100,
             time: Open.AddSeconds(2));
 
-        var prints = producer.Process(events);
+        var prints = feed.Publish<TradeDataEvent>(events);
 
         Assert.AreEqual(2, events.OfType<FillOrderConfirmed>().Count(), "two fills");
         Assert.AreEqual(1, prints.Count, "one public print");

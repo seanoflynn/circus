@@ -8,14 +8,11 @@ public sealed class InstrumentGroup
 {
     private readonly Sequencer _sequencer;
 
-    private sealed record ChannelConfig(MarketDataChannel Channel, FeedProducts Products, int Depth,
-        int SnapshotEvery);
+    private sealed record ChannelConfig(MarketDataChannel Channel, FeedProducts Products, int SnapshotEvery);
 
     private readonly Dictionary<string, ChannelConfig> _channels = new();
     private readonly List<string> _channelOrder = new();
     private readonly List<string> _symbols = new();
-
-    private readonly Dictionary<string, OrderBook> _ownBooks = new();
 
     public InstrumentGroup(DateTime start, TimeSpan? snapshotInterval = null)
     {
@@ -44,17 +41,12 @@ public sealed class InstrumentGroup
             ? config.Channel
             : throw new ArgumentException($"no channel named {name} in this group", nameof(name));
 
-    public void AddChannel(string name, FeedProducts products = FeedProducts.All,
-        int depth = OrderBook.DefaultPublishedDepth, int snapshotEvery = 1)
+    public void AddChannel(string name, FeedProducts products = FeedProducts.All, int snapshotEvery = 1)
     {
         ArgumentNullException.ThrowIfNull(name);
 
         if (_channels.ContainsKey(name))
             throw new ArgumentException($"a channel named {name} is already in this group", nameof(name));
-
-        if (depth <= 0)
-            throw new ArgumentOutOfRangeException(nameof(depth), depth,
-                "a channel carrying no levels is not a by-price channel");
 
         if (snapshotEvery <= 0)
             throw new ArgumentOutOfRangeException(nameof(snapshotEvery), snapshotEvery,
@@ -62,17 +54,12 @@ public sealed class InstrumentGroup
                 "snapshot interval unset instead, which says so");
 
         var channel = new MarketDataChannel(name);
-        var config = new ChannelConfig(channel, products, depth, snapshotEvery);
+        var config = new ChannelConfig(channel, products, snapshotEvery);
         _channels[name] = config;
         _channelOrder.Add(name);
 
         foreach (var symbol in _symbols)
-        {
-            if (Carries(config, FeedProducts.ByPrice) && _ownBooks.TryGetValue(symbol, out var book))
-                book.AlsoReport(depth);
-
             channel.Add(FeedFor(symbol, config));
-        }
     }
 
     public void Add(Instrument instrument, MarketSchedule schedule,
@@ -84,9 +71,7 @@ public sealed class InstrumentGroup
         RequireChannelsExist(channels);
         EnsureSomeChannel(channels);
 
-        var book = new OrderBook(instrument, DepthsFor(channels));
-        _sequencer.Add(book, schedule);
-        _ownBooks[instrument.Symbol] = book;
+        _sequencer.Add(new OrderBook(instrument), schedule);
         Publish(instrument.Symbol, channels);
     }
 
@@ -101,28 +86,8 @@ public sealed class InstrumentGroup
         Publish(book.Symbol, channels);
     }
 
-    private int[] DepthsFor(IReadOnlyList<string>? channels)
-    {
-        var depths = (channels ?? _channelOrder)
-            .Select(name => _channels[name])
-            .Where(config => Carries(config, FeedProducts.ByPrice))
-            .Select(config => config.Depth)
-            .Distinct()
-            .ToArray();
-
-        return depths.Length > 0 ? depths : new[] {OrderBook.DefaultPublishedDepth};
-    }
-
-    internal IReadOnlyList<int> PublishedDepthsFor(string symbol) =>
-        _ownBooks.TryGetValue(symbol, out var book)
-            ? book.PublishedDepths
-            : Array.Empty<int>();
-
-    private static bool Carries(ChannelConfig config, FeedProducts product) =>
-        (config.Products & product) != 0;
-
     private static InstrumentFeed FeedFor(string symbol, ChannelConfig config) =>
-        new(symbol, config.Products, config.Depth, config.SnapshotEvery);
+        new(symbol, config.Products, config.SnapshotEvery);
 
     private void EnsureSomeChannel(IReadOnlyList<string>? channels)
     {

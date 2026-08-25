@@ -6,10 +6,10 @@ using NUnit.Framework;
 
 namespace Circus.Tests.MarketData;
 
-// InstrumentFeed is the bundle of producers a venue publishes for one instrument. The producers
-// themselves are tested individually; what is worth holding here is that the bundle runs all of
-// them, that everything it emits says which instrument it is about, and that its order within a
-// call is fixed rather than incidental.
+// InstrumentFeed is every product a venue publishes about one instrument. The products themselves
+// are tested individually; what is worth holding here is that the feed runs all of them, that
+// everything it emits says which instrument it is about, and that its order within a call is fixed
+// rather than incidental.
 [TestFixture]
 public class InstrumentFeedTests
 {
@@ -17,7 +17,7 @@ public class InstrumentFeedTests
     private static readonly DateTime Now1 = new(2000, 1, 1, 12, 0, 0);
 
     [Test]
-    public void Process_ATrade_ProducesFromEveryProducerThatHasSomethingToSay()
+    public void Process_ATrade_PublishesFromEveryProductThatHasSomethingToSay()
     {
         // arrange
         var (feed, book) = Feed();
@@ -52,7 +52,7 @@ public class InstrumentFeedTests
         var (feed, book) = Feed();
         var all = new List<MarketDataEvent>();
 
-        // act - a pre-open auction, so the indicative producer contributes too
+        // act - a pre-open auction, so the indicative product contributes too
         all.AddRange(feed.Process(book.UpdateStatus(OrderBookStatus.PreOpen)));
         all.AddRange(feed.Process(
             book.CreateLimitOrder("Company1", "Order1", new OrderValidity.Day(), Side.Buy, 3, 100)));
@@ -68,7 +68,7 @@ public class InstrumentFeedTests
     }
 
     [Test]
-    public void Process_OrdersItsOutputByProducerRatherThanIncidentally()
+    public void Process_OrdersItsOutputByProductRatherThanIncidentally()
     {
         // arrange
         var (feed, book) = Feed();

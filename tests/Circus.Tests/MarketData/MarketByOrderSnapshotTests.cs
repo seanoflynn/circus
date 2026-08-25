@@ -1,4 +1,5 @@
 using Circus.Actions;
+using Circus.Events;
 using Circus.MarketData;
 using Circus.Tests.Helpers;
 using NUnit.Framework;
@@ -23,8 +24,8 @@ public class MarketByOrderSnapshotTests
     public void SetUp() => _book = new OrderBook(Gold);
 
     private OrdersDataEvent Snapshot(DateTime time) =>
-        new MarketByOrderSnapshotProducer()
-            .Process(_book.Process(new PublishSnapshot {Symbol = Gold.Symbol, Time = time}))
+        ProductFeed.Carrying(FeedProducts.ByOrder)
+            .PublishImage<OrdersDataEvent>(_book.Process(new PublishSnapshot {Symbol = Gold.Symbol, Time = time}))
             .Single();
 
     [Test]
@@ -100,15 +101,15 @@ public class MarketByOrderSnapshotTests
     [Test]
     public void AFill_CarriesTheTradeIdThatPairsItsTwoSides()
     {
-        var producer = new MarketByOrderIncrementalProducer();
+        var feed = ProductFeed.Carrying(FeedProducts.ByOrder);
         _book.UpdateStatus(OrderBookStatus.Open, time: Now1);
         _book.CreateLimitOrder("C1", "O1", new OrderValidity.Day(), Side.Buy, 3, 100, time: Now2);
 
-        var changes = producer.Process(
+        var changes = feed.Publish<MarketByOrderDeltaEvent>(
                 _book.CreateLimitOrder("C2", "O2", new OrderValidity.Day(), Side.Sell, 3, 100, time: Now3))
             .Single().Changes;
 
-        var fills = changes.Where(c => c.Action == MarketByOrderDeltaAction.Filled).ToList();
+        var fills = changes.Where(c => c.Action == OrderChangeAction.Filled).ToList();
         Assert.AreEqual(2, fills.Count, "one trade, one entry per side");
         Assert.IsNotNull(fills[0].TradeId);
         Assert.AreEqual(fills[0].TradeId, fills[1].TradeId, "the two sides of one trade share an id");
@@ -118,16 +119,16 @@ public class MarketByOrderSnapshotTests
     [Test]
     public void TwoTradesInOneAction_AreToldApartByTheirIds()
     {
-        var producer = new MarketByOrderIncrementalProducer();
+        var feed = ProductFeed.Carrying(FeedProducts.ByOrder);
         _book.UpdateStatus(OrderBookStatus.Open, time: Now1);
         _book.CreateLimitOrder("C1", "O1", new OrderValidity.Day(), Side.Sell, 2, 100, time: Now2);
         _book.CreateLimitOrder("C2", "O2", new OrderValidity.Day(), Side.Sell, 3, 110, time: Now2);
 
-        var changes = producer.Process(
+        var changes = feed.Publish<MarketByOrderDeltaEvent>(
                 _book.CreateLimitOrder("C3", "O3", new OrderValidity.Day(), Side.Buy, 5, 110, time: Now3))
             .Single().Changes;
 
-        var tradeIds = changes.Where(c => c.Action == MarketByOrderDeltaAction.Filled)
+        var tradeIds = changes.Where(c => c.Action == OrderChangeAction.Filled)
             .Select(c => c.TradeId).ToList();
 
         Assert.AreEqual(4, tradeIds.Count, "two trades, two sides each");
@@ -138,10 +139,10 @@ public class MarketByOrderSnapshotTests
     [Test]
     public void EverythingButAFill_CarriesNoTradeId()
     {
-        var producer = new MarketByOrderIncrementalProducer();
+        var feed = ProductFeed.Carrying(FeedProducts.ByOrder);
         _book.UpdateStatus(OrderBookStatus.Open, time: Now1);
 
-        var changes = producer.Process(
+        var changes = feed.Publish<MarketByOrderDeltaEvent>(
                 _book.CreateLimitOrder("C1", "O1", new OrderValidity.Day(), Side.Buy, 3, 100, time: Now2))
             .Single().Changes;
 

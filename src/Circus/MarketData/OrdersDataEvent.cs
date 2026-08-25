@@ -3,6 +3,8 @@ namespace Circus.MarketData;
 public record OrdersDataEvent(string Symbol, DateTime Time, IReadOnlyList<RestingOrder> Orders)
     : MarketDataEvent(Symbol, Time)
 {
+    // Spelled out for the reason MarketByPriceDeltaEvent spells them out: generated record
+    // equality would compare Orders by reference.
     public virtual bool Equals(OrdersDataEvent? other) =>
         other is not null
         && EqualityContract == other.EqualityContract

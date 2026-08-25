@@ -52,7 +52,7 @@ public class MarketDataChannelTests
         messages.AddRange(channel.Publish(gold.UpdateStatus(OrderBookStatus.Open)));
         messages.AddRange(channel.Publish(silver.UpdateStatus(OrderBookStatus.Open)));
 
-        // assert - filtered to the status messages, since a level producer republishes its
+        // assert - filtered to the status messages, since the by-price product republishes its
         // ladders on any non-empty batch and so contributes one of its own here too
         Assert.AreEqual(
             new[] {Gold.Symbol, Silver.Symbol},
@@ -88,7 +88,7 @@ public class MarketDataChannelTests
     public void Publish_EventsSpanningInstruments_ReachEachInstrumentsOwnFeed()
     {
         // arrange - nothing produces this today, since one dispatch is one book. It is what an
-        // action implying a fill in another book would look like, and each book's producers must
+        // action implying a fill in another book would look like, and each book's feed must
         // be handed their own book's events and only those.
         var channel = Channel(Gold, Silver);
 
@@ -103,7 +103,7 @@ public class MarketDataChannelTests
         var messages = channel.Publish(mixed);
 
         // assert - grouped by instrument in order of first appearance, and each feed saw only its
-        // own: gold's status producer tracked two changes, silver's one
+        // own: gold's status product carried two changes, silver's one
         var statuses = messages
             .Select(m => m.Data)
             .OfType<InstrumentStatusDataEvent>()

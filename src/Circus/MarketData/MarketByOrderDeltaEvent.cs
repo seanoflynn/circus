@@ -1,7 +1,9 @@
+using Circus.Events;
+
 namespace Circus.MarketData;
 
 public record MarketByOrderDelta(Side Side, string ExchangeOrderId, decimal Price, int Quantity,
-    MarketByOrderDeltaAction Action, string? TradeId = null);
+    OrderChangeAction Action, string? TradeId = null);
 
 public record MarketByOrderDeltaEvent(string Symbol, DateTime Time, IReadOnlyList<MarketByOrderDelta> Changes)
     : MarketDataEvent(Symbol, Time)

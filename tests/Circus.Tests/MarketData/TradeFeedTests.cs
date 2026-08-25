@@ -7,16 +7,16 @@ using NUnit.Framework;
 
 namespace Circus.Tests.MarketData;
 
-public class TradeDataProducerTests
+public class TradeFeedTests
 {
     [Test]
-    public void TradeDataProducer_Traded_FiresEvent()
+    public void Traded_PublishesAPrint()
     {
         // arrange
         var gold = new Instrument("GCZ6", 10, 10);
         var now = new DateTime(2000, 1, 1, 12, 0, 0);
         var clock = new ManualClock(now);
-        var producer = new TradeDataProducer();
+        var feed = ProductFeed.Carrying(FeedProducts.Trades);
 
         var book = new TimestampingOrderBook(gold, clock);
         book.UpdateStatus(OrderBookStatus.Open);
@@ -25,7 +25,7 @@ public class TradeDataProducerTests
             book.CreateLimitOrder("Company2", "Order2", new OrderValidity.Day(), Side.Sell, 3, 100);
 
         // act
-        var events = producer.Process(bookEvents);
+        var events = feed.Publish<TradeDataEvent>(bookEvents);
 
         // assert
         Assert.IsNotNull(events);
@@ -43,14 +43,14 @@ public class TradeDataProducerTests
     {
         var gold = new Instrument("GCZ6", 10, 10);
         var clock = new ManualClock(new DateTime(2000, 1, 1, 12, 0, 0));
-        var producer = new TradeDataProducer();
+        var feed = ProductFeed.Carrying(FeedProducts.Trades);
 
         var book = new TimestampingOrderBook(gold, clock);
         book.UpdateStatus(OrderBookStatus.Open);
         book.CreateLimitOrder("Company1", "Order1", new OrderValidity.Day(), Side.Sell, 2, 100);
         book.CreateLimitOrder("Company2", "Order2", new OrderValidity.Day(), Side.Sell, 3, 110);
 
-        var events = producer.Process(
+        var events = feed.Publish<TradeDataEvent>(
             book.CreateLimitOrder("Company3", "Order3", new OrderValidity.Day(), Side.Buy, 5, 110));
 
         Assert.AreEqual(2, events.Count, "two trades, two prints - not four fills");
@@ -60,7 +60,7 @@ public class TradeDataProducerTests
             "an id apiece - two prints sharing one would say they were the same trade");
     }
 
-    // The id is the book's, not the producer's. It is what the two fills of the trade carry, so a
+    // The id is the book's, not the feed's. It is what the two fills of the trade carry, so a
     // subscriber holding the by-order feed as well can join a print to the order events that made
     // it - and a participant can find its own fill inside a print it was part of.
     [Test]
@@ -76,7 +76,7 @@ public class TradeDataProducerTests
         var bookEvents =
             book.CreateLimitOrder("Company2", "Order2", new OrderValidity.Day(), Side.Sell, 3, 100);
 
-        var print = new TradeDataProducer().Process(bookEvents).Single();
+        var print = ProductFeed.Carrying(FeedProducts.Trades).Publish<TradeDataEvent>(bookEvents).Single();
         var fills = bookEvents.OfType<FillOrderConfirmed>().ToList();
 
         Assert.AreEqual(2, fills.Count, "one per side");
@@ -99,20 +99,20 @@ public class TradeDataProducerTests
         var bookEvents =
             book.CreateLimitOrder("Company2", "Order2", new OrderValidity.Day(), Side.Sell, 3, 100);
 
-        var print = new TradeDataProducer().Process(bookEvents).Single();
+        var print = ProductFeed.Carrying(FeedProducts.Trades).Publish<TradeDataEvent>(bookEvents).Single();
 
-        var filled = new MarketByOrderIncrementalProducer().Process(bookEvents)
+        var filled = ProductFeed.Carrying(FeedProducts.ByOrder).Publish<MarketByOrderDeltaEvent>(bookEvents)
             .SelectMany(message => message.Changes)
             .Where(change => change.TradeId == print.TradeId)
             .ToList();
 
         Assert.AreEqual(2, filled.Count, "the two sides of the print, found by its id alone");
-        Assert.IsTrue(filled.All(change => change.Action == MarketByOrderDeltaAction.Filled));
+        Assert.IsTrue(filled.All(change => change.Action == OrderChangeAction.Filled));
         Assert.AreEqual(new[] {Side.Buy, Side.Sell}, filled.Select(c => c.Side).OrderBy(s => s).ToArray());
     }
 
     // The property that lets this hold nothing: what a batch produces does not depend on the
-    // batches before it. A producer handed only the last dispatch says exactly what one that has
+    // batches before it. A feed handed only the last dispatch says exactly what one that has
     // seen the whole session says, so there is no state a subscriber could be missing and none
     // that can go stale.
     [Test]
@@ -122,21 +122,21 @@ public class TradeDataProducerTests
         var clock = new ManualClock(new DateTime(2000, 1, 1, 12, 0, 0));
 
         var book = new TimestampingOrderBook(gold, clock);
-        var throughout = new TradeDataProducer();
+        var throughout = ProductFeed.Carrying(FeedProducts.Trades);
 
-        throughout.Process(book.UpdateStatus(OrderBookStatus.Open));
-        throughout.Process(
+        throughout.Publish<TradeDataEvent>(book.UpdateStatus(OrderBookStatus.Open));
+        throughout.Publish<TradeDataEvent>(
             book.CreateLimitOrder("Company1", "Order1", new OrderValidity.Day(), Side.Buy, 3, 100));
-        throughout.Process(
+        throughout.Publish<TradeDataEvent>(
             book.CreateLimitOrder("Company2", "Order2", new OrderValidity.Day(), Side.Sell, 3, 100));
-        throughout.Process(
+        throughout.Publish<TradeDataEvent>(
             book.CreateLimitOrder("Company3", "Order3", new OrderValidity.Day(), Side.Buy, 4, 100));
 
         var lastDispatch =
             book.CreateLimitOrder("Company4", "Order4", new OrderValidity.Day(), Side.Sell, 4, 100);
 
-        var seenEverything = throughout.Process(lastDispatch);
-        var seenNothing = new TradeDataProducer().Process(lastDispatch);
+        var seenEverything = throughout.Publish<TradeDataEvent>(lastDispatch);
+        var seenNothing = ProductFeed.Carrying(FeedProducts.Trades).Publish<TradeDataEvent>(lastDispatch);
 
         Assert.AreEqual(seenEverything, seenNothing);
         Assert.AreEqual(1, seenNothing.Count, "and it is a print, so the comparison is not of two empties");

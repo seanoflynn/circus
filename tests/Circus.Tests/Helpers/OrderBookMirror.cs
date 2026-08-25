@@ -1,3 +1,4 @@
+using Circus.Events;
 using Circus.MarketData;
 
 namespace Circus.Tests.Helpers;
@@ -45,24 +46,24 @@ internal sealed class OrderBookMirror
         {
             switch (change.Action)
             {
-                case MarketByOrderDeltaAction.Added:
+                case OrderChangeAction.Added:
                     _orders.Add(new RestingOrder(change.Side, change.ExchangeOrderId, change.Price,
                         change.Quantity));
                     break;
 
-                case MarketByOrderDeltaAction.Modified:
+                case OrderChangeAction.Modified:
                     Replace(change.ExchangeOrderId,
                         order => order with {Price = change.Price, Quantity = change.Quantity});
                     break;
 
-                case MarketByOrderDeltaAction.Removed:
+                case OrderChangeAction.Removed:
                     Remove(change.ExchangeOrderId);
                     break;
 
                 // Quantity is what traded, so what is left is what it displayed less that. An
                 // order with nothing left has gone: the feed says nothing further about a fully
                 // filled order, since leaving is what being filled means.
-                case MarketByOrderDeltaAction.Filled:
+                case OrderChangeAction.Filled:
                     var index = IndexOf(change.ExchangeOrderId);
                     if (index < 0)
                         break;

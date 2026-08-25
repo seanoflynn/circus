@@ -119,6 +119,7 @@ public record OrderChange(Side Side, string ExchangeOrderId, decimal Price, int 
 public record OrdersChanged(string Symbol, DateTime Time, IReadOnlyList<OrderChange> Changes)
     : MarketEvent(Symbol, Time)
 {
+    // Spelled out for the reason LevelsChanged spells them out.
     public virtual bool Equals(OrdersChanged? other) =>
         other is not null
         && EqualityContract == other.EqualityContract

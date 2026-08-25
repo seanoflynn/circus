@@ -7,7 +7,7 @@ using NUnit.Framework;
 
 namespace Circus.Tests.MarketData;
 
-public class MarketByOrderIncrementalProducerTests
+public class MarketByOrderFeedTests
 {
     private static readonly Instrument Gold = new("GCZ6", 10, 10);
 
@@ -45,61 +45,61 @@ public class MarketByOrderIncrementalProducerTests
     [Test]
     public void Create_ProducesAddedDelta()
     {
-        var producer = new MarketByOrderIncrementalProducer();
+        var feed = ProductFeed.Carrying(FeedProducts.ByOrder);
         Book.UpdateStatus(OrderBookStatus.Open);
 
         var bookEvents = Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 100);
-        var deltas = producer.Process(bookEvents).Single().Changes;
+        var deltas = feed.Publish<MarketByOrderDeltaEvent>(bookEvents).Single().Changes;
 
         Assert.AreEqual(1, deltas.Count);
         Assert.AreEqual(Side.Buy, deltas[0].Side);
         Assert.AreEqual(100, deltas[0].Price);
         Assert.AreEqual(3, deltas[0].Quantity);
-        Assert.AreEqual(MarketByOrderDeltaAction.Added, deltas[0].Action);
+        Assert.AreEqual(OrderChangeAction.Added, deltas[0].Action);
     }
 
     [Test]
     public void Iceberg_AddedDelta_ShowsOnlyDisplayedPeak_NotHiddenReserve()
     {
-        var producer = new MarketByOrderIncrementalProducer();
+        var feed = ProductFeed.Carrying(FeedProducts.ByOrder);
         Book.UpdateStatus(OrderBookStatus.Open);
 
         // total 20, only 5 displayed at a time
         var bookEvents = Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 20, 100,
             maxVisibleQuantity: 5);
-        var deltas = producer.Process(bookEvents).Single().Changes;
+        var deltas = feed.Publish<MarketByOrderDeltaEvent>(bookEvents).Single().Changes;
 
         Assert.AreEqual(1, deltas.Count);
         Assert.AreEqual(5, deltas[0].Quantity, "only the displayed peak, never the hidden reserve");
-        Assert.AreEqual(MarketByOrderDeltaAction.Added, deltas[0].Action);
+        Assert.AreEqual(OrderChangeAction.Added, deltas[0].Action);
     }
 
     [Test]
     public void IcebergReplenish_ProducesRemovedThenAddedWithNewId()
     {
-        var producer = new MarketByOrderIncrementalProducer();
+        var feed = ProductFeed.Carrying(FeedProducts.ByOrder);
         Book.UpdateStatus(OrderBookStatus.Open);
         var created = Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Sell, 12, 100,
                 maxVisibleQuantity: 5)
             .OfType<CreateOrderConfirmed>().Single();
-        producer.Process(new OrderBookEvent[] {created});
+        feed.Publish<MarketByOrderDeltaEvent>(new OrderBookEvent[] {created});
 
         // aggressor larger than the peak - exhausts and replenishes the iceberg mid-match
         var bookEvents = Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Buy, 5, 100);
-        var deltas = producer.Process(bookEvents).Single().Changes;
+        var deltas = feed.Publish<MarketByOrderDeltaEvent>(bookEvents).Single().Changes;
 
         // one Filled delta per leg of the match (the iceberg resting, and the aggressor)
-        var filled = deltas.Where(d => d.Action == MarketByOrderDeltaAction.Filled).ToList();
+        var filled = deltas.Where(d => d.Action == OrderChangeAction.Filled).ToList();
         Assert.AreEqual(2, filled.Count);
         Assert.IsTrue(filled.Any(d => d.ExchangeOrderId == created.Order.ExchangeOrderId),
             "the iceberg's fill happened against its pre-replenish id");
 
-        var removed = deltas.Single(d => d.Action == MarketByOrderDeltaAction.Removed);
+        var removed = deltas.Single(d => d.Action == OrderChangeAction.Removed);
         Assert.AreEqual(created.Order.ExchangeOrderId, removed.ExchangeOrderId);
 
         // Side.Sell, not Side.Buy - the aggressor itself also produces its own Added delta
         // (its CreateOrderConfirmed), distinct from the iceberg's replenish arrival
-        var added = deltas.Single(d => d.Action == MarketByOrderDeltaAction.Added && d.Side == Side.Sell);
+        var added = deltas.Single(d => d.Action == OrderChangeAction.Added && d.Side == Side.Sell);
         Assert.AreNotEqual(created.Order.ExchangeOrderId, added.ExchangeOrderId);
         Assert.AreEqual(5, added.Quantity, "replenished back to the full peak");
     }
@@ -107,68 +107,68 @@ public class MarketByOrderIncrementalProducerTests
     [Test]
     public void Reprice_LosesPriority_ProducesRemovedThenAddedWithNewId()
     {
-        var producer = new MarketByOrderIncrementalProducer();
+        var feed = ProductFeed.Carrying(FeedProducts.ByOrder);
         Book.UpdateStatus(OrderBookStatus.Open);
         var created = Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 100)
             .OfType<CreateOrderConfirmed>().Single();
 
         var bookEvents = Book.UpdateOrder(CompanyId1, OrderId2, OrderId1, price: 110);
-        var deltas = producer.Process(bookEvents).Single().Changes;
+        var deltas = feed.Publish<MarketByOrderDeltaEvent>(bookEvents).Single().Changes;
 
         Assert.AreEqual(2, deltas.Count);
         Assert.AreEqual(created.Order.ExchangeOrderId, deltas[0].ExchangeOrderId);
         Assert.AreEqual(100, deltas[0].Price);
-        Assert.AreEqual(MarketByOrderDeltaAction.Removed, deltas[0].Action);
+        Assert.AreEqual(OrderChangeAction.Removed, deltas[0].Action);
 
         Assert.AreNotEqual(created.Order.ExchangeOrderId, deltas[1].ExchangeOrderId);
         Assert.AreEqual(110, deltas[1].Price);
-        Assert.AreEqual(MarketByOrderDeltaAction.Added, deltas[1].Action);
+        Assert.AreEqual(OrderChangeAction.Added, deltas[1].Action);
     }
 
     [Test]
     public void QuantityDecrease_PreservesPriority_ProducesModifiedWithSameId()
     {
-        var producer = new MarketByOrderIncrementalProducer();
+        var feed = ProductFeed.Carrying(FeedProducts.ByOrder);
         Book.UpdateStatus(OrderBookStatus.Open);
         var created = Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100)
             .OfType<CreateOrderConfirmed>().Single();
 
         var bookEvents = Book.UpdateOrder(CompanyId1, OrderId2, OrderId1, newTotalQuantity: 3);
-        var deltas = producer.Process(bookEvents).Single().Changes;
+        var deltas = feed.Publish<MarketByOrderDeltaEvent>(bookEvents).Single().Changes;
 
         Assert.AreEqual(1, deltas.Count);
         Assert.AreEqual(created.Order.ExchangeOrderId, deltas[0].ExchangeOrderId);
         Assert.AreEqual(3, deltas[0].Quantity);
-        Assert.AreEqual(MarketByOrderDeltaAction.Modified, deltas[0].Action);
+        Assert.AreEqual(OrderChangeAction.Modified, deltas[0].Action);
     }
 
     [Test]
     public void Cancel_ProducesRemovedDelta_WithPreCancelQuantity()
     {
-        var producer = new MarketByOrderIncrementalProducer();
+        var feed = ProductFeed.Carrying(FeedProducts.ByOrder);
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 100);
 
         var bookEvents = Book.CancelOrder(CompanyId1, OrderId2, OrderId1);
-        var deltas = producer.Process(bookEvents).Single().Changes;
+        var deltas = feed.Publish<MarketByOrderDeltaEvent>(bookEvents).Single().Changes;
 
         Assert.AreEqual(1, deltas.Count);
         Assert.AreEqual(100, deltas[0].Price);
         Assert.AreEqual(3, deltas[0].Quantity);
-        Assert.AreEqual(MarketByOrderDeltaAction.Removed, deltas[0].Action);
+        Assert.AreEqual(OrderChangeAction.Removed, deltas[0].Action);
     }
 
     [Test]
     public void PartialFill_ProducesFilledDeltaPerLeg_WithFillQuantityNotRemaining()
     {
-        var producer = new MarketByOrderIncrementalProducer();
+        var feed = ProductFeed.Carrying(FeedProducts.ByOrder);
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 5, 100);
 
         var bookEvents = Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 3, 100);
-        var deltas = producer.Process(bookEvents).Single().Changes;
+        var deltas = feed.Publish<MarketByOrderDeltaEvent>(bookEvents).Single().Changes;
 
-        var filled = deltas.Where(d => d.Action == MarketByOrderDeltaAction.Filled).ToList();
+        var filled = deltas.Where(d => d.Action == OrderChangeAction.Filled).ToList();
         Assert.AreEqual(2, filled.Count, "expected one Filled delta per leg of the match");
         Assert.IsTrue(filled.All(d => d.Quantity == 3), "fill quantity is the traded amount, not the resting order's total or remaining size");
     }
@@ -185,14 +185,14 @@ public class MarketByOrderIncrementalProducerTests
     [Test]
     public void StillHiddenStopOrder_Create_ProducesNoDelta()
     {
-        var producer = new MarketByOrderIncrementalProducer();
+        var feed = ProductFeed.Carrying(FeedProducts.ByOrder);
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 500);
         Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 3, 500);
 
         var bookEvents =
             Book.CreateStopLimitOrder(CompanyId3, OrderId3, new OrderValidity.Day(), Side.Buy, 5, 530, 510);
-        var messages = producer.Process(bookEvents);
+        var messages = feed.Publish<MarketByOrderDeltaEvent>(bookEvents);
 
         Assert.IsEmpty(messages, "a stop order that hasn't triggered yet isn't part of the displayed order book");
     }
@@ -200,7 +200,7 @@ public class MarketByOrderIncrementalProducerTests
     [Test]
     public void StopOrderActivation_ProducesAddedDelta_NotModified()
     {
-        var producer = new MarketByOrderIncrementalProducer();
+        var feed = ProductFeed.Carrying(FeedProducts.ByOrder);
         Book.UpdateStatus(OrderBookStatus.Open);
         Book.CreateLimitOrder(CompanyId1, OrderId1, new OrderValidity.Day(), Side.Buy, 3, 500);
         Book.CreateLimitOrder(CompanyId2, OrderId2, new OrderValidity.Day(), Side.Sell, 3, 500);
@@ -217,11 +217,11 @@ public class MarketByOrderIncrementalProducerTests
         // act - trade at the trigger price, converting the stop into a working limit order
         Clock.SetCurrentTime(Now6);
         var bookEvents = Book.CreateLimitOrder(CompanyId6, OrderId6, new OrderValidity.Day(), Side.Buy, 2, 510);
-        var deltas = producer.Process(bookEvents).Single().Changes;
+        var deltas = feed.Publish<MarketByOrderDeltaEvent>(bookEvents).Single().Changes;
 
-        var activation = deltas.SingleOrDefault(d => d.Price == 530 && d.Action != MarketByOrderDeltaAction.Filled);
+        var activation = deltas.SingleOrDefault(d => d.Price == 530 && d.Action != OrderChangeAction.Filled);
         Assert.IsNotNull(activation, "expected the triggered order's arrival into the working book");
-        Assert.AreEqual(MarketByOrderDeltaAction.Added, activation.Action,
+        Assert.AreEqual(OrderChangeAction.Added, activation.Action,
             "it has no prior working-book presence, so it's an arrival, not a move");
     }
 }
