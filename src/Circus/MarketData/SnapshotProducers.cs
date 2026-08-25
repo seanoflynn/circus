@@ -2,22 +2,6 @@ using Circus.Events;
 
 namespace Circus.MarketData;
 
-// The snapshot feed, as a translation of the BookSnapshot the book answers a snapshot tick with.
-//
-// Each of these republishes exactly the message type its incremental counterpart publishes, so a
-// subscriber applies a snapshot the same way it applies an update and needs no second code path -
-// the difference is which stream it arrived on and the sequence it declares itself consistent as
-// of, both of which the channel carries. CME draws it the same way: the snapshot is a different
-// message on a different feed, carrying the same fields.
-//
-// One class per product rather than one producing all three, because a channel carrying only
-// depth should be able to leave the rest out - the same reason InstrumentFeed is a bundle of
-// producers rather than one that does everything.
-//
-// The one place a feed shallower than its book truncates rather than subscribing. An image says
-// where the book is, so the first five entries of a ten-deep image are the five-deep image and
-// nothing is lost by cutting. A delta is the opposite - see LevelsChanged - which is why the
-// incremental half takes reports made at its depth instead.
 public class MarketByPriceSnapshotProducer : IIncrementalProducer<LevelsDataEvent>
 {
     private readonly int _depth;
@@ -50,8 +34,6 @@ public class MarketByPriceSnapshotProducer : IIncrementalProducer<LevelsDataEven
         return output ?? (IList<LevelsDataEvent>) Array.Empty<LevelsDataEvent>();
     }
 
-    // The book's list unchanged when it is already within the window, so the common case - a feed
-    // as deep as the book that feeds it - copies nothing.
     private IReadOnlyList<Level> Truncate(IReadOnlyList<Level> levels)
     {
         if (levels.Count <= _depth)
@@ -65,10 +47,6 @@ public class MarketByPriceSnapshotProducer : IIncrementalProducer<LevelsDataEven
     }
 }
 
-// The composite a joiner cannot rebuild: a status change and a limit lock arrive as separate
-// events at separate times, so a subscriber that heard neither has no way to assemble them. The
-// incremental half carries the whole composite on either event, which serves anyone who heard one
-// of them; this serves someone who heard nothing at all, and is the only thing that can.
 public class InstrumentStatusSnapshotProducer : IIncrementalProducer<InstrumentStatusDataEvent>
 {
     public IList<InstrumentStatusDataEvent> Process(IReadOnlyList<MarketEvent> events)
@@ -89,9 +67,6 @@ public class InstrumentStatusSnapshotProducer : IIncrementalProducer<InstrumentS
     }
 }
 
-// Published on the cycle even when there is no quote, so a null price restates that the book is
-// not crossing rather than leaving a joiner to assume it. The incremental feed says the same thing
-// by emitting a withdrawal, which is a message a late subscriber never heard.
 public class IndicativePriceSnapshotProducer : IIncrementalProducer<IndicativePriceDataEvent>
 {
     public IList<IndicativePriceDataEvent> Process(IReadOnlyList<MarketEvent> events)
@@ -112,8 +87,6 @@ public class IndicativePriceSnapshotProducer : IIncrementalProducer<IndicativePr
     }
 }
 
-// Every resting order, for a subscriber joining or recovering an order-by-order book. The
-// heaviest message this venue publishes, and the reason a real snapshot feed cycles slowly.
 public class MarketByOrderSnapshotProducer : IIncrementalProducer<OrdersDataEvent>
 {
     public IList<OrdersDataEvent> Process(IReadOnlyList<MarketEvent> events)

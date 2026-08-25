@@ -2,34 +2,6 @@ using Circus.Events;
 
 namespace Circus.MarketData;
 
-// Everything a venue publishes about one instrument, assembled in one place. A book's events go
-// in, the messages a subscriber would receive come out.
-//
-// One bundle per instrument, and nothing in it remembers the book. Every product is a pure
-// function of the events it is handed, since the book reports what moved - which price levels,
-// which orders, and what state the instrument is in - rather than leaving a producer to work it
-// out by shadowing the book. The only thing counted here is the snapshot cadence, which is this
-// feed's own business rather than something the book knows about.
-//
-// Which products it carries is configured, because a venue is not one shape. CME channels carry
-// by-price and by-order together with trades and status; Eurex splits by-order onto EOBI and
-// by-price onto EMDI, publishing state on both; an ITCH-shaped venue carries by-order alone. All
-// of them are this class with different flags, which is the point of the flags existing.
-//
-// Everything by default: a caller who has not thought about channels sees the whole venue, which
-// is more than any real depth feed carries and the useful answer for a simulator.
-//
-// Two numbers go with the products. Depth is how far the by-price products run, which has to be
-// agreed with the book rather than applied here - a shallower delta stream is not a filtered
-// deeper one, so the book is asked to report at this depth and this feed takes those reports. The
-// snapshot half does truncate, because an image cuts cleanly where a delta does not.
-//
-// snapshotEvery is how many snapshot ticks pass between images. The venue ticks at the finest
-// cadence any of its channels wants and each feed counts the ticks it cares about, so a group
-// whose depth feed restates itself every cycle and whose order-by-order feed restates itself every
-// fifth is one interval and two counters rather than two schedules to keep in step. Real venues
-// are shaped that way for the same reason: a full order-by-order image is the heaviest message a
-// venue sends, so it cycles slower than the depth image beside it.
 public sealed class InstrumentFeed
 {
     private readonly MarketByPriceIncrementalProducer _levels;
@@ -37,9 +9,6 @@ public sealed class InstrumentFeed
     private readonly TradeDataProducer _trades = new();
     private readonly IndicativePriceDataProducer _indicative = new();
 
-    // The other half of what a venue publishes, on its own stream: where the book is, rather than
-    // what changed about it. Each republishes the same message type its incremental counterpart
-    // does, so a subscriber applies a snapshot the same way it applies an update.
     private readonly MarketByPriceSnapshotProducer _levelsSnapshot;
     private readonly InstrumentStatusSnapshotProducer _statusSnapshot = new();
     private readonly IndicativePriceSnapshotProducer _indicativeSnapshot = new();
@@ -49,8 +18,6 @@ public sealed class InstrumentFeed
     private readonly int _depth;
     private readonly int _snapshotEvery;
 
-    // Snapshot ticks seen, not dispatches: a tick is a dispatch carrying a BookSnapshot for this
-    // instrument, and everything else passes without moving the count.
     private long _snapshotTicks;
 
     public InstrumentFeed(string symbol, FeedProducts products = FeedProducts.All,
@@ -81,23 +48,14 @@ public sealed class InstrumentFeed
 
     public string Symbol { get; }
 
-    // What this feed carries. A channel is a subset of the venue in two directions - which
-    // instruments, and which products about them - and this is the second.
     public FeedProducts Products => _products;
 
-    // How deep its by-price products run. The book has to be reporting at this depth for them to
-    // carry anything, which is why the two are configured together.
     public int Depth => _depth;
 
-    // How many snapshot ticks pass between images on this feed. One restates on every tick.
     public int SnapshotEvery => _snapshotEvery;
 
     private bool Carries(FeedProducts product) => (_products & product) != 0;
 
-    // Ordering within one call is by producer, in the fixed order below, rather than interleaved
-    // by time: every event in a single dispatch shares an instant, so there is no time order
-    // among them to preserve. Across calls it is the order the venue dispatched them in, which is
-    // the ordering that actually carries meaning.
     public IReadOnlyList<MarketDataEvent> Process(IReadOnlyList<OrderBookEvent> bookEvents)
     {
         var events = PublicHalf(bookEvents);
@@ -115,17 +73,6 @@ public sealed class InstrumentFeed
         return output ?? (IReadOnlyList<MarketDataEvent>) Array.Empty<MarketDataEvent>();
     }
 
-    // The snapshot half, kept a separate call rather than a second return value because the two
-    // streams are numbered separately and published independently - a subscriber in sync reads
-    // only the incremental one, and a channel is free to carry no snapshot feed at all.
-    //
-    // A dispatch that is not a snapshot tick produces nothing here, so the common path costs one
-    // scan that finds nothing rather than a branch the caller has to know to take.
-    //
-    // Ticks are counted before the cadence is applied, so a feed on every fifth tick publishes on
-    // the fifth and not the first. A joiner therefore waits at most a full cycle, which is what
-    // the cycle means; publishing immediately and then every fifth would make the first gap
-    // shorter than the promise.
     public IReadOnlyList<MarketDataEvent> Snapshot(IReadOnlyList<OrderBookEvent> bookEvents)
     {
         var events = PublicHalf(bookEvents);
@@ -148,23 +95,6 @@ public sealed class InstrumentFeed
         return output ?? (IReadOnlyList<MarketDataEvent>) Array.Empty<MarketDataEvent>();
     }
 
-    // What state the instrument is in, as one thing - CME's Security Status message, Eurex's
-    // instrument state. The book publishes the parts separately because they are separate: a
-    // status change and a limit lock are different events, and a limit-locked market is open. A
-    // subscriber wanting to render "what is happening to this instrument" wants them together,
-    // and assembling them is what this does.
-    //
-    // Assembling used to mean remembering. Each event carried one part of the composite and a
-    // producer held the rest between messages, which made this the last thing here that could
-    // drift from the book and the only one a missed message left permanently wrong. Both events
-    // carry the whole of it now - the book was already holding all four fields, and BookSnapshot
-    // was already publishing them as one composite - so this is a projection like every other
-    // product, and a gap costs a subscriber the update rather than the truth.
-    //
-    // Which of the two events it came from is not preserved, and should not be: what a status
-    // product says is where the instrument is, and both events answer that completely. That they
-    // stay separate types upstream is what lets a consumer who cares about only one of them say
-    // so - see LimitStateChanged.
     private static IList<InstrumentStatusDataEvent> StatusOf(IReadOnlyList<MarketEvent> events)
     {
         List<InstrumentStatusDataEvent>? output = null;
@@ -176,16 +106,12 @@ public sealed class InstrumentFeed
                 StatusChanged status => new InstrumentStatusDataEvent(status.Symbol, status.Time,
                     status.Status, status.Reason, status.ResumesAt, status.LimitState),
 
-                // Side is which way a limit has the market stuck; the rest is the status it stays
-                // in while stuck, which this event carries precisely so that it need not be held.
                 LimitStateChanged limit => new InstrumentStatusDataEvent(limit.Symbol, limit.Time,
                     limit.Status, limit.Reason, limit.ResumesAt, limit.Side),
 
                 _ => null
             };
 
-            // One per contributing event, carrying that event's own time rather than a time chosen
-            // for a batch. Each is a complete picture, so a consumer never needs two.
             if (data != null)
                 (output ??= new List<InstrumentStatusDataEvent>()).Add(data);
         }
@@ -193,10 +119,6 @@ public sealed class InstrumentFeed
         return output ?? (IList<InstrumentStatusDataEvent>) Array.Empty<InstrumentStatusDataEvent>();
     }
 
-    // The boundary where a book's output becomes a venue's. What a participant is told about its
-    // own order stops here: producers are typed to MarketEvent, so this is the only place the two
-    // halves are told apart, and it is a filter rather than a redaction because the public events
-    // are their own events rather than copies with fields removed.
     private static IReadOnlyList<MarketEvent> PublicHalf(IReadOnlyList<OrderBookEvent> bookEvents)
     {
         List<MarketEvent>? publicEvents = null;
@@ -210,9 +132,6 @@ public sealed class InstrumentFeed
         return publicEvents ?? (IReadOnlyList<MarketEvent>) Array.Empty<MarketEvent>();
     }
 
-    // A tick is a dispatch the book answered with an image. Counting those rather than every
-    // dispatch is what makes the cadence "every fifth snapshot" instead of "every fifth action",
-    // which would tie how often a feed restates itself to how busy the instrument is.
     private static bool IsSnapshotTick(IReadOnlyList<MarketEvent> events)
     {
         for (var i = 0; i < events.Count; i++)
