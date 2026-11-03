@@ -30,7 +30,7 @@ jobs:
 
       - name: Generate coverage summary
         if: always()
-        uses: danielpalme/ReportGenerator-GitHub-Action@5.5.11
+        uses: danielpalme/ReportGenerator-GitHub-Action@5.5.12
         with:
           reports: "**/coverage.cobertura.xml"
           targetdir: coveragereport
